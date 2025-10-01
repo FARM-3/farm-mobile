@@ -1,17 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons'; 
+import { Ionicons } from '@expo/vector-icons'; // *** ONLY IMPORTING IONICONS NOW ***
 
 // Import your defined colors
 import CoffeeColors from '../../../theme/colors'; 
 
 const DashboardScreen = () => {
-  const Card = ({ iconName, iconLibrary, title, description, time, recorder, color }) => (
+  // Simplified Card component: now only takes the Ionicons name
+  const Card = ({ iconName, title, description, time, recorder, color }) => (
     <TouchableOpacity style={styles.card} activeOpacity={0.7}>
       <View style={styles.cardHeader}>
-        {iconLibrary === 'Ionicons' && <Ionicons name={iconName} size={24} color={color} />}
-        {iconLibrary === 'MaterialCommunityIcons' && <MaterialCommunityIcons name={iconName} size={24} color={color} />}
-        {iconLibrary === 'FontAwesome5' && <FontAwesome5 name={iconName} size={24} color={color} />}
+        {/* All icons now use Ionicons */}
+        <Ionicons name={iconName} size={24} color={color} />
         <Text style={styles.cardTitle}>{title}</Text>
       </View>
       <Text style={styles.cardDescription}>{description}</Text>
@@ -28,49 +28,52 @@ const DashboardScreen = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollViewContent}>
+        {/* CARD 1: Aggregation (Using cube-outline) */}
         <Card
-          iconName="cube"
-          iconLibrary="MaterialCommunityIcons"
+          iconName="people-outline"
           title="Aggregation"
           description="Aggregation recorded: 1200 kg of coffee cherries"
           time="10:30 AM"
           recorder="Sarah"
-          color={CoffeeColors.LIGHT_BROWN} // Use a palette color
+          color={CoffeeColors.LIGHT_BROWN} 
         />
+        {/* CARD 2: Harvest (Using leaf-outline) */}
         <Card
-          iconName="seedling"
-          iconLibrary="FontAwesome5"
+          iconName="leaf-outline"
           title="Harvest"
           description="Harvest recorded: 500 kg of coffee cherries"
           time="09:00 AM"
           recorder="David"
-          color={CoffeeColors.MEDIUM_BROWN} // Use a palette color
+          color={CoffeeColors.MEDIUM_BROWN} 
         />
+        {/* CARD 3: Processing (Using cafe-outline) */}
         <Card
-          iconName="coffee"
-          iconLibrary="FontAwesome5"
+          iconName="home-outline"
           title="Processing"
           description="Processing recorded: Washed 300 kg of coffee cherries"
           time="02:00 PM"
           recorder="Emily"
-          color={CoffeeColors.GOLD} // Use a palette color
+          color={CoffeeColors.GOLD} 
         />
         {/* Empty card placeholder */}
         <View style={styles.card} />
       </ScrollView>
 
-      {/* Bottom Navigation Bar Placeholder */}
+      {/* Bottom Navigation Bar */}
       <View style={styles.bottomNavBar}>
+        {/* Nav 1: Aggregations */}
         <TouchableOpacity style={styles.navItem}>
           <Ionicons name="people-outline" size={24} color={CoffeeColors.MEDIUM_BROWN} />
           <Text style={styles.navText}>Aggregations</Text>
         </TouchableOpacity>
+        {/* Nav 2: Harvests (Now using leaf-outline from Ionicons) */}
         <TouchableOpacity style={styles.navItem}>
-          <MaterialCommunityIcons name="seedling" size={24} color={CoffeeColors.MEDIUM_BROWN} />
+          <Ionicons name="leaf-outline" size={24} color={CoffeeColors.MEDIUM_BROWN} />
           <Text style={styles.navText}>Harvests</Text>
         </TouchableOpacity>
+        {/* Nav 3: Processing (Using home-outline from Ionicons) */}
         <TouchableOpacity style={styles.navItem}>
-          <MaterialCommunityIcons name="home-outline" size={24} color={CoffeeColors.DARK_BROWN} />
+          <Ionicons name="home-outline" size={24} color={CoffeeColors.DARK_BROWN} />
           <Text style={[styles.navText, {color: CoffeeColors.DARK_BROWN, fontWeight: 'bold'}]}>Processing</Text>
         </TouchableOpacity>
       </View>
@@ -157,4 +160,3 @@ const styles = StyleSheet.create({
 });
 
 export default DashboardScreen;
-
