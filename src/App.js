@@ -7,7 +7,8 @@ import {
 } from 'react-native'; 
 
 // 1. Path to DashboardScreen (should be correct relative to src/App.js)
-import DashboardScreen from './features/dashboard/screens/DashboardScreen';
+// import DashboardScreen from './features/dashboard/screens/DashboardScreen';
+import LoginScreen from './features/dashboard/screens/LoginScreen';
 
 // 2. Path to Color Palette (should be correct relative to src/App.js)
 import CoffeeColors from './theme/colors';
@@ -18,8 +19,8 @@ export default function App() {
     <SafeAreaView style={styles.safeArea}> 
       <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
       <View style={styles.container}>
-        {/* Render your DashboardScreen */}
-        <DashboardScreen />
+        {/* <DashboardScreen /> */}
+        { <LoginScreen /> }
       </View>
     </SafeAreaView>
   );
