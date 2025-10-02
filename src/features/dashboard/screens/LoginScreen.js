@@ -9,15 +9,15 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; 
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native'; 
 
-// --- 1. Corrected Import of Named Colors ---
-// Adjusting the path to ensure it correctly finds the colors file 
-// (Assuming PinLoginScreen is two levels deep and colors is one level up from src)
-import { CoffeeColors } from '../../../theme/colors'; 
+// --- CRITICAL FIX: Changed from NAMED IMPORT { CoffeeColors } to DEFAULT IMPORT CoffeeColors ---
+import CoffeeColors from '../../../theme/colors'; 
 
 // --- PIN Login Screen Component ---
-const PinLoginScreen = () => {
+// Changed component name to match file name conventions
+const LoginScreen = () => { 
   const [pin, setPin] = useState(['', '', '', '']); 
   const pinInputRefs = useRef([]); 
 
@@ -29,7 +29,8 @@ const PinLoginScreen = () => {
 
     // Auto-focus logic
     if (text.length > 0 && index < 3) {
-      pinInputRefs.current[index + 1].focus();
+      // Check if the next input reference exists before focusing
+      pinInputRefs.current[index + 1] && pinInputRefs.current[index + 1].focus();
     }
   };
 
@@ -45,6 +46,7 @@ const PinLoginScreen = () => {
     const fullPin = pin.join('');
     if (fullPin.length === 4) {
       // NOTE: In a real app, you would use navigation.navigate('Dashboard') here
+      // Replaced Alert with a safer UI message in a real app, but leaving Alert for now.
       Alert.alert('Unlock Attempt', `PIN entered: ${fullPin}`);
     } else {
       Alert.alert('Invalid PIN', 'Please enter your 4-digit PIN.');
@@ -96,14 +98,14 @@ const PinLoginScreen = () => {
         </View>
 
         {/* Unlock Button */}
-        <TouchableOpacity style={styles.unlockButton} onPress={handleUnlock}>
-          <Text style={styles.unlockButtonText}>Unlock</Text>
+        <TouchableOpacity style={styles.LoginButton} onPress={handleLogin}>
+          <Text style={styles.LoginButtonText}>Login</Text>
         </TouchableOpacity>
 
-        {/* Logout Link */}
-        <TouchableOpacity style={styles.logoutLinkContainer} onPress={handleLogout}>
+        {/* Pin Reset */}
+        <TouchableOpacity style={styles.RestPinLinkContainer} onPress={handleResetPin}>
           <Ionicons name="arrow-back-outline" size={16} color={CoffeeColors.MEDIUM_BROWN} style={{transform: [{ rotateY: '180deg'}]}} />
-          <Text style={styles.logoutLinkText}> Logout</Text>
+          <Text style={styles.ResetPinText}> Reset Pin</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -129,6 +131,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '90%', 
+    maxWidth: 400, // Added maxWidth for better centering on large screens
     backgroundColor: CoffeeColors.CREAM,
     borderRadius: 15,
     padding: 25,
@@ -215,4 +218,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default PinLoginScreen;
+export default LoginScreen;

@@ -1,4 +1,3 @@
-// src/theme/colors.js
 
 const CoffeeColors = {
   // Primary (Darkest Brown/Main Background)
