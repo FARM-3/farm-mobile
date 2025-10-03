@@ -9,8 +9,9 @@ import {
 } from 'react-native'; 
 
 // 1. Path to DashboardScreen (Corrected case for folder)
-import DashboardScreen from './features/dashboard/screens/DashboardScreen'; 
-import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
+// import DashboardScreen from './features/dashboard/screens/DashboardScreen'; 
+import AggregationScreen from './features/Aggregation/screens/AggregationScreen';import LoginScreen from './features/dashboard/screens/LoginScreen';
+
 // 2. Path to Color Palette
 import CoffeeColors from './theme/colors';
 
@@ -57,8 +58,7 @@ export default function App() {
   };
 
   return (
-    // SafeAreaView handles notches and status bars
-    <SafeAreaView style={styles.safeArea}> 
+    <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
       <View style={styles.container}>
         {/* Render the currently active screen */}
@@ -71,10 +71,8 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    // Set the status bar background color here
     backgroundColor: CoffeeColors.DARK_BROWN, 
   },
-  // The main container fills the rest of the safe area
   container: {
     flex: 1, 
   },

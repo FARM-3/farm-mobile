@@ -1,4 +1,3 @@
-// src/theme/colors.js
 
 const CoffeeColors = {
   // Primary (Darkest Color/Main Background) - Used #161414
