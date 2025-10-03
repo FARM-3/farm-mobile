@@ -1,32 +1,74 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { 
   StyleSheet, 
   View, 
-  SafeAreaView 
+  SafeAreaView,
+  TouchableOpacity, 
+  Text // Added Text and TouchableOpacity for placeholder views
 } from 'react-native'; 
 
-// 1. Path to DashboardScreen (should be correct relative to src/App.js)
-import DashboardScreen from './features/dashboard/screens/DashboardScreen';
-
-// 2. Path to Color Palette (should be correct relative to src/App.js)
+// 1. Path to DashboardScreen (Corrected case for folder)
+import DashboardScreen from './features/dashboard/screens/DashboardScreen'; 
+import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
+// 2. Path to Color Palette
 import CoffeeColors from './theme/colors';
 
 export default function App() {
+  // State to manage the currently active screen. Start on 'Dashboard'.
+  const [activeScreen, setActiveScreen] = useState('Dashboard');
+
+  // Function to change the active screen state
+  const handleNavigate = (screenName) => {
+    // Only navigate to known screens for safety
+    if (['Dashboard', 'Aggregation', 'Harvests', 'Processing'].includes(screenName)) {
+        setActiveScreen(screenName);
+    }
+  };
+
+  // Function to render the correct component based on the active state
+  const renderScreen = () => {
+    switch (activeScreen) {
+      case 'Dashboard':
+        // Pass the navigation function to the dashboard
+        return <DashboardScreen onNavigate={handleNavigate} />;
+      
+      case 'Aggregation':
+        // Pass the navigation function to the aggregation screen (for the Exit button)
+        return <AggregationScreen onNavigate={handleNavigate} />; 
+
+      // Fallback/Placeholder screens for the other footer items
+      case 'Harvests':
+      case 'Processing':
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: CoffeeColors.DARK_BROWN }}>
+                <Text style={{ fontSize: 24, color: CoffeeColors.CREAM, marginBottom: 20 }}>
+                    {activeScreen} Feature Coming Soon!
+                </Text>
+                <TouchableOpacity onPress={() => handleNavigate('Dashboard')} style={styles.navButton}>
+                    <Text style={styles.navButtonText}>Go to Dashboard</Text>
+                </TouchableOpacity>
+            </View>
+        );
+
+      default:
+        return <DashboardScreen onNavigate={handleNavigate} />;
+    }
+  };
+
   return (
     // SafeAreaView handles notches and status bars
     <SafeAreaView style={styles.safeArea}> 
       <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
       <View style={styles.container}>
-        {/* Render your DashboardScreen */}
-        <DashboardScreen />
+        {/* Render the currently active screen */}
+        {renderScreen()}
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  // The safe area ensures the background color is present behind the status bar
   safeArea: {
     flex: 1,
     // Set the status bar background color here
@@ -36,4 +78,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1, 
   },
+  navButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    backgroundColor: CoffeeColors.GOLD,
+    borderRadius: 8,
+  },
+  navButtonText: {
+    color: CoffeeColors.WHITE,
+    fontWeight: 'bold',
+    fontSize: 16,
+  }
 });
