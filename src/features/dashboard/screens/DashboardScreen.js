@@ -29,16 +29,9 @@ const DashboardScreen = ({ onNavigate }) => {
 
   return (
     <View style={styles.container}>
-<<<<<<< HEAD
-      {/* Header Placeholder */}
-      <View style={[styles.header, { borderWidth: 3, borderColor: '#FFD700' }]}>
-        <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
-        {/* Notification icon uses the bright CREAM accent */}
-=======
       {/* Header Placeholder (New addition for better UI) */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>FMIS Dashboard</Text>
->>>>>>> c4e5b6ae990f9b7eee50f6f3f52f17bcd86dd4c3
         <Ionicons name="notifications-outline" size={24} color={CoffeeColors.CREAM} />
       </View>
 
