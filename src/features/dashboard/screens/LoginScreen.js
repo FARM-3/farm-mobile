@@ -5,31 +5,43 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Alert,
+  Alert, // Keeping Alert for now, but will replace with custom UI later
   Platform,
   Keyboard,
+  ActivityIndicator, // Added for loading state
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native'; 
+import { useNavigation } from '@react-navigation/native';
 
-// --- CRITICAL FIX: Changed from NAMED IMPORT { CoffeeColors } to DEFAULT IMPORT CoffeeColors ---
-import CoffeeColors from '../../../theme/colors'; 
+// Import local utilities and theme
+import CoffeeColors from '../../../theme/colors';
+// Import the centralized API client for Django calls
+import apiClient from '../../../services/apiClient'; 
 
 // --- PIN Login Screen Component ---
-// Changed component name to match file name conventions
-const LoginScreen = () => { 
+const LoginScreen = () => {
+  // State for PIN input
   const [pin, setPin] = useState(['', '', '', '']); 
-  const pinInputRefs = useRef([]); 
+  const pinInputRefs = useRef([]);
+
+  // NEW STATE for validation feedback
+  const [message, setMessage] = useState(null);
+  const [messageType, setMessageType] = useState(null); // 'error' or 'success'
+  const [isLoading, setIsLoading] = useState(false);
 
   // Function to handle PIN input changes
   const handlePinChange = (text, index) => {
+    setMessage(null); // Clear messages on input change
+    setMessageType(null);
+
     const newPin = [...pin];
-    newPin[index] = text.slice(-1); 
-    setPin(newPin);
+    // Ensure only the last character is taken and it's a digit (though keyboardType helps)
+    const digit = text.slice(-1).replace(/[^0-9]/g, ''); 
+    newPin[index] = digit;
+    setPin(newPin); 
 
     // Auto-focus logic
-    if (text.length > 0 && index < 3) {
-      // Check if the next input reference exists before focusing
+    if (digit.length > 0 && index < 3) {
       pinInputRefs.current[index + 1] && pinInputRefs.current[index + 1].focus();
     }
   };
@@ -41,21 +53,70 @@ const LoginScreen = () => {
     }
   };
 
-  const handleUnlock = () => {
-    Keyboard.dismiss(); 
+  // *** UPDATED LOGIN FUNCTION WITH VALIDATION AND API CALL ***
+  const handleLogin = async () => {
+    Keyboard.dismiss();
+    setMessage(null);
+    setMessageType(null);
     const fullPin = pin.join('');
-    if (fullPin.length === 4) {
-      // NOTE: In a real app, you would use navigation.navigate('Dashboard') here
-      // Replaced Alert with a safer UI message in a real app, but leaving Alert for now.
-      Alert.alert('Unlock Attempt', `PIN entered: ${fullPin}`);
-    } else {
-      Alert.alert('Invalid PIN', 'Please enter your 4-digit PIN.');
+
+    // 1. Client-Side Validation
+    if (fullPin.length === 0) {
+      setMessage('Invalid input: Please enter your 4-digit PIN.');
+      setMessageType('error');
+      return;
+    }
+    if (fullPin.length !== 4 || !/^\d{4}$/.test(fullPin)) {
+      setMessage('Invalid input: PIN must be exactly 4 numbers.');
+      setMessageType('error');
+      return;
+    }
+
+    // 2. Server-Side Authentication
+    setIsLoading(true);
+    try {
+      // Assuming Django has a 'login/' endpoint expecting the 'pin' in the body
+      const response = await apiClient.post('login/', { pin: fullPin });
+      
+      // Successfully received response
+      if (response.status === 200 && response.data.token) {
+        // Successful Login (Simulated: Django returns token)
+        setMessage('Login successful!');
+        setMessageType('success');
+        // TODO: Save token using SecureStore and navigate to Dashboard
+      } else {
+        // Logic for successful status but invalid credentials (e.g., specific Django message)
+        setMessage(response.data.message || 'Invalid PIN or credentials.');
+        setMessageType('error');
+      }
+
+    } catch (error) {
+      // Handle server errors (e.g., 401 Unauthorized, 400 Bad Request, network failure)
+      const errorMessage = error.response?.data?.detail 
+                         || error.response?.data?.message 
+                         || 'Invalid PIN or network error.';
+      setMessage(errorMessage);
+      setMessageType('error');
+      console.error('Login API Error:', error);
+
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    Keyboard.dismiss(); 
-    Alert.alert('Logout', 'Logging out...');
+  const handleResetPin = () => {
+      Keyboard.dismiss();
+      Alert.alert('PIN Reset', 'Initiating PIN reset process...');
+  }
+
+  const getMessageStyle = () => {
+    if (messageType === 'error') {
+      return [styles.messageBox, styles.errorBox];
+    }
+    if (messageType === 'success') {
+      return [styles.messageBox, styles.successBox];
+    }
+    return null;
   };
 
   return (
@@ -70,7 +131,6 @@ const LoginScreen = () => {
           <Ionicons name="cloud-upload-outline" size={48} color={CoffeeColors.MEDIUM_BROWN} />
         </View>
 
-        {/* Welcome Back Text */}
         <Text style={styles.welcomeText}>Welcome Back</Text>
         <Text style={styles.instructionText}>
           Enter your PIN to securely access your farm data.
@@ -87,25 +147,47 @@ const LoginScreen = () => {
               ref={el => pinInputRefs.current[index] = el}
               style={styles.pinInputBox}
               value={digit}
-              onChangeText={text => handlePinChange(text, index)}
+              onChangeText={text => handlePinChange(text, index)} 
               onKeyPress={event => handleBackspace(event, index)}
               maxLength={1}
               keyboardType="number-pad"
-              secureTextEntry 
+              secureTextEntry
               caretHidden={true}
+              editable={!isLoading} // Disable input while loading
             />
           ))}
         </View>
+        
+        {/* Validation/Feedback Message Display */}
+        {message && (
+          <View style={getMessageStyle()}>
+            <Text style={messageType === 'error' ? styles.errorMessageText : styles.successMessageText}>
+              {message}
+            </Text>
+          </View>
+        )}
 
-        {/* Unlock Button */}
-        <TouchableOpacity style={styles.LoginButton} onPress={handleLogin}>
-          <Text style={styles.LoginButtonText}>Login</Text>
+        {/* Login Button (Updated Text and Style name) */}
+        <TouchableOpacity 
+          style={[styles.loginButton, isLoading && styles.disabledButton]} 
+          onPress={handleLogin}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color={CoffeeColors.WHITE} />
+          ) : (
+            <Text style={styles.loginButtonText}>LOGIN</Text> 
+          )}
         </TouchableOpacity>
 
-        {/* Pin Reset */}
-        <TouchableOpacity style={styles.RestPinLinkContainer} onPress={handleResetPin}>
+        {/* Reset PIN Link (Updated Text and Style name) */}
+        <TouchableOpacity 
+          style={styles.resetPinLinkContainer} 
+          onPress={handleResetPin} 
+          disabled={isLoading}
+        >
           <Ionicons name="arrow-back-outline" size={16} color={CoffeeColors.MEDIUM_BROWN} style={{transform: [{ rotateY: '180deg'}]}} />
-          <Text style={styles.ResetPinText}> Reset Pin</Text>
+          <Text style={styles.resetPinLinkText}> Reset PIN</Text> 
         </TouchableOpacity>
       </View>
     </View>
@@ -118,29 +200,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: CoffeeColors.LIGHT_GRAY,
     padding: 20,
-    paddingTop: Platform.OS === 'android' ? 50 : 0, 
-    alignItems: 'center', 
+    paddingTop: Platform.OS === 'android' ? 50 : 0,
+    alignItems: 'center',
   },
   pageTitle: {
     fontSize: 28,
-    fontWeight: 'normal', 
+    fontWeight: 'normal',
     color: CoffeeColors.GRAY_TEXT,
-    alignSelf: 'flex-start', 
+    alignSelf: 'flex-start',
     marginBottom: 20,
-    marginTop: 20, 
+    marginTop: 20,
   },
   card: {
-    width: '90%', 
-    maxWidth: 400, // Added maxWidth for better centering on large screens
+    width: '90%',
+    maxWidth: 400,
     backgroundColor: CoffeeColors.CREAM,
     borderRadius: 15,
     padding: 25,
-    alignItems: 'center', 
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
-    elevation: 8, 
+    elevation: 8,
   },
   iconContainer: {
     marginBottom: 20,
@@ -168,27 +250,59 @@ const styles = StyleSheet.create({
   pinInputContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 30,
+    marginBottom: 10, // Reduced margin to make space for message
   },
   pinInputBox: {
-    width: 55, 
-    height: 55, 
+    width: 55,
+    height: 55,
     backgroundColor: CoffeeColors.WHITE,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: CoffeeColors.LIGHT_BROWN, 
+    borderColor: CoffeeColors.LIGHT_BROWN,
     textAlign: 'center',
     fontSize: 24,
     fontWeight: 'bold',
     color: CoffeeColors.DARK_BROWN,
-    marginHorizontal: 8, 
-    shadowColor: '#000', 
+    marginHorizontal: 8,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 3,
     elevation: 3,
   },
-  unlockButton: {
+  // --- NEW STYLES FOR MESSAGE BOX ---
+  messageBox: {
+    width: '100%',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  errorBox: {
+    backgroundColor: '#FFE5E5', // Light Red background
+    borderColor: CoffeeColors.RED, // Red border
+    borderWidth: 1,
+  },
+  successBox: {
+    backgroundColor: '#E6FFE6', // Light Green background
+    borderColor: CoffeeColors.GREEN, // Green border
+    borderWidth: 1,
+  },
+  errorMessageText: {
+    color: CoffeeColors.RED,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  successMessageText: {
+    color: CoffeeColors.GREEN,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  // ----------------------------------
+  // Updated style name from loginButton
+  loginButton: {
     backgroundColor: CoffeeColors.MEDIUM_BROWN,
     width: '100%',
     paddingVertical: 16,
@@ -201,21 +315,30 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 6,
   },
-  unlockButtonText: {
+  disabledButton: {
+    opacity: 0.6, // Dim button when loading
+  },
+  // Updated style name from loginButtonText
+  loginButtonText: {
     color: CoffeeColors.WHITE,
     fontSize: 18,
     fontWeight: 'bold',
   },
-  logoutLinkContainer: {
+  // Updated style name from resetPinLinkContainer
+  resetPinLinkContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoutLinkText: {
+  // Updated style name from resetPinLinkText
+  resetPinLinkText: {
     color: CoffeeColors.MEDIUM_BROWN,
     fontSize: 16,
     fontWeight: 'bold',
   },
+  // Added color definitions for clarity (assuming these exist in theme/colors.js)
+  RED: { color: '#D9534F' }, 
+  GREEN: { color: '#5CB85C' },
 });
 
 export default LoginScreen;
