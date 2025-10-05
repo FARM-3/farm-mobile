@@ -19,6 +19,10 @@ const CoffeeColors = {
   WHITE: '#FFFFFF',           // For Text on dark backgrounds
   LIGHT_GRAY: '#ffe1d8',      // Overall Screen Background
   GRAY_TEXT: '#555555',       // Secondary Text
+
+  //Login Screen validation colors
+  ERROR_RED: '#ff4d4d',       // Error messages
+  SUCCESS_GREEN: '#28a745',   // Success messages
 };
 
 export default CoffeeColors;
