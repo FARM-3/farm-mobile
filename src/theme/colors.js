@@ -7,7 +7,7 @@ const CoffeeColors = {
   MEDIUM_BROWN: '#382d27ff',    // Dark blue-green accent
   
   // Tertiary (Muted Mid-tone/Card Border) - Used #a49b63
-  LIGHT_BROWN: '#a49b63',     // Muted olive/khaki
+  LIGHT_BROWN: '#ffe1d8',     // Muted olive/khaki
   
   // Accent (Highlighting Data/Icons - The 'Pop') - Used #64b49c
   CREAM: '#64b49c',           // Bright seafoam green

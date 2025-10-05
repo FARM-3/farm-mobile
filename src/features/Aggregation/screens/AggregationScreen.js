@@ -224,8 +224,15 @@ const AggregationScreen = ({ onNavigate }) => {
             await loadRecords(); // Refresh data from API
         } catch (e) {
             console.error("Error adding farmer:", e);
-            // Show the raw message and suggest checking server logs
-            Alert.alert("Submission Failed", e.message || "Failed to save farmer details. Check server logs for a 500 error.");
+            // If the axios error contains a server response, surface it in dev
+            const serverBody = e.response?.data;
+            if (__DEV__ && serverBody) {
+                // Show a truncated version in an Alert for quick copy/paste
+                const bodyText = typeof serverBody === 'string' ? serverBody : JSON.stringify(serverBody, null, 2);
+                Alert.alert('Submission Failed (server response)', bodyText.slice(0, 2000));
+            } else {
+                Alert.alert("Submission Failed", e.message || "Failed to save farmer details. Check server logs for a 500 error.");
+            }
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;

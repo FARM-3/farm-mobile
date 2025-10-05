@@ -1,9 +1,5 @@
 import axios from 'axios';
-
-// --- Configuration ---
-// !!! CRITICAL: REPLACE THIS WITH YOUR ACTUAL DJANGO SERVER ADDRESS !!!
-// On mobile simulators/devices, 'localhost' will not work. Use your machine's local IP (e.g., 'http://192.168.1.100:8000/api')
-const API_BASE_URL = 'https://api-3181.onrender.com/api'; 
+import { API_BASE_URL } from './apiConfig';
 
 // --- Helper for ID Generation ---
 
@@ -81,7 +77,8 @@ export const submitFarmer = async (data) => {
             console.error("Error message:", error.message);
         }
         console.error("Request payload:", JSON.stringify(data, null, 2));
-        throw new Error("Failed to submit farmer data to Django.");
+        // Rethrow original error so callers can inspect response (status, data)
+        throw error;
     }
 };
 
