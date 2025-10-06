@@ -1,112 +1,58 @@
-import React, { useState } from 'react';
+import React from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { 
-    StyleSheet, 
-    View, 
-    SafeAreaView,
-    TouchableOpacity, 
-    Text // Added Text and TouchableOpacity for placeholder views
-} from 'react-native'; 
+import { StyleSheet, View } from 'react-native';
 
-// 1. Path to Screens (Corrected case for folder)
-import DashboardScreen from './features/dashboard/screens/DashboardScreen';
-import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
-import ProcessingScreen from './features/Processing/screens/ProcessingScreen';
-import LoginScreen from './features/dashboard/screens/LoginScreen';
+// --- 1. React Navigation Imports ---
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-// 2. Path to Color Palette
+// --- 2. Screen and Theme Imports ---
+// NOTE: LoginScreen is the component being imported
+import PinLoginScreen from './features/dashboard/screens/LoginScreen'; 
+
+// Using default import to cover the most common way themes are exported
+import CoffeeColors from './theme/colors'; 
+// 2. Path to Color Palette (should be correct relative to src/App.js)
 import CoffeeColors from './theme/colors';
 
-export default function App() {
-    // State to manage the currently active screen. Start on 'Login'.
-    const [activeScreen, setActiveScreen] = useState('Login');
+// Create the Stack Navigator instance
+const Stack = createNativeStackNavigator();
 
-    // Function to change the active screen state
-    const handleNavigate = (screenName) => {
-        // Updated to include 'Inventory' and 'Quality' from the Dashboard
-        console.log('handleNavigate requested:', screenName);
-        if (['Dashboard', 'Aggregation', 'Harvests', 'Processing', 'Inventory', 'Quality', 'Login', 'ResetPin'].includes(screenName)) {
-            setActiveScreen(screenName);
-            console.log('activeScreen now set to:', screenName);
-        }
-    };
+// Define the colors required for the StatusBar
+// Assuming CoffeeColors is the default export and DARK_BROWN is a key on it.
+const STATUS_BAR_COLOR = CoffeeColors.DARK_BROWN || '#4A2B1D';
 
-    // Function to render the correct component based on the active state
-    const renderScreen = () => {
-        switch (activeScreen) {
-            case 'Login':
-                return <LoginScreen onNavigate={handleNavigate} />;
-
-            case 'ResetPin':
-                // Simple placeholder ResetPin screen for now
-                return (
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-                        <Text style={{ fontSize: 20, color: CoffeeColors.DARK_BROWN }}>Reset PIN coming soon</Text>
-                        <TouchableOpacity onPress={() => handleNavigate('Login')} style={styles.navButton}>
-                            <Text style={styles.navButtonText}>Back to Login</Text>
-                        </TouchableOpacity>
-                    </View>
-                );
-
-            case 'Dashboard':
-                // Pass the navigation function to the dashboard
-                return <DashboardScreen onNavigate={handleNavigate} />;
-            
-            case 'Aggregation':
-                // Pass the navigation function to the aggregation screen (for the Exit button)
-                return <AggregationScreen onNavigate={handleNavigate} />; 
-
-            // Combined placeholder screens for features not yet built:
-            case 'Harvests':
-            case 'Inventory': // New route
-            case 'Quality':   // New route
-                return (
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: CoffeeColors.DARK_BROWN }}>
-                        <Text style={{ fontSize: 24, color: CoffeeColors.CREAM, marginBottom: 20 }}>
-                            {activeScreen} Feature Coming Soon!
-                        </Text>
-                        <TouchableOpacity onPress={() => handleNavigate('Dashboard')} style={styles.navButton}>
-                            <Text style={styles.navButtonText}>Go to Dashboard</Text>
-                        </TouchableOpacity>
-                    </View>
-                );
-
-            case 'Processing':
-                return <ProcessingScreen onNavigate={handleNavigate} />;
-
-            default:
-                return <DashboardScreen onNavigate={handleNavigate} />;
-        }
-    };
-
+// Define the main navigation component
+const AppNavigator = () => {
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
-            <View style={styles.container}>
-                {/* Render the currently active screen */}
-                {renderScreen()}
-            </View>
-        </SafeAreaView>
+        <Stack.Navigator 
+            // Sets the LoginScreen as the first screen to display
+            initialRouteName="Login" 
+            // Hides the top navigation bar 
+            screenOptions={{ headerShown: false }} 
+        >
+            {/* Map the imported component to the route name */}
+            <Stack.Screen name="Login" component={PinLoginScreen} />
+        </Stack.Navigator>
     );
+};
+
+export default function App() {
+  return (
+    // SafeAreaView handles notches and status bars
+    <SafeAreaView style={styles.safeArea}> 
+      <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
+      <View style={styles.container}>
+        {/* Render your DashboardScreen */}
+        <DashboardScreen />
+      </View>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: CoffeeColors.DARK_BROWN, 
-    },
     container: {
         flex: 1, 
     },
-    navButton: {
-        paddingVertical: 12,
-        paddingHorizontal: 25,
-        backgroundColor: CoffeeColors.GOLD,
-        borderRadius: 8,
-    },
-    navButtonText: {
-        color: CoffeeColors.WHITE,
-        fontWeight: 'bold',
-        fontSize: 16,
-    }
 });
