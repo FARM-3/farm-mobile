@@ -39,18 +39,6 @@ const AppNavigator = () => {
 };
 
 export default function App() {
-    return (
-        <View style={styles.container}>
-            {/* The entire application must be wrapped in NavigationContainer */}
-            <NavigationContainer>
-                <AppNavigator />
-            </NavigationContainer>
-            
-            {/* The StatusBar is defined outside the navigation container */}
-            <StatusBar style="light" backgroundColor={STATUS_BAR_COLOR} />
-        </View>
-    );
-export default function App() {
   return (
     // SafeAreaView handles notches and status bars
     <SafeAreaView style={styles.safeArea}> 
@@ -68,4 +56,3 @@ const styles = StyleSheet.create({
         flex: 1, 
     },
 });
-

@@ -1,5 +1,4 @@
 import React, { useState, useRef } from "react";
-import React, { useState, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -563,7 +562,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   resetPinLinkText: {
-  resetPinLinkText: {
     color: CoffeeColors.MEDIUM_BROWN,
     fontSize: 15,
     fontWeight: 'bold',
@@ -598,5 +596,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
 
 export default LoginScreen;
