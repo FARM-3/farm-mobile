@@ -100,10 +100,24 @@ export const fetchHarvests = async () => {
  */
 export const submitHarvest = async (data) => {
     try {
-        const response = await axios.post(`${API_BASE_URL}/aggregation/FarmerHarvest/`, data);
+        // The Django backend expects certain field names (e.g. farmer, date_harvested, quantity).
+        // Map our internal harvestRecord shape to the API shape to avoid validation errors.
+        const apiPayload = {
+            // keep original fields for compatibility / debugging
+            ...data,
+            // common server-side expected aliases
+            farmer: data.farmer_name || data.farmer || '',
+            date_harvested: data.date_of_delivery || data.date_harvested || '',
+            quantity: data.weight_on_delivery != null ? parseFloat(data.weight_on_delivery) : (data.quantity || 0),
+            harvest: data.id || data.harvest || '',
+        };
+
+        console.log('Submitting harvest payload to Django:', JSON.stringify(apiPayload, null, 2));
+        const response = await axios.post(`${API_BASE_URL}/aggregation/FarmerHarvest/`, apiPayload);
         return response.data;
     } catch (error) {
         console.error("Error submitting harvest:", error.response?.data || error.message);
-        throw new Error("Failed to submit harvest data to Django.");
+        // Re-throw the original error so callers can present server-provided validation messages
+        throw error;
     }
 };

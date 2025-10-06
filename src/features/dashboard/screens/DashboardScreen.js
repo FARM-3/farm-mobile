@@ -8,7 +8,6 @@ import CoffeeColors from '../../../theme/colors';
 
 // DashboardScreen now accepts an onNavigate prop from the parent App component
 const DashboardScreen = ({ onNavigate }) => {
-<<<<<<< HEAD
     // Note: The original provided code included console logs and removed Auth/Loading logic. 
     // We keep the structure exactly as provided.
     
@@ -22,110 +21,13 @@ const DashboardScreen = ({ onNavigate }) => {
             </View>
             <Text style={styles.cardDescription}>{description}</Text>
             <Text style={styles.cardInfo}>{time} • Recorded by {recorder}</Text>
-=======
-  React.useEffect(() => {
-    console.log('DashboardScreen mounted');
-    return () => console.log('DashboardScreen unmounted');
-  }, []);
-
-  console.log('Rendering DashboardScreen');
-
-  // Card component now accepts an onPress handler
-  const Card = ({ iconName, title, description, time, recorder, color, onPress }) => (
-    <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={onPress}>
-      <View style={styles.cardHeader}>
-        {/* All icons now use Ionicons */}
-        <Ionicons name={iconName} size={24} color={color} />
-        <Text style={styles.cardTitle}>{title}</Text>
-      </View>
-  <Text style={styles.cardDescription}>{description}</Text>
-      <Text style={styles.cardInfo}>{time} • Recorded by {recorder}</Text>
-    </TouchableOpacity>
-  );
-
-  return (
-    <View style={styles.container}>
-      {/* Header Placeholder (New addition for better UI) */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>FMIS Dashboard</Text>
-        <Ionicons name="notifications-outline" size={24} color={CoffeeColors.CREAM} />
-      </View>
-
-  <ScrollView contentContainerStyle={[styles.scrollViewContent, { flex: 1, paddingBottom: 110 }]}>
-        {/* CARD 1: Aggregation (Taps navigate to AggregationScreen) */}
-        <Card
-          iconName="people-outline"
-          title="Aggregation"
-          description="Record farmer details and harvest weights."
-          time="10:30 AM"
-          recorder="Sarah"
-          color={CoffeeColors.GOLD} // Rich brown accent
-          onPress={() => onNavigate('Aggregation')} // Navigation added
-        />
-        {/* CARD 2: Harvest (Taps navigate to placeholder screen) */}
-        <Card
-          iconName="leaf-outline"
-          title="Harvest"
-          description="View and manage recent harvest records."
-          time="09:00 AM"
-          recorder="David"
-          color={CoffeeColors.LIGHT_BROWN} // Muted mid-tone
-          onPress={() => onNavigate('Harvests')} // Navigation added
-        />
-        {/* CARD 3: Processing (Taps navigate to placeholder screen) */}
-        <Card
-          iconName="home-outline"
-          title="Processing"
-          description="Track processing stages: washing, drying, hulling."
-          time="02:00 PM"
-          recorder="Emily"
-          color={CoffeeColors.MEDIUM_BROWN} // Dark accent
-          onPress={() => onNavigate('Processing')} // Navigation added
-        />
-        {/* Empty card placeholder */}
-        <View style={styles.card} />
-      </ScrollView>
-
-      {/* Bottom Navigation Bar */}
-  <View style={styles.bottomNavBar} pointerEvents="box-none">
-        
-        {/* Nav 1: Aggregations (Active Tab) */}
-        <TouchableOpacity 
-          style={[styles.navItem, styles.navItemActive]} // Marked as active for dashboard
-          onPress={() => onNavigate('Aggregation')} 
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          {/* Icon and Text colors use CREAM for active state */}
-          <Ionicons name="people-outline" size={24} color={CoffeeColors.CREAM} />
-          <Text style={[styles.navText, styles.navTextActive]}>Aggregations</Text>
-        </TouchableOpacity>
-        
-        {/* Nav 2: Harvests */}
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => onNavigate('Harvests')} 
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="leaf-outline" size={24} color={CoffeeColors.LIGHT_BROWN} />
-          <Text style={styles.navText}>Harvests</Text>
-        </TouchableOpacity>
-        
-        {/* Nav 3: Processing */}
-        <TouchableOpacity 
-          style={styles.navItem} 
-          onPress={() => onNavigate('Processing')} 
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="flask-outline" size={24} color={CoffeeColors.LIGHT_BROWN} /> 
-          <Text style={styles.navText}>Processing</Text>
->>>>>>> 4013326e8a39cf5db3e689a5cc45ddd6ed1ae1a9
         </TouchableOpacity>
     );
 
     return (
         <View style={styles.container}>
             {/* Header Placeholder */}
-            <View style={[styles.header, { borderWidth: 3, borderColor: '#FFD700' }]}>
+            <View style={[styles.header, { borderWidth: 3, borderColor: '#1c1109ff' }]}>
                     <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         {/* Notification icon uses the bright CREAM accent */}
