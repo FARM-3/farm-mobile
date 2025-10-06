@@ -27,7 +27,7 @@ const DashboardScreen = ({ onNavigate }) => {
     return (
         <View style={styles.container}>
             {/* Header Placeholder */}
-            <View style={[styles.header, { borderWidth: 3, borderColor: '#1c1109ff' }]}>
+            <View style={[styles.header, { borderWidth: 3, borderColor: '#201208ff' }]}>
                     <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         {/* Notification icon uses the bright CREAM accent */}
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
         borderWidth: 0, 
         borderBottomLeftRadius: 15,
         borderBottomRightRadius: 15,
-        shadowColor: '#000',
+        shadowColor: '#321a07ff',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 5,
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     },
     navText: {
         fontSize: 10,
-        color: CoffeeColors.LIGHT_BROWN, // Default nav text: Light Brown
+        color: CoffeeColors.DARK_BROWN_BROWN, // Default nav text: Light Brown
         marginTop: 4,
     },
     navTextActive: {

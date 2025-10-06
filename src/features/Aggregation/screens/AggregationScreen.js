@@ -76,6 +76,15 @@ const RecordsTable = ({ records, title, onExit, fields }) => {
         [records]
     );
 
+    // derive flex weights from fields' width (percent strings like '25%') or default weight
+    const flexWeights = fields.map(f => {
+        if (f.width && typeof f.width === 'string' && f.width.trim().endsWith('%')) {
+            const num = parseFloat(f.width.trim().replace('%',''));
+            return isNaN(num) ? 10 : num;
+        }
+        return 10; // default weight
+    });
+
     return (
         <View style={styles.recordsContainer}>
             <View style={styles.header}>
@@ -88,8 +97,8 @@ const RecordsTable = ({ records, title, onExit, fields }) => {
                 <View style={styles.table}>
                     {/* Table Header */}
                     <View style={styles.tableRow}>
-                        {fields.map(field => (
-                            <Text key={field.key} style={[styles.tableHeader, { width: field.width || '25%' }]}>
+                        {fields.map((field, idx) => (
+                            <Text key={field.key} style={[styles.tableHeader, { flex: flexWeights[idx], minWidth: 0 }] }>
                                 {field.label}
                             </Text>
                         ))}
@@ -100,12 +109,12 @@ const RecordsTable = ({ records, title, onExit, fields }) => {
                     ) : (
                         sortedRecords.map((record, index) => (
                             <View key={record.id || index} style={[styles.tableRow, index % 2 && styles.tableRowAlt]}>
-                                {fields.map(field => (
+                                {fields.map((field, idx) => (
                                     <Text 
                                         key={`${record.id}-${field.key}`} 
-                                        style={[styles.tableCell, { width: field.width || '25%' }]}
+                                        style={[styles.tableCell, { flex: flexWeights[idx], minWidth: 0, flexShrink: 1 }]}
                                     >
-                                        {record[field.key]}
+                                        {String(record[field.key] ?? '')}
                                     </Text>
                                 ))}
                             </View>
@@ -150,7 +159,18 @@ const AggregationScreen = ({ onNavigate }) => {
         setLoading(true);
         try {
             const fetchedFarmers = await fetchFarmers();
-            setFarmersList(fetchedFarmers);
+            // Log raw response so we can see whether the backend returned a list or a paginated object
+            console.log('fetchFarmers raw response:', fetchedFarmers);
+            // Handle common Django/DRF patterns: either an array or a paginated object { results: [...] }
+            if (Array.isArray(fetchedFarmers)) {
+                setFarmersList(fetchedFarmers);
+            } else if (fetchedFarmers && Array.isArray(fetchedFarmers.results)) {
+                setFarmersList(fetchedFarmers.results);
+            } else {
+                // Fallback: if server returned null/undefined or an unexpected shape, set empty array
+                console.warn('fetchFarmers returned unexpected shape, populating empty array');
+                setFarmersList([]);
+            }
             
             const fetchedHarvests = await fetchHarvests();
             setHarvestsList(fetchedHarvests); 
@@ -206,7 +226,8 @@ const AggregationScreen = ({ onNavigate }) => {
     }, [farmersList]);
 
     // Derive farmer options with ids for use when submitting harvests
-    const farmerOptions = farmersList.map(f => ({
+    const _safeFarmers = Array.isArray(farmersList) ? farmersList : (farmersList?.results ?? []);
+    const farmerOptions = _safeFarmers.map(f => ({
         id: f.id ?? f.pk ?? f._id ?? f.ID ?? null,
         name: getFarmerDisplayName(f),
     })).filter(o => o.name);
@@ -343,6 +364,10 @@ const AggregationScreen = ({ onNavigate }) => {
                     <TouchableOpacity style={styles.submitButton} onPress={handleFarmerSubmit} disabled={loading}>
                         {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : <Text style={styles.submitButtonText}>Submit Farmer Details</Text>}
                     </TouchableOpacity>
+                    {/* Always-available View Records button */}
+                    <TouchableOpacity style={[styles.viewRecordsButton, { marginTop: 10 }]} onPress={() => { setActiveTab('farmers'); setViewMode('table'); }}>
+                        <Text style={styles.viewRecordsButtonText}>View Records</Text>
+                    </TouchableOpacity>
                 </View>
             );
         } else {
@@ -387,6 +412,10 @@ const AggregationScreen = ({ onNavigate }) => {
                         disabled={!effectiveFarmerName || loading}
                     >
                         {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : <Text style={styles.submitButtonText}>Submit Harvest Details</Text>}
+                    </TouchableOpacity>
+                    {/* Always-available View Records button for harvests */}
+                    <TouchableOpacity style={[styles.viewRecordsButton, { marginTop: 10 }]} onPress={() => { setActiveTab('harvests'); setViewMode('table'); }}>
+                        <Text style={styles.viewRecordsButtonText}>View Records</Text>
                     </TouchableOpacity>
                 </View>
             );
@@ -603,6 +632,18 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    viewRecordsButton: {
+        backgroundColor: CoffeeColors.CREAM,
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: CoffeeColors.MEDIUM_BROWN,
+    },
+    viewRecordsButtonText: {
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontWeight: '700',
+    },
 
     // --- Modal/Success Styles ---
     overlay: {
@@ -676,14 +717,15 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 12,
         color: CoffeeColors.DARK_BROWN,
-        textAlign: 'center',
-        paddingHorizontal: 4,
+        textAlign: 'left',
+        paddingHorizontal: 8,
     },
     tableCell: {
         fontSize: 12,
         color: CoffeeColors.GRAY_TEXT,
-        textAlign: 'center',
-        paddingHorizontal: 4,
+        textAlign: 'left',
+        paddingHorizontal: 8,
+        paddingVertical: 6,
     },
     noRecords: {
         padding: 20,
