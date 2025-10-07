@@ -2,9 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../../../theme/colors';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import CoffeeColors from '../../../theme/colors';
 
 CoffeeColors.GOLD = '#c39e00';
 CoffeeColors.ACCENT = '#ff6347';

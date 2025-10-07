@@ -11,7 +11,7 @@ import {
 // 1. Path to Screens (Corrected case for folder)
 import DashboardScreen from './features/dashboard/screens/DashboardScreen';
 import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
-import ProcessingScreen from './features/Processing/screens/ProcessingScreen';
+import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 import LoginScreen from './features/dashboard/screens/LoginScreen';
 
 // 2. Path to Color Palette
@@ -90,7 +90,7 @@ export default function App() {
     );
 }
 
-const styles = StyleSheet.create({
+    const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
         backgroundColor: CoffeeColors.DARK_BROWN, 
