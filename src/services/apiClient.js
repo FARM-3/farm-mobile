@@ -5,7 +5,7 @@ import { API_BASE_URL as BASE } from '../utils/apiConfig';
 const normalizedBase = BASE.endsWith('/') ? BASE : BASE + '/';
 const client = axios.create({
   baseURL: normalizedBase,
-  timeout: 15000,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
