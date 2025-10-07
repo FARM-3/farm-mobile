@@ -410,7 +410,7 @@ const LoginScreen = ({ onNavigate }) => {
                 <Text style={styles.loginButtonText}>LOGIN</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={[styles.loginButton, { backgroundColor: CoffeeColors.GOLD, marginTop: 0 }]}
               onPress={async () => {
                 try {
@@ -426,7 +426,7 @@ const LoginScreen = ({ onNavigate }) => {
               }}
             >
               <Text style={styles.loginButtonText}>CHECK API</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
             {/* Reset PIN Link */}
             <TouchableOpacity
               style={styles.resetPinLinkContainer}

@@ -14,9 +14,12 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage"; 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 // Importing the API service function (assuming this is updated elsewhere)
-import { postHarvestRecord } from "../../../services/harvestRecord"; 
+import { postHarvestRecord } from "../../../services/harvestRecord";
+// Import shared components
+import Header from '../../../components/Header';
+import BottomNav from '../../../components/BottomNav'; 
 
 /**
  * Utility function to format date for API (YYYY-MM-DD string).
@@ -209,12 +212,14 @@ export default function HarvestFormScreen({ onNavigate }) {
     );
 
     return (
-        <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.select({ ios: "padding", android: undefined })}
-        >
-            <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-                <Text style={styles.heading}>Harvest Recording (Block Champion)</Text>
+        <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
+            <Header title="Harvest Form" onNavigate={onNavigate} />
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.select({ ios: "padding", android: undefined })}
+            >
+                <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+                    <Text style={styles.heading}>Harvest Recording (Block Champion)</Text>
 
                 <Text style={styles.label}>Grade</Text>
                 <View style={styles.pickerWrap}>
@@ -298,11 +303,13 @@ export default function HarvestFormScreen({ onNavigate }) {
                     )}
                 </TouchableOpacity>
 
-                <BackButton />
-                
-                <View style={{ height: 60 }} />
-            </ScrollView>
-        </KeyboardAvoidingView>
+                    <BackButton />
+
+                    <View style={{ height: 100 }} />
+                </ScrollView>
+            </KeyboardAvoidingView>
+            <BottomNav activeScreen="Harvests" onNavigate={onNavigate} />
+        </View>
     );
 }
 

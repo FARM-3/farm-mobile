@@ -15,9 +15,9 @@ import DashboardScreen from './features/dashboard/screens/DashboardScreen';
 import LoginScreen from './features/dashboard/screens/LoginScreen';
 
 // --- HARVEST SCREENS ---
-import HarvestSummaryScreen from './features/harvest/screens/HarvestSummaryScreen'; 
+import HarvestSummaryScreen from './features/harvest/screens/HarvestSummaryScreen';
 // Adding the Form Screen import, assuming its location
-import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen'; 
+import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen';
 
 // 2. Path to Color Palette
 import CoffeeColors from './theme/colors';
@@ -61,28 +61,14 @@ export default function App() {
                 // Pass the navigation function to the aggregation screen (for the Exit button)
                 return <AggregationScreen onNavigate={handleNavigate} />; 
 
-            // --- HARVEST SUMMARY SCREEN INTEGRATION ---
+            // --- HARVEST FORM INTEGRATION ---
             case 'Harvests':
-                // Renders the Harvest Summary Screen
+                // Renders the Harvest Form Screen
                 return <HarvestSummaryScreen onNavigate={handleNavigate} />;
 
             // --- HARVEST FORM INTEGRATION ---
             case 'HarvestForm':
-                 return <HarvestFormScreen onNavigate={handleNavigate} />;
-                
-                return (
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-                        <Text style={{ fontSize: 24, color: CoffeeColors.DARK_BROWN, marginBottom: 20 }}>
-                            Harvest Form Screen Placeholder
-                        </Text>
-                        <Text style={{ fontSize: 16, color: CoffeeColors.GRAY_TEXT, marginBottom: 20 }}>
-                            (Used for creating new harvest records)
-                        </Text>
-                        <TouchableOpacity onPress={() => handleNavigate('Harvests')} style={styles.navButton}>
-                            <Text style={styles.navButtonText}>Go to Harvest Summary</Text>
-                        </TouchableOpacity>
-                    </View>
-                );
+                return <HarvestFormScreen onNavigate={handleNavigate} />;
 
 
             case 'Processing':

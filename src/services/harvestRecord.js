@@ -65,8 +65,8 @@ const mapToApiPayload = (payload) => {
  */
 export const postHarvestRecord = async (uiPayload) => {
     const apiPayload = mapToApiPayload(uiPayload);
-    // Endpoint: /api/harvests/harvests/
-    const endpoint = '/api/harvests/harvests/';
+    // Endpoint: harvests/harvests/
+    const endpoint = 'harvests/harvests/';
 
     try {
         const response = await client.post(endpoint, apiPayload);
@@ -83,8 +83,8 @@ export const postHarvestRecord = async (uiPayload) => {
  * Fetches a list of all harvest records from the API.
  */
 export const fetchAllHarvestRecords = async () => {
-    // Endpoint: /api/harvests/harvests/
-    const endpoint = '/api/harvests/harvests/';
+    // Endpoint: harvests/harvests/
+    const endpoint = 'harvests/harvests/';
 
     try {
         const response = await client.get(endpoint);
@@ -101,8 +101,8 @@ export const fetchAllHarvestRecords = async () => {
  * @param {number} id - The integer ID of the harvest record to fetch.
  */
 export const fetchHarvestRecordById = async (id) => {
-    // API uses the integer ID field as the path parameter: /api/harvests/harvests/{id}/
-    const endpoint = `/api/harvests/harvests/${id}/`;
+    // API uses the integer ID field as the path parameter: harvests/harvests/{id}/
+    const endpoint = `harvests/harvests/${id}/`;
 
     try {
         const response = await client.get(endpoint);
@@ -262,8 +262,8 @@ export const syncAllRecords = async () => {
 //  */
 // export const postHarvestRecord = async (uiPayload) => {
 //     const apiPayload = mapToApiPayload(uiPayload);
-//     // Endpoint: /api/harvests/harvests/
-//     const endpoint = '/api/harvests/harvests/';
+//     // Endpoint: harvests/harvests/
+//     const endpoint = 'harvests/harvests/';
 
 //     try {
 //         const response = await client.post(endpoint, apiPayload);
@@ -280,8 +280,8 @@ export const syncAllRecords = async () => {
 //  * Fetches a list of all harvest records from the API.
 //  */
 // export const fetchAllHarvestRecords = async () => {
-//     // Endpoint: /api/harvests/harvests/
-//     const endpoint = '/api/harvests/harvests/';
+//     // Endpoint: harvests/harvests/
+//     const endpoint = 'harvests/harvests/';
 
 //     try {
 //         const response = await client.get(endpoint);
@@ -298,8 +298,8 @@ export const syncAllRecords = async () => {
 //  * @param {number} cherryColorId - The integer ID (cherry_color) of the harvest record to fetch.
 //  */
 // export const fetchHarvestRecordById = async (cherryColorId) => {
-//     // API uses the integer cherry_color field as the path parameter: /api/harvests/harvests/{cherry_color}/
-//     const endpoint = `/api/harvests/harvests/${cherryColorId}/`;
+//     // API uses the integer cherry_color field as the path parameter: harvests/harvests/{cherry_color}/
+//     const endpoint = `harvests/harvests/${cherryColorId}/`;
 
 //     try {
 //         const response = await client.get(endpoint);
