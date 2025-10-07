@@ -64,15 +64,52 @@ const DashboardScreen = ({ onNavigate }) => {
             <Ionicons name="log-out-outline" size={22} color={CoffeeColors.CREAM} />
           </TouchableOpacity>
         </View>
+        <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Ionicons name="notifications-outline" size={24} color={CoffeeColors.CREAM} style={{ marginRight: 12 }} />
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert(
+                'Logout',
+                'Are you sure you want to log out?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Yes',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+                        await AsyncStorage.removeItem('authToken');
+                        await AsyncStorage.removeItem('user');
+                        console.log('Cleared AsyncStorage auth keys');
+                      } catch (e) {
+                        console.warn('AsyncStorage not available or clear failed', e.message || e);
+                      }
+                      onNavigate('Login');
+                    }
+                  }
+                ]
+              );
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="log-out-outline" size={22} color={CoffeeColors.CREAM} />
+          </TouchableOpacity>
+        </View>
       </View>
 
+      <ScrollView contentContainerStyle={[styles.scrollViewContent, { flex: 1, paddingBottom: 110 }]}>
       <ScrollView contentContainerStyle={[styles.scrollViewContent, { flex: 1, paddingBottom: 110 }]}>
         <Card
           iconName="people-outline"
           title="Aggregation"
           description="Record farmer details and harvest weights."
+          description="Record farmer details and harvest weights."
           time="10:30 AM"
           recorder="Sarah"
+          color={CoffeeColors.GOLD}
+          onPress={() => onNavigate('Aggregation')}
           color={CoffeeColors.GOLD}
           onPress={() => onNavigate('Aggregation')}
         />
@@ -80,14 +117,19 @@ const DashboardScreen = ({ onNavigate }) => {
           iconName="leaf-outline"
           title="Harvest"
           description="View and manage recent harvest records."
+          description="View and manage recent harvest records."
           time="09:00 AM"
           recorder="David"
+          color={CoffeeColors.LIGHT_BROWN}
+          onPress={() => onNavigate('Harvests')}
           color={CoffeeColors.LIGHT_BROWN}
           onPress={() => onNavigate('Harvests')}
         />
         <Card
           iconName="cube-outline"
+          iconName="cube-outline"
           title="Processing"
+          description="Track processing stages: washing, drying, hulling."
           description="Track processing stages: washing, drying, hulling."
           time="02:00 PM"
           recorder="Emily"
@@ -111,12 +153,40 @@ const DashboardScreen = ({ onNavigate }) => {
           recorder="Aisha"
           color={CoffeeColors.ACCENT}
           onPress={() => onNavigate('Quality')}
+          color={CoffeeColors.MEDIUM_BROWN}
+          onPress={() => onNavigate('Processing')}
         />
+        <Card
+          iconName="archive-outline"
+          title="Inventory"
+          description="Manage parchment and green bean stock locations."
+          time="04:00 PM"
+          recorder="John"
+          color={CoffeeColors.DARK_BROWN}
+          onPress={() => onNavigate('Inventory')}
+        />
+        <Card
+          iconName="sparkles-outline"
+          title="Quality Control (QC)"
+          description="Log cup scores, moisture, and defect analysis."
+          time="08:00 AM"
+          recorder="Aisha"
+          color={CoffeeColors.ACCENT}
+          onPress={() => onNavigate('Quality')}
+        />
+        {/* Empty card placeholder to maintain grid layout */}
         {/* Empty card placeholder to maintain grid layout */}
         <View style={styles.card} />
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
+      <View style={styles.bottomNavBar} pointerEvents="box-none">
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => onNavigate('Aggregation')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="people-outline" size={24} color={CoffeeColors.LIGHT_BROWN} />
       <View style={styles.bottomNavBar} pointerEvents="box-none">
         <TouchableOpacity
           style={styles.navItem}
@@ -132,8 +202,29 @@ const DashboardScreen = ({ onNavigate }) => {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="leaf-outline" size={24} color={CoffeeColors.LIGHT_BROWN} />
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => onNavigate('Harvests')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="leaf-outline" size={24} color={CoffeeColors.LIGHT_BROWN} />
           <Text style={styles.navText}>Harvests</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => onNavigate('Processing')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="cube-outline" size={24} color={CoffeeColors.LIGHT_BROWN} />
+          <Text style={styles.navText}>Processing</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.navItem, styles.navItemActive]}
+          onPress={() => onNavigate('Dashboard')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="grid-outline" size={24} color={CoffeeColors.CREAM} />
+          <Text style={[styles.navText, styles.navTextActive]}>Dashboard</Text>
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => onNavigate('Processing')}
@@ -159,15 +250,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: CoffeeColors.LIGHT_GRAY,
+    backgroundColor: CoffeeColors.LIGHT_GRAY,
   },
   header: {
     paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 15,
     backgroundColor: CoffeeColors.DARK_BROWN,
+    backgroundColor: CoffeeColors.DARK_BROWN,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 0,
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
     borderWidth: 0,
     borderBottomLeftRadius: 15,
     borderBottomRightRadius: 15,
@@ -181,6 +282,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: CoffeeColors.CREAM,
+    color: CoffeeColors.CREAM,
   },
   scrollViewContent: {
     padding: 15,
@@ -191,13 +293,18 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: CoffeeColors.WHITE,
     borderRadius: 15,
+    borderRadius: 15,
     padding: 15,
     marginBottom: 15,
     width: '48%',
     elevation: 5,
     shadowColor: CoffeeColors.DARK_BROWN,
     shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+    shadowColor: CoffeeColors.DARK_BROWN,
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
+    shadowRadius: 5,
     shadowRadius: 5,
     minHeight: 180,
   },
@@ -210,6 +317,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginLeft: 10,
+    color: CoffeeColors.DARK_BROWN,
     color: CoffeeColors.DARK_BROWN,
   },
   cardDescription: {
@@ -226,10 +334,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     backgroundColor: CoffeeColors.LIGHT_GRAY,
+    backgroundColor: CoffeeColors.LIGHT_GRAY,
     borderTopWidth: 1,
+    borderTopColor: CoffeeColors.MEDIUM_BROWN,
     borderTopColor: CoffeeColors.MEDIUM_BROWN,
     paddingVertical: 10,
     paddingHorizontal: 5,
+    paddingBottom: 30,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
+    elevation: 16,
     paddingBottom: 30,
     position: 'absolute',
     left: 0,
@@ -246,11 +363,22 @@ const styles = StyleSheet.create({
   navItemActive: {
     backgroundColor: CoffeeColors.MEDIUM_BROWN,
     borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  navItemActive: {
+    backgroundColor: CoffeeColors.MEDIUM_BROWN,
+    borderRadius: 8,
   },
   navText: {
     fontSize: 10,
     color: CoffeeColors.LIGHT_BROWN,
+    color: CoffeeColors.LIGHT_BROWN,
     marginTop: 4,
+  },
+  navTextActive: {
+    color: CoffeeColors.CREAM,
+    fontWeight: 'bold',
   },
   navTextActive: {
     color: CoffeeColors.CREAM,

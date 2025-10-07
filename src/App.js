@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState }, { useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { 
+    StyleSheet, 
+    View, 
+    SafeAreaView,
+    TouchableOpacity, 
+    Text // Added Text and TouchableOpacity for placeholder views
     StyleSheet, 
     View, 
     SafeAreaView,
