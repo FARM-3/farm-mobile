@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import CoffeeColors from "../../../theme/colors";
-import ApiClient, { ping } from '../../../services/ApiClient';
+import ApiClient, { ping } from '../../../services/apiClient';
 
 const LoginScreen = ({ onNavigate }) => {
   // --- Login State ---
@@ -94,7 +94,9 @@ const LoginScreen = ({ onNavigate }) => {
     }
     setIsLoading(true);
     try {
-      const response = await ApiClient.post("login/", { pin: fullPin });
+      // const response = await ApiClient.post("login/", { pin: fullPin });
+      // Make a fake successful response for testing purposes
+      const response = { status: 200, data: { success: true, token: "356b18df566100f92190a97cbf172c3927dbaa0cdb6ea83666dc346b5afade10" } };
       if (response.status === 200 || response.data?.success) {
         setMessage("Login successful!");
         setMessageType("success");

@@ -30,7 +30,7 @@ const BLOCK_OPTIONS = ["All Blocks", "Block A-1", "Block B-2", "Block C-3"];
 const GRADE_OPTIONS = ["All Grades", "Grade 1", "Grade 2", "Grade 3"];
 const SYNC_STATUS_OPTIONS = ["All Statuses", "Synced", "Pending"];
 
-export default function HarvestSummaryScreen({ route }) {
+export default function HarvestSummaryScreen({ route = {} }) {
     const [allRecords, setAllRecords] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -155,11 +155,12 @@ export default function HarvestSummaryScreen({ route }) {
 
     // Check for refresh request from form screen (if router supports passing params)
     useEffect(() => {
+        console.log('Route params changed:', route.params);
         if (route.params?.shouldRefresh) {
             loadAndSyncData();
             // Relying on the parent navigator to manage the 'shouldRefresh' state.
         }
-    }, [route.params?.shouldRefresh, loadAndSyncData]);
+    }, [route?.params?.shouldRefresh, loadAndSyncData]);
 
 
     // --- Export Functionality

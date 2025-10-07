@@ -1,6 +1,6 @@
 // File: src/services/harvestRecord.js - Handles all API interactions for Harvest Records, now including offline sync utilities.
 
-import client from './ApiClient'; // Corrected case to match actual filename
+import client from './apiClient'; // Corrected case to match actual filename
 import AsyncStorage from "@react-native-async-storage/async-storage"; // <-- Added for sync utilities
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsynced records
@@ -208,7 +208,7 @@ export const syncAllRecords = async () => {
 
 // // File: src/services/harvestRecord.js - Handles all API interactions for Harvest Records, now including offline sync utilities.
 
-// import client from './ApiClient'; // Corrected case to match actual filename
+// import client from './apiClient'; // Corrected case to match actual filename
 // import AsyncStorage from "@react-native-async-storage/async-storage"; // <-- Added for sync utilities
 
 // const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsynced records
