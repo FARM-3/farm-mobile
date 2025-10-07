@@ -71,51 +71,61 @@ export const fetchFarmers = async () => {
 };
 
 /**
- * Submits new farmer details to the Django API.
- * Uses JWT authentication automatically via ApiService
+ * Submits new farmer details - OFFLINE-FIRST pattern
+ * Saves to local DB first, then syncs to API
  * @param {Object} data - Farmer data to submit
- * @returns {Promise<Object>} Created farmer object
+ * @returns {Promise<Object>} Created farmer object (from API if online, local if offline)
  */
 export const submitFarmer = async (data) => {
+    // CRITICAL: Save to local database FIRST (offline-first pattern)
+    let localId;
+    try {
+        if (DatabaseService.isInitialized) {
+            const farmerData = {
+                name: data.name,
+                phone: data.contact || '',
+                location: data.location || '',
+                plot_size: data.num_trees || 0,
+                synced: 0,  // Will be marked as 1 after successful sync
+            };
+
+            localId = await DatabaseService.insert('farmers', farmerData);
+            console.log('[aggregationService] Farmer saved to local DB with ID:', localId);
+        }
+    } catch (dbError) {
+        console.error('[aggregationService] Failed to save farmer to local DB:', dbError);
+        throw new Error('Failed to save farmer locally');
+    }
+
+    // Now try to sync to API (silent fail if offline)
     try {
         console.log('[aggregationService] Submitting farmer to API...');
         const response = await ApiService.post('/aggregation/Farmer/', data);
-        console.log('[aggregationService] Farmer submitted successfully');
+        console.log('[aggregationService] Farmer submitted successfully to API');
 
-        // Store in local database for offline access
-        try {
-            if (DatabaseService.isInitialized) {
-                await DatabaseService.insert('farmers', {
-                    server_id: response.data.id,
-                    name: data.name,
-                    phone: data.contact || '',
-                    location: data.location || '',
-                    plot_size: data.num_trees || 0,
-                    synced: 1,
-                });
-                console.log('[aggregationService] Farmer saved to local database');
-            }
-        } catch (dbError) {
-            console.warn('[aggregationService] Failed to save farmer to local DB:', dbError);
+        // Mark as synced and update server_id
+        if (localId && DatabaseService.isInitialized) {
+            await DatabaseService.markAsSynced('farmers', localId, response.data.id);
+            console.log('[aggregationService] Marked farmer as synced with server ID:', response.data.id);
         }
 
         return response.data;
     } catch (error) {
-        // Detailed logging to help diagnose server 500s
-        console.error('[aggregationService] Error submitting farmer:');
+        // API failed but data is safe in local DB - will sync later
+        console.error('[aggregationService] API submission failed (offline?):');
         if (error.response) {
             console.error('Status:', error.response.status);
             console.error('Response data:', error.response.data);
-            console.error('Response headers:', error.response.headers);
-        } else if (error.request) {
-            console.error('No response received');
         } else {
             console.error('Error message:', error.message);
         }
-        console.error('Request payload:', JSON.stringify(data, null, 2));
 
-        // Rethrow original error so callers can inspect response
-        throw error;
+        // Return local record info so UI can continue
+        return {
+            id: localId,
+            ...data,
+            _localOnly: true,  // Flag to indicate this is not yet synced
+        };
     }
 };
 

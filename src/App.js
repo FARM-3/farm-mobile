@@ -5,7 +5,8 @@ import {
     View,
     SafeAreaView,
     TouchableOpacity,
-    Text // Added Text and TouchableOpacity for placeholder views
+    Text,
+    ActivityIndicator // Added for loading state
 } from 'react-native';
 
 // 1. Path to Screens (Corrected case for folder)
@@ -24,16 +25,40 @@ import CoffeeColors from './theme/colors';
 
 // 3. Services
 import DatabaseService from './services/DatabaseService';
+import AuthService from './services/AuthService';
 
 export default function App() {
     // State to manage the currently active screen. Start on 'Login'.
     const [activeScreen, setActiveScreen] = useState('Login');
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-    // Initialize database on app start
+    // Initialize database and check auth on app start
     useEffect(() => {
-        DatabaseService.init().catch(error => {
-            console.error('[App] Database initialization failed:', error);
-        });
+        const initializeApp = async () => {
+            try {
+                // Initialize database
+                await DatabaseService.init();
+                console.log('[App] Database initialized successfully');
+
+                // Check if user is already logged in
+                const isAuthenticated = await AuthService.isAuthenticated();
+
+                if (isAuthenticated) {
+                    console.log('[App] User is authenticated, navigating to Dashboard');
+                    setActiveScreen('Dashboard');
+                } else {
+                    console.log('[App] User not authenticated, staying on Login');
+                    setActiveScreen('Login');
+                }
+            } catch (error) {
+                console.error('[App] Initialization error:', error);
+                setActiveScreen('Login');
+            } finally {
+                setIsCheckingAuth(false);
+            }
+        };
+
+        initializeApp();
     }, []);
 
     // Function to change the active screen state
@@ -102,6 +127,21 @@ export default function App() {
                 return <DashboardScreen onNavigate={handleNavigate} />;
         }
     };
+
+    // Show loading screen while checking auth
+    if (isCheckingAuth) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color={CoffeeColors.GOLD} />
+                    <Text style={{ color: CoffeeColors.WHITE, marginTop: 16, fontSize: 16 }}>
+                        Loading...
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.safeArea}>
