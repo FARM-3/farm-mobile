@@ -1,6 +1,6 @@
 // File: src/services/harvestRecord.js - Handles all API interactions for Harvest Records, now including offline sync utilities.
 
-import client from './apiClient'; // Corrected case to match actual filename
+import ApiService from './ApiService';
 import AsyncStorage from "@react-native-async-storage/async-storage"; // <-- Added for sync utilities
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsynced records
@@ -69,7 +69,7 @@ export const postHarvestRecord = async (uiPayload) => {
     const endpoint = 'harvests/harvests/';
 
     try {
-        const response = await client.post(endpoint, apiPayload);
+        const response = await ApiService.post(endpoint, apiPayload);
         return { success: true, status: response.status, remoteData: response.data };
     } catch (error) {
         // Return 0 for status if network error (offline) to handle offline state robustly
@@ -87,7 +87,7 @@ export const fetchAllHarvestRecords = async () => {
     const endpoint = 'harvests/harvests/';
 
     try {
-        const response = await client.get(endpoint);
+        const response = await ApiService.get(endpoint);
         return { success: true, status: response.status, remoteData: response.data };
     } catch (error) {
         const status = error.response ? error.response.status : 0;
@@ -105,7 +105,7 @@ export const fetchHarvestRecordById = async (id) => {
     const endpoint = `harvests/harvests/${id}/`;
 
     try {
-        const response = await client.get(endpoint);
+        const response = await ApiService.get(endpoint);
         return { success: true, status: response.status, remoteData: response.data };
     } catch (error) {
         const status = error.response ? error.response.status : 0;

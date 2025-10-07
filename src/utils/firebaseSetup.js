@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { API_BASE_URL } from './apiConfig';
+import ApiService from '../services/ApiService';
+import AuthService from '../services/AuthService';
 
 // --- Helper for ID Generation ---
 
@@ -21,103 +21,125 @@ export const generateRecordId = (type) => {
 };
 
 
-// --- API Functions (Assume standard REST endpoints) ---
+// --- API Functions (Using AuthService with JWT tokens) ---
 
 /**
- * Initializes the app. Simulates successful auth for now, providing a unique user ID.
- * @returns {Promise<string>} Placeholder User ID.
+ * Initializes the app and gets the current user
+ * @returns {Promise<string|null>} User ID or null
  */
 export const initializeAuth = async () => {
-    console.log("Authentication simulation complete. Using Django backend.");
-    return 'django-user-' + Math.random().toString(36).substring(2, 8); 
+    try {
+        console.log('[firebaseSetup] Checking authentication...');
+        const user = await AuthService.getStoredUser();
+
+        if (user && user.id) {
+            console.log('[firebaseSetup] User authenticated:', user.id);
+            return String(user.id);
+        }
+
+        console.warn('[firebaseSetup] No authenticated user found');
+        return null;
+    } catch (error) {
+        console.error('[firebaseSetup] Auth initialization error:', error);
+        return null;
+    }
 };
 
 
 /**
  * Fetches all registered farmers from the Django API.
+ * Uses JWT authentication automatically via ApiService
  */
 export const fetchFarmers = async () => {
     try {
-        const response = await axios.get(`${API_BASE_URL}/aggregation/Farmer/`);
+        console.log('[firebaseSetup] Fetching farmers...');
+        const response = await ApiService.get('/aggregation/Farmer/');
+        console.log('[firebaseSetup] Farmers fetched successfully');
         return response.data;
     } catch (error) {
-        console.error("Error fetching farmers:", error);
+        console.error('[firebaseSetup] Error fetching farmers:', error.response?.data || error.message);
+
+        // If unauthorized, might need to re-login
+        if (error.response?.status === 401) {
+            console.warn('[firebaseSetup] Unauthorized - user may need to login again');
+        }
+
         return [];
     }
 };
 
 /**
  * Submits new farmer details to the Django API.
+ * Uses JWT authentication automatically via ApiService
  */
 export const submitFarmer = async (data) => {
     try {
-        const response = await axios.post(`${API_BASE_URL}/aggregation/Farmer/`, data);
+        console.log('[firebaseSetup] Submitting farmer...');
+        const response = await ApiService.post('/aggregation/Farmer/', data);
+        console.log('[firebaseSetup] Farmer submitted successfully');
         return response.data;
     } catch (error) {
         // Detailed logging to help diagnose server 500s
-        console.error("Error submitting farmer:");
+        console.error('[firebaseSetup] Error submitting farmer:');
         if (error.response) {
-            console.error("Status:", error.response.status);
-            console.error("Response data:", error.response.data);
-            console.error("Response headers:", error.response.headers);
-            // Log request config (headers, url, method) for debugging
-            try {
-                console.error("Request config:", {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers,
-                    data: error.config?.data,
-                });
-            } catch (e) {
-                console.error('Failed to log request config', e);
-            }
+            console.error('Status:', error.response.status);
+            console.error('Response data:', error.response.data);
+            console.error('Response headers:', error.response.headers);
         } else if (error.request) {
-            console.error("No response received. Request:", error.request);
+            console.error('No response received');
         } else {
-            console.error("Error message:", error.message);
+            console.error('Error message:', error.message);
         }
-        console.error("Request payload:", JSON.stringify(data, null, 2));
-        // Rethrow original error so callers can inspect response (status, data)
+        console.error('Request payload:', JSON.stringify(data, null, 2));
+
+        // Rethrow original error so callers can inspect response
         throw error;
     }
 };
 
 /**
- * Fetches all recorded harvests from the Django API.
+ * Fetches all harvest records from the Django API.
+ * Uses JWT authentication automatically via ApiService
  */
 export const fetchHarvests = async () => {
     try {
-        const response = await axios.get(`${API_BASE_URL}/aggregation/FarmerHarvest/`);
+        console.log('[firebaseSetup] Fetching harvests...');
+        const response = await ApiService.get('aggregation/FarmerHarvest');
+        console.log('[firebaseSetup] Harvests fetched successfully');
         return response.data;
     } catch (error) {
-        console.error("Error fetching harvests:", error);
+        console.error('[firebaseSetup] Error fetching harvests:', error.response?.data || error.message);
+
+        if (error.response?.status === 401) {
+            console.warn('[firebaseSetup] Unauthorized - user may need to login again');
+        }
+
         return [];
     }
 };
 
 /**
- * Submits new harvest details to the Django API.
+ * Submits new harvest/aggregation record to the Django API.
+ * Uses JWT authentication automatically via ApiService
  */
 export const submitHarvest = async (data) => {
     try {
-        // The Django backend expects certain field names (e.g. farmer, date_harvested, quantity).
-        // Map our internal harvestRecord shape to the API shape to avoid validation errors.
-        const apiPayload = {
-            // keep original fields for compatibility / debugging
-            ...data,
-            // common server-side expected aliases
-            farmer: data.farmer_name || data.farmer || '',
-            date_harvested: data.date_of_delivery || data.date_harvested || '',
-            quantity: data.weight_on_delivery != null ? parseFloat(data.weight_on_delivery) : (data.quantity || 0),
-            harvest: data.id || data.harvest || '',
-        };
-
-        console.log('Submitting harvest payload to Django:', JSON.stringify(apiPayload, null, 2));
-        const response = await axios.post(`${API_BASE_URL}/aggregation/FarmerHarvest/`, apiPayload);
+        console.log('[firebaseSetup] Submitting harvest...');
+        const response = await ApiService.post('aggregation/FarmerHarvest/', data);
+        console.log('[firebaseSetup] Harvest submitted successfully');
         return response.data;
     } catch (error) {
-        console.error("Error submitting harvest:", error.response?.data || error.message);
-        // Re-throw the original error so callers can present server-provided validation messages
+        console.error('[firebaseSetup] Error submitting harvest:');
+        if (error.response) {
+            console.error('Status:', error.response.status);
+            console.error('Response data:', error.response.data);
+        } else if (error.request) {
+            console.error('No response received');
+        } else {
+            console.error('Error message:', error.message);
+        }
+        console.error('Request payload:', JSON.stringify(data, null, 2));
+
         throw error;
     }
 };

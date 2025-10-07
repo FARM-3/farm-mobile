@@ -1,22 +1,17 @@
-import React, { useState }, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { 
-    StyleSheet, 
-    View, 
+import {
+    StyleSheet,
+    View,
     SafeAreaView,
-    TouchableOpacity, 
+    TouchableOpacity,
     Text // Added Text and TouchableOpacity for placeholder views
-    StyleSheet, 
-    View, 
-    SafeAreaView,
-    TouchableOpacity, 
-    Text
-} from 'react-native'; 
+} from 'react-native';
 
 // 1. Path to Screens (Corrected case for folder)
 import DashboardScreen from './features/dashboard/screens/DashboardScreen';
-// import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
-// import ProcessingScreen from './features/Processing/screens/ProcessingScreen';
+import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
+import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 import LoginScreen from './features/dashboard/screens/LoginScreen';
 
 // --- HARVEST SCREENS ---
@@ -27,9 +22,19 @@ import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen';
 // 2. Path to Color Palette
 import CoffeeColors from './theme/colors';
 
+// 3. Services
+import DatabaseService from './services/DatabaseService';
+
 export default function App() {
     // State to manage the currently active screen. Start on 'Login'.
     const [activeScreen, setActiveScreen] = useState('Login');
+
+    // Initialize database on app start
+    useEffect(() => {
+        DatabaseService.init().catch(error => {
+            console.error('[App] Database initialization failed:', error);
+        });
+    }, []);
 
     // Function to change the active screen state
     const handleNavigate = (screenName) => {

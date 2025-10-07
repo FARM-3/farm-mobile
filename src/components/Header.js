@@ -1,9 +1,52 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../theme/colors';
+import AuthService from '../services/AuthService';
+import SyncService from '../services/SyncService';
 
-const Header = ({ title = "Rugyeyo Farm", onNavigate }) => {
+/**
+ * Unified Header Component
+ * Used across all screens for consistent design
+ */
+const Header = ({ title = 'Rugyeyo Farm', onNavigate, showSync = true, showLogout = true }) => {
+  const [syncStatus, setSyncStatus] = React.useState({ pending: 0 });
+  const [isSyncing, setIsSyncing] = React.useState(false);
+
+  // Load sync status on mount
+  React.useEffect(() => {
+    loadSyncStatus();
+  }, []);
+
+  const loadSyncStatus = async () => {
+    try {
+      const status = await SyncService.getSyncStatus();
+      setSyncStatus({ pending: status.pendingRecords });
+      setIsSyncing(status.isSyncing);
+    } catch (error) {
+      console.error('[Header] Error loading sync status:', error);
+    }
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await SyncService.syncAll();
+
+      if (result.success) {
+        Alert.alert('Sync Complete', result.message);
+      } else {
+        Alert.alert('Sync Incomplete', result.message);
+      }
+
+      await loadSyncStatus();
+    } catch (error) {
+      Alert.alert('Sync Failed', error.message || 'Failed to sync data');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleLogout = () => {
     Alert.alert(
       'Logout',
@@ -15,14 +58,14 @@ const Header = ({ title = "Rugyeyo Farm", onNavigate }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-              await AsyncStorage.removeItem('authToken');
-              await AsyncStorage.removeItem('user');
-              console.log('Cleared AsyncStorage auth keys');
-            } catch (e) {
-              console.warn('AsyncStorage not available or clear failed', e.message || e);
+              await AuthService.logout();
+              if (onNavigate) {
+                onNavigate('Login');
+              }
+            } catch (error) {
+              console.error('[Header] Logout error:', error);
+              Alert.alert('Error', 'Failed to logout');
             }
-            onNavigate('Login');
           }
         }
       ]
@@ -32,14 +75,37 @@ const Header = ({ title = "Rugyeyo Farm", onNavigate }) => {
   return (
     <View style={styles.header}>
       <Text style={styles.headerTitle}>{title}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Ionicons name="notifications-outline" size={24} color={CoffeeColors.CREAM} style={{ marginRight: 12 }} />
-        <TouchableOpacity
-          onPress={handleLogout}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="log-out-outline" size={22} color={CoffeeColors.CREAM} />
-        </TouchableOpacity>
+
+      <View style={styles.headerRight}>
+        {showSync && (
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={handleSync}
+            disabled={isSyncing}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name={isSyncing ? "sync" : "cloud-upload-outline"}
+              size={24}
+              color={CoffeeColors.CREAM}
+            />
+            {syncStatus.pending > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{syncStatus.pending}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {showLogout && (
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={handleLogout}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="log-out-outline" size={24} color={CoffeeColors.CREAM} />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -54,7 +120,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 0,
     borderBottomLeftRadius: 15,
     borderBottomRightRadius: 15,
     shadowColor: '#000',
@@ -67,6 +132,32 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: CoffeeColors.CREAM,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: CoffeeColors.ACCENT,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: CoffeeColors.WHITE,
+    fontSize: 10,
+    fontWeight: 'bold',
   },
 });
 
