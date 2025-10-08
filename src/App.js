@@ -9,8 +9,9 @@ import {
 } from 'react-native'; 
 
 // 1. Path to DashboardScreen (Corrected case for folder)
-// import DashboardScreen from './features/dashboard/screens/DashboardScreen'; 
-import AggregationScreen from './features/Aggregation/screens/AggregationScreen';import LoginScreen from './features/dashboard/screens/LoginScreen';
+import DashboardScreen from './features/dashboard/screens/DashboardScreen'; 
+import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
+import LoginScreen from './features/dashboard/screens/LoginScreen';
 
 // 2. Path to Color Palette
 import CoffeeColors from './theme/colors';
