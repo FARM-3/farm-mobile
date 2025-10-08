@@ -19,18 +19,21 @@ import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 
 import CoffeeColors from '../../../theme/colors';
-import { 
-    fetchAllHarvestRecords, 
-    getUnsyncedRecords, 
-    syncAllRecords 
+import {
+    fetchAllHarvestRecords,
+    getUnsyncedRecords,
+    syncAllRecords
 } from '../../../services/harvestRecord';
+// Import shared components
+import Header from '../../../components/Header';
+import BottomNav from '../../../components/BottomNav';
 
 // --- Constants for Filters ---
 const BLOCK_OPTIONS = ["All Blocks", "Block A-1", "Block B-2", "Block C-3"];
 const GRADE_OPTIONS = ["All Grades", "Grade 1", "Grade 2", "Grade 3"];
 const SYNC_STATUS_OPTIONS = ["All Statuses", "Synced", "Pending"];
 
-export default function HarvestSummaryScreen({ route }) {
+export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
     const [allRecords, setAllRecords] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -155,11 +158,12 @@ export default function HarvestSummaryScreen({ route }) {
 
     // Check for refresh request from form screen (if router supports passing params)
     useEffect(() => {
+        console.log('Route params changed:', route.params);
         if (route.params?.shouldRefresh) {
             loadAndSyncData();
             // Relying on the parent navigator to manage the 'shouldRefresh' state.
         }
-    }, [route.params?.shouldRefresh, loadAndSyncData]);
+    }, [route?.params?.shouldRefresh, loadAndSyncData]);
 
 
     // --- Export Functionality
@@ -246,10 +250,21 @@ export default function HarvestSummaryScreen({ route }) {
     }
 
     return (
-        <View style={styles.container}>
-            
-            {/* Sync Status Banner */}
-            <View style={styles.syncBanner}>
+        <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
+            <Header title="Harvest Summary" onNavigate={onNavigate} />
+            <View style={styles.container}>
+
+                {/* Add New Harvest Button */}
+                <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={() => onNavigate && onNavigate('HarvestForm')}
+                >
+                    <Ionicons name="add-circle" size={20} color={CoffeeColors.WHITE} />
+                    <Text style={styles.addButtonText}>Record New Harvest</Text>
+                </TouchableOpacity>
+
+                {/* Sync Status Banner */}
+                <View style={styles.syncBanner}>
                 <Text style={styles.syncText}>{syncStatus}</Text>
                 <TouchableOpacity onPress={loadAndSyncData} style={{ marginLeft: 10 }}>
                     <Ionicons name="reload-circle-sharp" size={24} color={CoffeeColors.WHITE} />
@@ -308,7 +323,10 @@ export default function HarvestSummaryScreen({ route }) {
                 renderItem={renderRow}
                 keyExtractor={(item, index) => item.id?.toString() || index.toString()}
                 ListEmptyComponent={<Text style={styles.emptyText}>No harvest records found matching your filters.</Text>}
+                contentContainerStyle={{ paddingBottom: 100 }}
             />
+            </View>
+            <BottomNav activeScreen="Harvests" onNavigate={onNavigate} />
         </View>
     );
 }
@@ -328,6 +346,26 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 10,
         color: CoffeeColors.DARK_BROWN,
+    },
+    addButton: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: CoffeeColors.ACCENT,
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
+    },
+    addButtonText: {
+        color: CoffeeColors.WHITE,
+        fontWeight: '700',
+        marginLeft: 8,
+        fontSize: 14,
     },
     syncBanner: {
         flexDirection: 'row',

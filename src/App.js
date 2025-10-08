@@ -1,30 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { 
-    StyleSheet, 
-    View, 
+import {
+    StyleSheet,
+    View,
     SafeAreaView,
-    TouchableOpacity, 
-    Text
-} from 'react-native'; 
+    TouchableOpacity,
+    Text,
+    ActivityIndicator // Added for loading state
+} from 'react-native';
 
 // 1. Path to Screens (Corrected case for folder)
 import DashboardScreen from './features/dashboard/screens/DashboardScreen';
-// import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
-// import ProcessingScreen from './features/Processing/screens/ProcessingScreen';
+import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
+import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 import LoginScreen from './features/dashboard/screens/LoginScreen';
 
 // --- HARVEST SCREENS ---
-import HarvestSummaryScreen from './features/harvest/screens/HarvestSummaryScreen'; 
+import HarvestSummaryScreen from './features/harvest/screens/HarvestSummaryScreen';
 // Adding the Form Screen import, assuming its location
-import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen'; 
+import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen';
 
 // 2. Path to Color Palette
 import CoffeeColors from './theme/colors';
 
+// 3. Services
+import DatabaseService from './services/DatabaseService';
+import AuthService from './services/AuthService';
+
 export default function App() {
     // State to manage the currently active screen. Start on 'Login'.
     const [activeScreen, setActiveScreen] = useState('Login');
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+    // Initialize database and check auth on app start
+    useEffect(() => {
+        const initializeApp = async () => {
+            try {
+                // Initialize database
+                await DatabaseService.init();
+                console.log('[App] Database initialized successfully');
+
+                // Check if user is already logged in
+                const isAuthenticated = await AuthService.isAuthenticated();
+
+                if (isAuthenticated) {
+                    console.log('[App] User is authenticated, navigating to Dashboard');
+                    setActiveScreen('Dashboard');
+                } else {
+                    console.log('[App] User not authenticated, staying on Login');
+                    setActiveScreen('Login');
+                }
+            } catch (error) {
+                console.error('[App] Initialization error:', error);
+                setActiveScreen('Login');
+            } finally {
+                setIsCheckingAuth(false);
+            }
+        };
+
+        initializeApp();
+    }, []);
 
     // Function to change the active screen state
     const handleNavigate = (screenName) => {
@@ -61,28 +96,14 @@ export default function App() {
                 // Pass the navigation function to the aggregation screen (for the Exit button)
                 return <AggregationScreen onNavigate={handleNavigate} />; 
 
-            // --- HARVEST SUMMARY SCREEN INTEGRATION ---
+            // --- HARVEST FORM INTEGRATION ---
             case 'Harvests':
-                // Renders the Harvest Summary Screen
+                // Renders the Harvest Form Screen
                 return <HarvestSummaryScreen onNavigate={handleNavigate} />;
 
             // --- HARVEST FORM INTEGRATION ---
             case 'HarvestForm':
-                 return <HarvestFormScreen onNavigate={handleNavigate} />;
-                
-                return (
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-                        <Text style={{ fontSize: 24, color: CoffeeColors.DARK_BROWN, marginBottom: 20 }}>
-                            Harvest Form Screen Placeholder
-                        </Text>
-                        <Text style={{ fontSize: 16, color: CoffeeColors.GRAY_TEXT, marginBottom: 20 }}>
-                            (Used for creating new harvest records)
-                        </Text>
-                        <TouchableOpacity onPress={() => handleNavigate('Harvests')} style={styles.navButton}>
-                            <Text style={styles.navButtonText}>Go to Harvest Summary</Text>
-                        </TouchableOpacity>
-                    </View>
-                );
+                return <HarvestFormScreen onNavigate={handleNavigate} />;
 
 
             case 'Processing':
@@ -106,6 +127,21 @@ export default function App() {
                 return <DashboardScreen onNavigate={handleNavigate} />;
         }
     };
+
+    // Show loading screen while checking auth
+    if (isCheckingAuth) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                    <ActivityIndicator size="large" color={CoffeeColors.GOLD} />
+                    <Text style={{ color: CoffeeColors.WHITE, marginTop: 16, fontSize: 16 }}>
+                        Loading...
+                    </Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.safeArea}>

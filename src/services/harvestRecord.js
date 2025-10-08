@@ -1,6 +1,6 @@
 // File: src/services/harvestRecord.js - Handles all API interactions for Harvest Records, now including offline sync utilities.
 
-import client from './ApiClient'; // Corrected case to match actual filename
+import ApiService from './ApiService';
 import AsyncStorage from "@react-native-async-storage/async-storage"; // <-- Added for sync utilities
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsynced records
@@ -65,11 +65,11 @@ const mapToApiPayload = (payload) => {
  */
 export const postHarvestRecord = async (uiPayload) => {
     const apiPayload = mapToApiPayload(uiPayload);
-    // Endpoint: /api/harvests/harvests/
-    const endpoint = '/api/harvests/harvests/';
+    // Endpoint: harvests/harvests/
+    const endpoint = 'harvests/harvests/';
 
     try {
-        const response = await client.post(endpoint, apiPayload);
+        const response = await ApiService.post(endpoint, apiPayload);
         return { success: true, status: response.status, remoteData: response.data };
     } catch (error) {
         // Return 0 for status if network error (offline) to handle offline state robustly
@@ -83,11 +83,11 @@ export const postHarvestRecord = async (uiPayload) => {
  * Fetches a list of all harvest records from the API.
  */
 export const fetchAllHarvestRecords = async () => {
-    // Endpoint: /api/harvests/harvests/
-    const endpoint = '/api/harvests/harvests/';
+    // Endpoint: harvests/harvests/
+    const endpoint = 'harvests/harvests/';
 
     try {
-        const response = await client.get(endpoint);
+        const response = await ApiService.get(endpoint);
         return { success: true, status: response.status, remoteData: response.data };
     } catch (error) {
         const status = error.response ? error.response.status : 0;
@@ -101,11 +101,11 @@ export const fetchAllHarvestRecords = async () => {
  * @param {number} id - The integer ID of the harvest record to fetch.
  */
 export const fetchHarvestRecordById = async (id) => {
-    // API uses the integer ID field as the path parameter: /api/harvests/harvests/{id}/
-    const endpoint = `/api/harvests/harvests/${id}/`;
+    // API uses the integer ID field as the path parameter: harvests/harvests/{id}/
+    const endpoint = `harvests/harvests/${id}/`;
 
     try {
-        const response = await client.get(endpoint);
+        const response = await ApiService.get(endpoint);
         return { success: true, status: response.status, remoteData: response.data };
     } catch (error) {
         const status = error.response ? error.response.status : 0;
@@ -208,7 +208,7 @@ export const syncAllRecords = async () => {
 
 // // File: src/services/harvestRecord.js - Handles all API interactions for Harvest Records, now including offline sync utilities.
 
-// import client from './ApiClient'; // Corrected case to match actual filename
+// import client from './apiClient'; // Corrected case to match actual filename
 // import AsyncStorage from "@react-native-async-storage/async-storage"; // <-- Added for sync utilities
 
 // const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsynced records
@@ -262,8 +262,8 @@ export const syncAllRecords = async () => {
 //  */
 // export const postHarvestRecord = async (uiPayload) => {
 //     const apiPayload = mapToApiPayload(uiPayload);
-//     // Endpoint: /api/harvests/harvests/
-//     const endpoint = '/api/harvests/harvests/';
+//     // Endpoint: harvests/harvests/
+//     const endpoint = 'harvests/harvests/';
 
 //     try {
 //         const response = await client.post(endpoint, apiPayload);
@@ -280,8 +280,8 @@ export const syncAllRecords = async () => {
 //  * Fetches a list of all harvest records from the API.
 //  */
 // export const fetchAllHarvestRecords = async () => {
-//     // Endpoint: /api/harvests/harvests/
-//     const endpoint = '/api/harvests/harvests/';
+//     // Endpoint: harvests/harvests/
+//     const endpoint = 'harvests/harvests/';
 
 //     try {
 //         const response = await client.get(endpoint);
@@ -298,8 +298,8 @@ export const syncAllRecords = async () => {
 //  * @param {number} cherryColorId - The integer ID (cherry_color) of the harvest record to fetch.
 //  */
 // export const fetchHarvestRecordById = async (cherryColorId) => {
-//     // API uses the integer cherry_color field as the path parameter: /api/harvests/harvests/{cherry_color}/
-//     const endpoint = `/api/harvests/harvests/${cherryColorId}/`;
+//     // API uses the integer cherry_color field as the path parameter: harvests/harvests/{cherry_color}/
+//     const endpoint = `harvests/harvests/${cherryColorId}/`;
 
 //     try {
 //         const response = await client.get(endpoint);

@@ -15,9 +15,12 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage"; 
-// Importing the API service function (assuming this is updated elsewhere)
-import { postHarvestRecord } from "../../../services/harvestRecord"; 
+// Import services - CHANGED: Using DatabaseService instead of AsyncStorage
+import DatabaseService from "../../../services/DatabaseService";
+import SyncService from "../../../services/SyncService";
+// Import shared components
+import Header from '../../../components/Header';
+import BottomNav from '../../../components/BottomNav'; 
 
 /**
  * Utility function to format date for API (YYYY-MM-DD string).
@@ -52,12 +55,9 @@ function generateHarvestId(date) {
     return `PA${dd}${mm}${yy}H`;
 }
 
-const BLOCK_OPTIONS = ["Block A-1", "Block B-2", "Block C-3"]; 
+const BLOCK_OPTIONS = ["Block A-1", "Block B-2", "Block C-3"];
 const GRADE_OPTIONS = ["Grade 1", "Grade 2", "Grade 3"];
 const CHERRY_COLORS = ["Red", "Green"];
-
-// Key for the local queue of unsynced records
-const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
 // Updated to accept onNavigate, aligning with App.js router
 export default function HarvestFormScreen({ onNavigate }) { 
@@ -91,26 +91,6 @@ export default function HarvestFormScreen({ onNavigate }) {
         return null;
     };
 
-    /**
-     * Saves the harvest object to the local synchronization queue.
-     * The local object is structured for the app's internal use (camelCase, added flags).
-     * @param {object} harvestObject - The complete harvest record payload.
-     * @returns {boolean} True if local save was successful.
-     */
-    const saveToSyncQueue = async (harvestObject) => {
-        try {
-            const raw = await AsyncStorage.getItem(SYNC_QUEUE_KEY);
-            const currentQueue = raw ? JSON.parse(raw) : [];
-            currentQueue.push(harvestObject);
-            await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(currentQueue));
-            return true;
-        } catch (err) {
-            console.error("Failed to save to sync queue:", err);
-            return false;
-        }
-    };
-
-
     const handleSubmit = async () => {
         if (isSaving) return;
 
@@ -122,77 +102,55 @@ export default function HarvestFormScreen({ onNavigate }) {
 
         setIsSaving(true);
 
-        // 1. Build the local payload (used for offline queue and local display)
-        const localPayload = {
-            id: generatedId,
-            grade, 
-            weight: Number(weight),
-            block, 
-            cherryColor, 
-            date: date.toISOString(), // Save as ISO string for AsyncStorage consistency
-            dateReadable: formatDateForDisplay(date), 
-            name: name.trim(), 
-            amountPaid: Number(amountPaid), 
-            isSynced: false, // Flag for offline status
-        };
-
-        // 2. Build the API payload (uses snake_case and correct data types/formats)
-        const apiPayload = {
-            grade, 
-            weight: String(Number(weight)), // API expects string, convert number back to string
-            block, 
-            cherry_color: cherryColor, // Snake case for API
-            date: formatDateForApi(date), // YYYY-MM-DD string format for API
-            name: name.trim(), 
-            amount_paid: String(Number(amountPaid)), // Snake case for API, convert to string
-        };
-
-
-        // 3. Local Save (Critical for Offline Functionality)
-        const isLocalSaveSuccessful = await saveToSyncQueue(localPayload);
-
-        if (!isLocalSaveSuccessful) {
-            Alert.alert("Local Error", "Data capture failed. Could not save harvest locally.");
-            setIsSaving(false);
-            return;
-        }
-
-        // 4. Attempt Remote Sync
         try {
-            // Pass the API-compliant payload
-            const response = await postHarvestRecord(apiPayload); 
+            // CRITICAL: Save to local database FIRST (offline-first pattern)
+            const harvestData = {
+                farmer_name: name.trim(),
+                harvest_date: formatDateForApi(date),
+                weight: Number(weight),
+                quality: grade,
+                notes: `Block: ${block}, Cherry: ${cherryColor}, Amount Paid: ${amountPaid}`,
+                synced: 0  // Will be marked as 1 after successful sync
+            };
 
-            if (response.success) {
-                // Success: Notify the user and refresh UI.
-                // The API returned the new ID, but we rely on the local record until sync is fully implemented.
-                const harvestId = response.remoteData.id || localPayload.id; 
-                Alert.alert("Success & Synced", `Harvest record saved remotely. Server ID: ${harvestId}`);
-                
-                // NOTE: A proper sync mechanism would now remove/mark this record from the local queue.
-            } else {
-                // Failure: Assume offline or temporary API error. Notify user that it's locally saved.
-                const msg = response.status === 0 ? "You appear to be offline. " : "API encountered an error. ";
-                Alert.alert("Offline Mode", `${msg}The harvest has been saved locally and will sync when you go online.`);
+            console.log('[HarvestForm] Saving to local database...', harvestData);
+            const localId = await DatabaseService.insert('harvests', harvestData);
+            console.log('[HarvestForm] Saved locally with ID:', localId);
+
+            // Try to sync immediately to cloud (silent fail if offline)
+            try {
+                console.log('[HarvestForm] Attempting immediate sync...');
+                const synced = await SyncService.syncImmediately('harvests', localId);
+
+                if (synced) {
+                    Alert.alert("Success", "Harvest saved and synced to cloud!");
+                } else {
+                    Alert.alert("Saved Locally", "Harvest saved. Will sync when online.");
+                }
+            } catch (syncError) {
+                // Silent fail for sync - data is safe in local DB
+                console.log('[HarvestForm] Sync failed (offline?), staying in queue:', syncError.message);
+                Alert.alert("Saved Locally", "Harvest saved. Will sync when online.");
             }
-        } catch(e) {
-            // Network error (definitely offline)
-            Alert.alert("Offline Mode", "No internet connection detected. The harvest has been saved locally and will sync when you go online.");
-        }
 
+            // Reset form
+            setWeight("");
+            setAmountPaid("");
+            setName("");
+            setDate(new Date());
+            setGrade(GRADE_OPTIONS[0]);
+            setBlock(BLOCK_OPTIONS[0]);
+            setCherryColor(CHERRY_COLORS[0]);
 
-        // 5. Reset Form
-        setWeight("");
-        setAmountPaid("");
-        setName("");
-        setDate(new Date());
-        setGrade(GRADE_OPTIONS[0]);
-        setBlock(BLOCK_OPTIONS[0]);
-        setCherryColor(CHERRY_COLORS[0]);
-        setIsSaving(false);
-        
-        // 6. Navigate back to the summary list to show the new record
-        if (onNavigate) {
-            onNavigate('Harvests'); 
+            // Navigate back to summary
+            if (onNavigate) {
+                onNavigate('Harvests');
+            }
+        } catch (error) {
+            console.error('[HarvestForm] Local save failed:', error);
+            Alert.alert("Error", "Failed to save harvest. Please try again.");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -210,12 +168,14 @@ export default function HarvestFormScreen({ onNavigate }) {
     );
 
     return (
-        <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.select({ ios: "padding", android: undefined })}
-        >
-            <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-                <Text style={styles.heading}>Harvest Recording (Block Champion)</Text>
+        <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
+            <Header title="Harvest Form" onNavigate={onNavigate} />
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.select({ ios: "padding", android: undefined })}
+            >
+                <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+                    <Text style={styles.heading}>Harvest Recording (Block Champion)</Text>
 
                 <Text style={styles.label}>Grade</Text>
                 <View style={styles.pickerWrap}>
@@ -299,11 +259,13 @@ export default function HarvestFormScreen({ onNavigate }) {
                     )}
                 </TouchableOpacity>
 
-                <BackButton />
-                
-                <View style={{ height: 60 }} />
-            </ScrollView>
-        </KeyboardAvoidingView>
+                    <BackButton />
+
+                    <View style={{ height: 100 }} />
+                </ScrollView>
+            </KeyboardAvoidingView>
+            <BottomNav activeScreen="Harvests" onNavigate={onNavigate} />
+        </View>
     );
 }
 
