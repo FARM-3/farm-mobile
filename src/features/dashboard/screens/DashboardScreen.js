@@ -6,7 +6,6 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../../../theme/colors';
 
-<<<<<<< HEAD
 // Import your defined colors (fixed relative path)
 import CoffeeColors from '../../../theme/colors'; 
 
@@ -279,8 +278,6 @@ const styles = StyleSheet.create({
 });
 
 // Defining colors needed for Card components (since the original version was replaced)
-=======
->>>>>>> eb7923ffdf453c1dd608fa04d0d1438a7e66774c
 CoffeeColors.GOLD = '#c39e00';
 CoffeeColors.ACCENT = '#ff6347';
 CoffeeColors.LIGHT_BROWN = '#a0522d';
