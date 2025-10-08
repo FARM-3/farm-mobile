@@ -5,8 +5,10 @@ import { Picker } from '@react-native-picker/picker';
 
 // Utilities and Theme Imports
 import CoffeeColors from '../../../theme/colors';
-// IMPORTING THE NEW API FUNCTIONS
-import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest } from '../../../utils/firebaseSetup'; 
+import Header from '../../../components/Header';
+import BottomNav from '../../../components/BottomNav';
+// IMPORTING THE AGGREGATION SERVICE
+import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest } from '../../../services/aggregationService'; 
 
 // --- CONSTANTS ---
 const GRADES = ['A', 'B', 'C', 'D'];
@@ -476,52 +478,46 @@ const AggregationScreen = ({ onNavigate }) => {
 
     return (
         <View style={styles.container}>
-            {/* Header displaying User ID */}
-                    <View style={styles.header}>
-                        {/* Back to Dashboard */}
-                        <TouchableOpacity onPress={() => onNavigate && onNavigate('Dashboard')} style={{ paddingRight: 12 }}>
-                            <Ionicons name="arrow-back" size={24} color={CoffeeColors.CREAM} />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Record Aggregation</Text>
-                        <Text style={styles.userIdText}>Recorder ID: {userId ? userId.slice(0, 15) + '...' : 'N/A'}</Text>
-                    </View>
-            
-            <View style={styles.contentArea}>
-                        {/* Add a small back button above the content as a fallback */}
-                        <View style={{ paddingHorizontal: 20, paddingVertical: 8 }}>
-                            <TouchableOpacity onPress={() => onNavigate && onNavigate('Dashboard')} style={{ padding: 8 }}>
-                                <Text style={{ color: CoffeeColors.CREAM }}>Back to Dashboard</Text>
-                            </TouchableOpacity>
-                        </View>
-                        {mainContent}
+            {/* Unified Header */}
+            <Header title="Aggregation" onNavigate={onNavigate} />
+
+            {/* Tab Navigation for Farmers/Harvests */}
+            <View style={styles.tabBar}>
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'farmers' && styles.activeTabItem]}
+                    onPress={() => { setActiveTab('farmers'); setViewMode('form'); }}
+                >
+                    <Ionicons
+                        name="person-add-outline"
+                        size={20}
+                        color={activeTab === 'farmers' ? CoffeeColors.WHITE : CoffeeColors.GRAY_TEXT}
+                    />
+                    <Text style={[styles.tabText, activeTab === 'farmers' && styles.activeTabText]}>
+                        Farmers
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'harvests' && styles.activeTabItem]}
+                    onPress={() => { setActiveTab('harvests'); setViewMode('form'); }}
+                >
+                    <Ionicons
+                        name="leaf-outline"
+                        size={20}
+                        color={activeTab === 'harvests' ? CoffeeColors.WHITE : CoffeeColors.GRAY_TEXT}
+                    />
+                    <Text style={[styles.tabText, activeTab === 'harvests' && styles.activeTabText]}>
+                        Harvests
+                    </Text>
+                </TouchableOpacity>
             </View>
 
-            {/* Bottom Navigation Bar */}
-            <View style={styles.bottomNavBar}>
-                <TouchableOpacity 
-                    style={[styles.navItem, activeTab === 'farmers' && styles.activeNavItem]} 
-                    onPress={() => { console.log('Nav: Farmers pressed'); setActiveTab('farmers'); setViewMode('form'); }}
-                >
-                    <Ionicons 
-                        name="person-add-outline" 
-                        size={24} 
-                        color={activeTab === 'farmers' ? CoffeeColors.CREAM : CoffeeColors.MEDIUM_BROWN} 
-                    />
-                    <Text style={[styles.navText, activeTab === 'farmers' && styles.activeNavText]}>Farmers Details</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                    style={[styles.navItem, activeTab === 'harvests' && styles.activeNavItem]} 
-                    onPress={() => { console.log("Nav: Harvests pressed"); setActiveTab('harvests'); setViewMode('form'); }}
-                >
-                    <Ionicons 
-                        name="leaf-outline" 
-                        size={24} 
-                        color={activeTab === 'harvests' ? CoffeeColors.CREAM : CoffeeColors.MEDIUM_BROWN} 
-                    />
-                    <Text style={[styles.navText, activeTab === 'harvests' && styles.activeNavText]}>Farmer's Harvest</Text>
-                </TouchableOpacity>
+            <View style={styles.contentArea}>
+                {mainContent}
             </View>
+
+            {/* Unified Bottom Navigation */}
+            <BottomNav activeScreen="Aggregation" onNavigate={onNavigate} />
         </View>
     );
 };
@@ -734,6 +730,35 @@ const styles = StyleSheet.create({
     },
     exitButton: {
         padding: 5,
+    },
+
+    // --- Tab Bar Styles ---
+    tabBar: {
+        flexDirection: 'row',
+        backgroundColor: CoffeeColors.WHITE,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_BROWN,
+        paddingHorizontal: 10,
+    },
+    tabItem: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        gap: 8,
+    },
+    activeTabItem: {
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        borderRadius: 8,
+    },
+    tabText: {
+        fontSize: 14,
+        color: CoffeeColors.GRAY_TEXT,
+        fontWeight: '600',
+    },
+    activeTabText: {
+        color: CoffeeColors.WHITE,
     },
 
     // --- Nav Bar Styles ---
