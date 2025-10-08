@@ -5,8 +5,10 @@ import { Picker } from '@react-native-picker/picker';
 
 // Utilities and Theme Imports
 import CoffeeColors from '../../../theme/colors';
-// IMPORTING THE NEW API FUNCTIONS
-import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest } from '../../../utils/firebaseSetup'; 
+import Header from '../../../components/Header';
+import BottomNav from '../../../components/BottomNav';
+// IMPORTING THE AGGREGATION SERVICE
+import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest } from '../../../services/aggregationService'; 
 
 // --- CONSTANTS ---
 const GRADES = ['A', 'B', 'C', 'D'];
@@ -76,6 +78,15 @@ const RecordsTable = ({ records, title, onExit, fields }) => {
         [records]
     );
 
+    // derive flex weights from fields' width (percent strings like '25%') or default weight
+    const flexWeights = fields.map(f => {
+        if (f.width && typeof f.width === 'string' && f.width.trim().endsWith('%')) {
+            const num = parseFloat(f.width.trim().replace('%',''));
+            return isNaN(num) ? 10 : num;
+        }
+        return 10; // default weight
+    });
+
     return (
         <View style={styles.recordsContainer}>
             <View style={styles.header}>
@@ -88,8 +99,8 @@ const RecordsTable = ({ records, title, onExit, fields }) => {
                 <View style={styles.table}>
                     {/* Table Header */}
                     <View style={styles.tableRow}>
-                        {fields.map(field => (
-                            <Text key={field.key} style={[styles.tableHeader, { width: field.width || '25%' }]}>
+                        {fields.map((field, idx) => (
+                            <Text key={field.key} style={[styles.tableHeader, { flex: flexWeights[idx], minWidth: 0 }] }>
                                 {field.label}
                             </Text>
                         ))}
@@ -100,12 +111,12 @@ const RecordsTable = ({ records, title, onExit, fields }) => {
                     ) : (
                         sortedRecords.map((record, index) => (
                             <View key={record.id || index} style={[styles.tableRow, index % 2 && styles.tableRowAlt]}>
-                                {fields.map(field => (
+                                {fields.map((field, idx) => (
                                     <Text 
                                         key={`${record.id}-${field.key}`} 
-                                        style={[styles.tableCell, { width: field.width || '25%' }]}
+                                        style={[styles.tableCell, { flex: flexWeights[idx], minWidth: 0, flexShrink: 1 }]}
                                     >
-                                        {record[field.key]}
+                                        {String(record[field.key] ?? '')}
                                     </Text>
                                 ))}
                             </View>
@@ -134,6 +145,7 @@ const AggregationScreen = ({ onNavigate }) => {
     const [farmerForm, setFarmerForm] = useState({ name: '', location: '', trees: '', contact: '' });
     const [harvestForm, setHarvestForm] = useState({
         farmerName: '', 
+        manualFarmerName: '',
         weightOnDelivery: '',
         weightAfterFloating: '',
         grade: GRADES[0],
@@ -149,7 +161,18 @@ const AggregationScreen = ({ onNavigate }) => {
         setLoading(true);
         try {
             const fetchedFarmers = await fetchFarmers();
-            setFarmersList(fetchedFarmers);
+            // Log raw response so we can see whether the backend returned a list or a paginated object
+            console.log('fetchFarmers raw response:', fetchedFarmers);
+            // Handle common Django/DRF patterns: either an array or a paginated object { results: [...] }
+            if (Array.isArray(fetchedFarmers)) {
+                setFarmersList(fetchedFarmers);
+            } else if (fetchedFarmers && Array.isArray(fetchedFarmers.results)) {
+                setFarmersList(fetchedFarmers.results);
+            } else {
+                // Fallback: if server returned null/undefined or an unexpected shape, set empty array
+                console.warn('fetchFarmers returned unexpected shape, populating empty array');
+                setFarmersList([]);
+            }
             
             const fetchedHarvests = await fetchHarvests();
             setHarvestsList(fetchedHarvests); 
@@ -180,7 +203,8 @@ const AggregationScreen = ({ onNavigate }) => {
         setFarmerForm({ name: '', location: '', trees: '', contact: '' });
         setHarvestForm(p => ({
             ...p,
-            farmerName: farmersList[0]?.name || '',
+            farmerName: getFarmerDisplayName(farmersList[0]) || '',
+            manualFarmerName: '',
             weightOnDelivery: '',
             weightAfterFloating: '',
             amountPaid: '',
@@ -188,6 +212,27 @@ const AggregationScreen = ({ onNavigate }) => {
             date: new Date().toISOString().slice(0, 10),
         }));
     };
+
+    // Helper to safely extract a farmer's display name from various backend shapes
+    const getFarmerDisplayName = (f) => {
+        if (!f) return '';
+        return f.name || f.full_name || f.farmer_name || f.displayName || '';
+    };
+
+    // When the farmersList changes, ensure harvestForm has a sensible default farmer selection
+    useEffect(() => {
+        if (farmersList && farmersList.length > 0) {
+            const firstName = getFarmerDisplayName(farmersList[0]) || '';
+            setHarvestForm(p => ({ ...p, farmerName: p.farmerName || firstName }));
+        }
+    }, [farmersList]);
+
+    // Derive farmer options with ids for use when submitting harvests
+    const _safeFarmers = Array.isArray(farmersList) ? farmersList : (farmersList?.results ?? []);
+    const farmerOptions = _safeFarmers.map(f => ({
+        id: f.id ?? f.pk ?? f._id ?? f.ID ?? null,
+        name: getFarmerDisplayName(f),
+    })).filter(o => o.name);
 
     const handleFarmerSubmit = async () => {
         if (!farmerForm.name || !farmerForm.contact || !userId) {
@@ -224,8 +269,15 @@ const AggregationScreen = ({ onNavigate }) => {
             await loadRecords(); // Refresh data from API
         } catch (e) {
             console.error("Error adding farmer:", e);
-            // Show the raw message and suggest checking server logs
-            Alert.alert("Submission Failed", e.message || "Failed to save farmer details. Check server logs for a 500 error.");
+            // If the axios error contains a server response, surface it in dev
+            const serverBody = e.response?.data;
+            if (__DEV__ && serverBody) {
+                // Show a truncated version in an Alert for quick copy/paste
+                const bodyText = typeof serverBody === 'string' ? serverBody : JSON.stringify(serverBody, null, 2);
+                Alert.alert('Submission Failed (server response)', bodyText.slice(0, 2000));
+            } else {
+                Alert.alert("Submission Failed", e.message || "Failed to save farmer details. Check server logs for a 500 error.");
+            }
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -233,16 +285,43 @@ const AggregationScreen = ({ onNavigate }) => {
     };
 
     const handleHarvestSubmit = async () => {
-        if (!harvestForm.farmerName || !harvestForm.weightOnDelivery || !userId) {
+        // Prefer manual entry when present, otherwise use selected farmer from picker
+        const effectiveFarmerName = (harvestForm.manualFarmerName || harvestForm.farmerName || '').trim();
+
+        console.log('handleHarvestSubmit invoked', { effectiveFarmerName, harvestForm, userId });
+
+        if (!effectiveFarmerName || !harvestForm.weightOnDelivery || !userId) {
             Alert.alert("Validation", "Please fill in Farmer's Name and Weight on Delivery.");
             return;
         }
 
         setLoading(true);
         const newRecordId = generateRecordId('PA');
+
+        // Resolve farmer id: prefer existing farmer id when a picker selection was made
+        let farmerId = null;
+        // try to find a matching farmer by display name
+        const matched = farmerOptions.find(f => f.name === harvestForm.farmerName);
+        if (matched && matched.id) {
+            farmerId = matched.id;
+        }
+
+        // If no existing farmer and user provided a manual name, create a farmer on the backend
+        if (!farmerId && harvestForm.manualFarmerName) {
+            try {
+                // Provide a minimal non-empty contact/location to satisfy server-side validation
+                const created = await submitFarmer({ name: harvestForm.manualFarmerName, contact: 'N/A', location: 'N/A', num_trees: 0, recorder_id: userId });
+                // backend may return an object or id; try to extract id
+                farmerId = created?.id ?? created?.pk ?? created;
+            } catch (e) {
+                console.error('Failed to create farmer for manual name:', e);
+                // continue to validation fail below
+            }
+        }
+
         const harvestRecord = {
             id: newRecordId,
-            farmer_name: harvestForm.farmerName,
+            farmer_name: effectiveFarmerName,
             weight_on_delivery: parseFloat(harvestForm.weightOnDelivery) || 0,
             weight_after_floating: parseFloat(harvestForm.weightAfterFloating) || 0,
             date_of_delivery: harvestForm.date,
@@ -253,12 +332,14 @@ const AggregationScreen = ({ onNavigate }) => {
             who_paid: harvestForm.whoPaid,
             recorder_id: userId,
             timestamp: Date.now(),
+            // Add farmer id expected by Django serializer
+            farmer: farmerId,
         };
 
         try {
             await submitHarvest(harvestRecord);
 
-            setSuccessMessage(`Harvest for '${harvestForm.farmerName}' recorded successfully! ID: ${newRecordId}`);
+            setSuccessMessage(`Harvest for '${effectiveFarmerName}' recorded successfully! ID: ${newRecordId}`);
             setViewMode('success');
             resetForms();
             await loadRecords(); // Refresh data from API
@@ -285,10 +366,16 @@ const AggregationScreen = ({ onNavigate }) => {
                     <TouchableOpacity style={styles.submitButton} onPress={handleFarmerSubmit} disabled={loading}>
                         {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : <Text style={styles.submitButtonText}>Submit Farmer Details</Text>}
                     </TouchableOpacity>
+                    {/* Always-available View Records button */}
+                    <TouchableOpacity style={[styles.viewRecordsButton, { marginTop: 10 }]} onPress={() => { setActiveTab('farmers'); setViewMode('table'); }}>
+                        <Text style={styles.viewRecordsButtonText}>View Records</Text>
+                    </TouchableOpacity>
                 </View>
             );
         } else {
-            const availableFarmers = farmersList.map(f => f.name);
+            const availableFarmers = farmersList.map(f => getFarmerDisplayName(f)).filter(Boolean);
+            // prefer manual farmer name when provided so users can submit even if no registered farmers exist
+            const effectiveFarmerName = (harvestForm.manualFarmerName || harvestForm.farmerName || '').trim();
 
             return (
                 <View style={styles.formSection}>
@@ -297,14 +384,17 @@ const AggregationScreen = ({ onNavigate }) => {
                     {availableFarmers.length > 0 ? (
                         <CustomPicker 
                             label="Farmer's Name" 
-                            selectedValue={harvestForm.farmerName || availableFarmers[0]} 
+                            // selectedValue must reflect actual state so effectiveFarmerName is computed correctly
+                            selectedValue={harvestForm.farmerName} 
                             onValueChange={(name) => setHarvestForm(p => ({ ...p, farmerName: name }))} 
                             items={availableFarmers} 
                         />
                     ) : (
                         <Text style={styles.noFarmersWarning}>No farmers registered. Please register a farmer first.</Text>
                     )}
-
+                    {/* Manual entry fallback if farmer not listed */}
+                    <CustomInput label="Manual Farmer Name (optional)" value={harvestForm.manualFarmerName} onChangeText={(v) => setHarvestForm(p => ({ ...p, manualFarmerName: v }))} />
+                    {/* <customInput label="Farmer's Name" value={harvestForm.farmerName} onChangeText={(v) => setHarvestForm(p => ({ ...p, farmerName: v }))} editable={availableFarmers.length > 0} /> */}
                     <CustomInput label="Weight on Delivery (kg)" value={harvestForm.weightOnDelivery} onChangeText={(v) => setHarvestForm(p => ({ ...p, weightOnDelivery: v }))} keyboardType="numeric" />
                     <CustomInput label="Weight after Floating (kg)" value={harvestForm.weightAfterFloating} onChangeText={(v) => setHarvestForm(p => ({ ...p, weightAfterFloating: v }))} keyboardType="numeric" />
                     <CustomInput label="Date of Delivery (YYYY-MM-DD)" value={harvestForm.date} onChangeText={(v) => setHarvestForm(p => ({ ...p, date: v }))} />
@@ -317,11 +407,17 @@ const AggregationScreen = ({ onNavigate }) => {
                     <CustomInput label="Who Paid" value={harvestForm.whoPaid} onChangeText={(v) => setHarvestForm(p => ({ ...p, whoPaid: v }))} />
 
                     <TouchableOpacity 
-                        style={[styles.submitButton, {opacity: availableFarmers.length === 0 || loading ? 0.5 : 1}]} 
+                        testID="submit-harvest-button"
+                        accessibilityLabel="submit-harvest-button"
+                        style={[styles.submitButton, {opacity: (!effectiveFarmerName || loading) ? 0.5 : 1}]} 
                         onPress={handleHarvestSubmit} 
-                        disabled={availableFarmers.length === 0 || loading}
+                        disabled={!effectiveFarmerName || loading}
                     >
                         {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : <Text style={styles.submitButtonText}>Submit Harvest Details</Text>}
+                    </TouchableOpacity>
+                    {/* Always-available View Records button for harvests */}
+                    <TouchableOpacity style={[styles.viewRecordsButton, { marginTop: 10 }]} onPress={() => { setActiveTab('harvests'); setViewMode('table'); }}>
+                        <Text style={styles.viewRecordsButtonText}>View Records</Text>
                     </TouchableOpacity>
                 </View>
             );
@@ -382,52 +478,46 @@ const AggregationScreen = ({ onNavigate }) => {
 
     return (
         <View style={styles.container}>
-            {/* Header displaying User ID */}
-                    <View style={styles.header}>
-                        {/* Back to Dashboard */}
-                        <TouchableOpacity onPress={() => onNavigate && onNavigate('Dashboard')} style={{ paddingRight: 12 }}>
-                            <Ionicons name="arrow-back" size={24} color={CoffeeColors.CREAM} />
-                        </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Record Aggregation</Text>
-                        <Text style={styles.userIdText}>Recorder ID: {userId ? userId.slice(0, 15) + '...' : 'N/A'}</Text>
-                    </View>
-            
-            <View style={styles.contentArea}>
-                        {/* Add a small back button above the content as a fallback */}
-                        <View style={{ paddingHorizontal: 20, paddingVertical: 8 }}>
-                            <TouchableOpacity onPress={() => onNavigate && onNavigate('Dashboard')} style={{ padding: 8 }}>
-                                <Text style={{ color: CoffeeColors.CREAM }}>Back to Dashboard</Text>
-                            </TouchableOpacity>
-                        </View>
-                        {mainContent}
+            {/* Unified Header */}
+            <Header title="Aggregation" onNavigate={onNavigate} />
+
+            {/* Tab Navigation for Farmers/Harvests */}
+            <View style={styles.tabBar}>
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'farmers' && styles.activeTabItem]}
+                    onPress={() => { setActiveTab('farmers'); setViewMode('form'); }}
+                >
+                    <Ionicons
+                        name="person-add-outline"
+                        size={20}
+                        color={activeTab === 'farmers' ? CoffeeColors.WHITE : CoffeeColors.GRAY_TEXT}
+                    />
+                    <Text style={[styles.tabText, activeTab === 'farmers' && styles.activeTabText]}>
+                        Farmers
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'harvests' && styles.activeTabItem]}
+                    onPress={() => { setActiveTab('harvests'); setViewMode('form'); }}
+                >
+                    <Ionicons
+                        name="leaf-outline"
+                        size={20}
+                        color={activeTab === 'harvests' ? CoffeeColors.WHITE : CoffeeColors.GRAY_TEXT}
+                    />
+                    <Text style={[styles.tabText, activeTab === 'harvests' && styles.activeTabText]}>
+                        Harvests
+                    </Text>
+                </TouchableOpacity>
             </View>
 
-            {/* Bottom Navigation Bar */}
-            <View style={styles.bottomNavBar}>
-                <TouchableOpacity 
-                    style={[styles.navItem, activeTab === 'farmers' && styles.activeNavItem]} 
-                    onPress={() => { console.log('Nav: Farmers pressed'); setActiveTab('farmers'); setViewMode('form'); }}
-                >
-                    <Ionicons 
-                        name="person-add-outline" 
-                        size={24} 
-                        color={activeTab === 'farmers' ? CoffeeColors.CREAM : CoffeeColors.MEDIUM_BROWN} 
-                    />
-                    <Text style={[styles.navText, activeTab === 'farmers' && styles.activeNavText]}>Farmers Details</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                    style={[styles.navItem, activeTab === 'harvests' && styles.activeNavItem]} 
-                    onPress={() => { console.log("Nav: Harvests pressed"); setActiveTab('harvests'); setViewMode('form'); }}
-                >
-                    <Ionicons 
-                        name="leaf-outline" 
-                        size={24} 
-                        color={activeTab === 'harvests' ? CoffeeColors.CREAM : CoffeeColors.MEDIUM_BROWN} 
-                    />
-                    <Text style={[styles.navText, activeTab === 'harvests' && styles.activeNavText]}>Farmer's Harvest</Text>
-                </TouchableOpacity>
+            <View style={styles.contentArea}>
+                {mainContent}
             </View>
+
+            {/* Unified Bottom Navigation */}
+            <BottomNav activeScreen="Aggregation" onNavigate={onNavigate} />
         </View>
     );
 };
@@ -538,6 +628,18 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    viewRecordsButton: {
+        backgroundColor: CoffeeColors.CREAM,
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: CoffeeColors.MEDIUM_BROWN,
+    },
+    viewRecordsButtonText: {
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontWeight: '700',
+    },
 
     // --- Modal/Success Styles ---
     overlay: {
@@ -611,14 +713,15 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         fontSize: 12,
         color: CoffeeColors.DARK_BROWN,
-        textAlign: 'center',
-        paddingHorizontal: 4,
+        textAlign: 'left',
+        paddingHorizontal: 8,
     },
     tableCell: {
         fontSize: 12,
         color: CoffeeColors.GRAY_TEXT,
-        textAlign: 'center',
-        paddingHorizontal: 4,
+        textAlign: 'left',
+        paddingHorizontal: 8,
+        paddingVertical: 6,
     },
     noRecords: {
         padding: 20,
@@ -627,6 +730,35 @@ const styles = StyleSheet.create({
     },
     exitButton: {
         padding: 5,
+    },
+
+    // --- Tab Bar Styles ---
+    tabBar: {
+        flexDirection: 'row',
+        backgroundColor: CoffeeColors.WHITE,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_BROWN,
+        paddingHorizontal: 10,
+    },
+    tabItem: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        gap: 8,
+    },
+    activeTabItem: {
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        borderRadius: 8,
+    },
+    tabText: {
+        fontSize: 14,
+        color: CoffeeColors.GRAY_TEXT,
+        fontWeight: '600',
+    },
+    activeTabText: {
+        color: CoffeeColors.WHITE,
     },
 
     // --- Nav Bar Styles ---

@@ -1,24 +1,21 @@
 
 const CoffeeColors = {
-  // Primary (Darkest Color/Main Background) - Used #161414
-  DARK_BROWN: '#921f00',      // Deepest, burnt orange
-  
-  // Secondary (Dark Accent/Main Text) - Used #1c2924
-  MEDIUM_BROWN: '#382d27ff',    // Dark blue-green accent
-  
-  // Tertiary (Muted Mid-tone/Card Border) - Used #a49b63
-  LIGHT_BROWN: '#a49b63',     // Muted olive/khaki
-  
-  // Accent (Highlighting Data/Icons - The 'Pop') - Used #64b49c
-  CREAM: '#64b49c',           // Bright seafoam green
-  
-  // Button/Rich Accent - Used #ad6a29
-  GOLD: '#ad6a29',            // Rich burnt orange/brown/navigation
-  
-  // Neutrals (UI Elements - kept for contrast)
-  WHITE: '#FFFFFF',           // For Text on dark backgrounds
-  LIGHT_GRAY: '#ffe1d8',      // Overall Screen Background
-  GRAY_TEXT: '#555555',       // Secondary Text
+  // Coffee-themed color palette
+  DARK_BROWN: '#4e342e',      // Header background
+  MEDIUM_BROWN: '#8d6e63',    // Active nav items
+  LIGHT_BROWN: '#a0522d',     // Nav icons/text
+  CREAM: '#fbe9e7',           // Header text
+  GOLD: '#c39e00',            // Card accent
+  ACCENT: '#ff6347',          // Highlights
+
+  // Neutrals
+  WHITE: '#ffffff',
+  LIGHT_GRAY: '#f5f5f5',      // Screen background
+  GRAY_TEXT: '#757575',       // Secondary text
+
+  // Status colors
+  ERROR_RED: '#D32F2F',       // Error messages
+  SUCCESS_GREEN: '#4CAF50',   // Success messages
 };
 
 export default CoffeeColors;
