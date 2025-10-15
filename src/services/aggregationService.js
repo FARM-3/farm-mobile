@@ -326,15 +326,43 @@ export const syncFarmers = async () => {
 
         for (const farmer of unsyncedFarmers) {
             try {
-                const data = {
-                    name: farmer.name,
-                    contact: farmer.phone,
-                    location: farmer.location,
-                    num_trees: farmer.plot_size,
-                    recorder_id: await initializeAuth(),
+                // Transform data to match Django backend API format
+                const apiPayload = {
+                    farmer_id: farmer.id || `FD${Date.now()}`,
+                    first_name: farmer.name?.split(' ')[0] || '',
+                    last_name: farmer.name?.split(' ').slice(1).join(' ') || '',
+                    gender: 'Other', // Default value
+                    nin: '',
+                    date_of_birth: null,
+                    contact: farmer.phone || '',
+                    email: '',
+                    farmer_type: 'individual',
+                    started_coffee_farming_year: null,
+                    district: farmer.location?.split(',')[0] || '',
+                    other_district: '',
+                    sub_county: '',
+                    other_sub_county: '',
+                    parish: '',
+                    village: '',
+                    gps_coordinates: '',
+                    nearest_landmark: '',
+                    coffee_variety: 'Other',
+                    number_of_trees: farmer.plot_size || 0,
+                    ownership_of_trees: true,
+                    planted_date: null,
+                    land_ownership: 'owned',
+                    spacing_between_trees: '3 metres by 3 metres',
+                    defforestation_status: false,
+                    source_of_seedlings: 'nursery',
+                    type_of_seedlings: 'Other',
+                    age_of_seedlings: '',
+                    standard_practices: false,
+                    irrigation_source: 'none',
+                    fertilizers: '',
+                    pesticide: '',
                 };
 
-                const response = await ApiService.post('aggregation/farmer/', data);
+                const response = await ApiService.post('aggregation/farmer/', apiPayload);
 
                 // Mark as synced and update server_id
                 await DatabaseService.markAsSynced('farmers', farmer.id, response.data.id);
@@ -370,16 +398,23 @@ export const syncHarvests = async () => {
 
         for (const harvest of unsyncedHarvests) {
             try {
-                const data = {
-                    farmer: harvest.farmer_id,
-                    farmer_name: harvest.farmer_name,
-                    weight_on_delivery: harvest.weight,
-                    date_of_delivery: harvest.harvest_date,
-                    grade: harvest.quality,
+                // Transform data to match Django backend API format
+                const apiPayload = {
+                    id: harvest.server_id || harvest.id,
+                    name: harvest.farmer_name || '',
+                    weight_on_delivery: Math.round(Number(harvest.weight) || 0),
+                    weight_after_floating: 0, // Default value
+                    date_of_delivery: harvest.harvest_date || '',
+                    grade: harvest.quality || '',
+                    cherry_color: 'Red', // Default value
+                    stage: 'fresh_cherry', // Default value
+                    amount_paid: '0', // Default value
+                    paid_by: 'System', // Default value
                     recorder_id: await initializeAuth(),
+                    timestamp: Date.now(),
                 };
 
-                const response = await ApiService.post('aggregation/farmer-harvest/', data);
+                const response = await ApiService.post('aggregation/farmer-harvest/', apiPayload);
 
                 // Mark as synced and update server_id
                 await DatabaseService.markAsSynced('harvests', harvest.id, response.data.id);
