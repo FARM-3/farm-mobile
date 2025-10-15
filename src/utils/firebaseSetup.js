@@ -55,7 +55,20 @@ export const fetchFarmers = async () => {
         console.log('[firebaseSetup] Fetching farmers...');
     const response = await ApiService.get('aggregation/farmer/');
         console.log('[firebaseSetup] Farmers fetched successfully');
-        return response.data;
+
+        // Handle both paginated and non-paginated responses (same as fetchHarvests)
+        let payload = response.data;
+        // If paginated, use results array
+        if (payload && Array.isArray(payload.results)) {
+            console.log('[firebaseSetup] Using paginated results, count:', payload.results.length);
+            payload = payload.results;
+        }
+
+        // Ensure we always return an array
+        const farmers = Array.isArray(payload) ? payload : [];
+        console.log('[firebaseSetup] Returning', farmers.length, 'farmers');
+
+        return farmers;
     } catch (error) {
         console.error('[firebaseSetup] Error fetching farmers:', error.response?.data || error.message);
 
@@ -188,11 +201,42 @@ export const fetchHarvests = async () => {
 /**
  * Submits new harvest/aggregation record to the Django API.
  * Uses JWT authentication automatically via ApiService
+ * Transforms React Native form data to match Django API schema
  */
 export const submitHarvest = async (data) => {
     try {
         console.log('[firebaseSetup] Submitting harvest...');
-    const response = await ApiService.post('aggregation/farmer-harvest/', data);
+        console.log('[firebaseSetup] Raw harvest data received:', data);
+
+        // Transform React Native form data to Django API format
+        const apiPayload = {
+            // REQUIRED: name field (Django expects farmer identifier here, not farmer_name)
+            name: data.farmer_uid || data.farmer_name || '',
+
+            // Weight fields (required by Django)
+            weight_on_delivery: Number(data.weight_on_delivery) || 0,
+            weight_after_floating: Number(data.weight_after_floating) || 0,
+
+            // Date field (required)
+            date_of_delivery: data.date_of_delivery || new Date().toISOString().split('T')[0],
+
+            // Grade field (map from coffee_type)
+            grade: data.coffee_type || data.grade || '',
+
+            // Cherry color field (optional, map from form if available)
+            cherry_color: data.cherry_colour || data.cherry_color || '',
+
+            // Stage field (optional)
+            stage: data.stage || '',
+
+            // Payment fields
+            amount_paid: String(data.amount_paid || '0'), // Django expects string
+            paid_by: data.paid_by || data.who_paid || '',
+        };
+
+        console.log('[firebaseSetup] Transformed API payload:', JSON.stringify(apiPayload, null, 2));
+
+        const response = await ApiService.post('aggregation/farmer-harvest/', apiPayload);
         console.log('[firebaseSetup] Harvest submitted successfully');
         return response.data;
     } catch (error) {
@@ -205,7 +249,7 @@ export const submitHarvest = async (data) => {
         } else {
             console.error('Error message:', error.message);
         }
-        console.error('Request payload:', JSON.stringify(data, null, 2));
+        console.error('Original data:', JSON.stringify(data, null, 2));
 
         throw error;
     }
