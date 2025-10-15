@@ -1,19 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
-// NOTE: We are mocking external imports for code completeness.
-const CoffeeColors = {
-    DARK_BROWN: '#3D2F2F',
-    MEDIUM_BROWN: '#6C4A4A',
-    LIGHT_BROWN: '#B4A59E',
-    CREAM: '#F4F2F0',
-    WHITE: '#FFFFFF',
-    LIGHT_GRAY: '#F0F0F0',
-    ACCENT: '#4CAF50', // Used for stepper color
-};
-// NOTE: Assuming these services and components exist in your environment.
-// import DatabaseService from "../../../services/DatabaseService"; 
-// import SyncService from "../../../services/SyncService"; 
-// import Header from '../../../components/Header';
-// import BottomNav from '../../../components/BottomNav'; 
+import CoffeeColors from '../../../theme/colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getUnsyncedRecords } from '../../../services/harvestRecord';
+import Header from '../../../components/Header';
+import BottomNav from '../../../components/BottomNav';
+
+const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
 import {
     View,
@@ -76,7 +68,6 @@ const BLOCK_DATA = [
     { id: "BLK-004", name: "Block D-4 (New Crop)" },
 ];
 
-const PAID_BY_OPTIONS = ["Client", "Manager", "System Transfer"];
 
 
 // --- STEP COMPONENTS ---
@@ -172,13 +163,13 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
         />
         
         <Text style={styles.label}>Paid By</Text>
-        <View style={styles.pickerWrap}>
-            <Picker selectedValue={formData.paidBy} onValueChange={(v) => updateField('paidBy', v)}>
-                {PAID_BY_OPTIONS.map((p) => (
-                    <Picker.Item key={p} label={p} value={p} />
-                ))}
-            </Picker>
-        </View>
+        <TextInput
+            style={styles.input}
+            value={formData.paidBy}
+            onChangeText={(t) => updateField('paidBy', t)}
+            placeholder="Enter name of person who paid"
+            autoCapitalize="words"
+        />
     </View>
 );
 
@@ -198,7 +189,7 @@ const initialFormState = {
     weight: "", // maps to weight on delivery
     date: new Date(), // maps to date of delivery
     amountPaid: "", // maps to amount paid
-    paidBy: PAID_BY_OPTIONS[0], // maps to paid by
+    paidBy: "", // maps to paid by
     
     // System fields
     showDatePicker: false,
@@ -206,7 +197,7 @@ const initialFormState = {
 };
 
 
-export default function HarvestFormScreen({ onNavigate = (screen) => console.log(`[Navigation Fallback] Attempted navigation to: ${screen}`) }) { 
+export default function HarvestFormScreen({ navigation }) {
     const [formData, setFormData] = useState(initialFormState);
     const [currentStep, setCurrentStep] = useState(0);
     const [isSaving, setIsSaving] = useState(false); 
@@ -290,24 +281,27 @@ export default function HarvestFormScreen({ onNavigate = (screen) => console.log
         try {
             // CRITICAL: Save to local database FIRST (offline-first pattern)
             const harvestData = {
-                // Fields aligned with 'Production Harvest details (Stage 1)'
-                Worker_name: formData.workerName.trim(),
-                block_ID: formData.blockId,
-                weight_on_delivery: Number(formData.weight),
-                date_of_delivery: formatDateForApi(formData.date),
-                amount_paid: Number(formData.amountPaid),
-                paid_by: formData.paidBy,
-                Harvest_ID: formData.generatedId,
+                // Fields aligned with API schema
+                workerName: formData.workerName.trim(),
+                blockId: formData.blockId,
+                weight: Number(formData.weight),
+                date: formData.date,
+                amountPaid: Number(formData.amountPaid),
+                paidBy: formData.paidBy,
+                id: formData.generatedId,
 
                 // System/Internal fields
-                synced: 0,
-                notes: `Worker: ${formData.workerName}, Block ID: ${formData.blockId}, Weight: ${formData.weight} kg, Paid By: ${formData.paidBy}`,
+                synced: false,
+                dateReadable: formatDateForApi(formData.date),
             };
 
-            // NOTE: Using console.log as a placeholder for actual DatabaseService calls
-            console.log('[HarvestForm] Simulating Save to local database...', harvestData);
-            // const localId = await DatabaseService.insert('harvests', harvestData);
-            const localId = 'mock-local-id-123';
+            // Save to local storage for offline sync
+            const { records: currentRecords } = await getUnsyncedRecords();
+            const updatedRecords = [...currentRecords, harvestData];
+            await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
+
+            console.log('[HarvestForm] Saved to local storage:', harvestData);
+            const localId = formData.generatedId;
 
             // Try to sync immediately to cloud (silent fail if offline)
             try {
@@ -329,8 +323,8 @@ export default function HarvestFormScreen({ onNavigate = (screen) => console.log
             setFormData(initialFormState);
             setCurrentStep(0); // Go back to the first step
 
-            // Navigate back to summary (Now safe due to default prop)
-            onNavigate('Harvests');
+            // Navigate back to summary
+            navigation.navigate('HarvestSummary');
             
         } catch (error) {
             console.error('[HarvestForm] Local save failed:', error);
@@ -344,15 +338,14 @@ export default function HarvestFormScreen({ onNavigate = (screen) => console.log
 
     // A small placeholder view to navigate back to the summary screen
     const BackButton = () => (
-        // Now safe due to default prop
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => onNavigate('Harvests')}>
+        <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('HarvestSummary')}>
             <Text style={styles.secondaryBtnText}>Back to Harvest Summary</Text>
         </TouchableOpacity>
     );
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            {/* <Header title="Harvest Form" onNavigate={onNavigate} /> */}
+            <Header title="New Harvest Entry" onNavigate={(screen) => navigation.navigate(screen)} />
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.select({ ios: "padding", android: undefined })}
@@ -424,7 +417,7 @@ export default function HarvestFormScreen({ onNavigate = (screen) => console.log
                     <View style={{ height: 100 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
-            {/* <BottomNav activeScreen="Harvests" onNavigate={onNavigate} /> */}
+            <BottomNav activeScreen="Harvests" onNavigate={(screen) => navigation.navigate(screen)} />
         </View>
     );
 }

@@ -10,7 +10,7 @@ const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsy
 /**
  * Maps the UI payload (camelCase, internal flags) to the format expected by the backend API (snake_case, strings).
  *
- * API Schema POST: { "grade": "string", "weight": "string", "block": "string", "cherry_color": "string", "date": "string", "name": "string", "amount_paid": "string" }
+ * API Schema POST: { "worker_name": "string", "block_id": "block01", "weight_on_delivery": "string", "date_of_delivery": "2025-10-15", "amount_paid": "string", "paid_by": "string" }
  *
  * @param {object} payload - The raw payload from the UI or the sync queue.
  * @returns {object} The API-ready payload.
@@ -18,42 +18,37 @@ const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsy
 const mapToApiPayload = (payload) => {
     const apiPayload = {};
 
-    // 1. Date (UI: date (Date object/ISO string) -> API: date (YYYY-MM-DD string))
+    // 1. Date (UI: date (Date object/ISO string) -> API: date_of_delivery (YYYY-MM-DD string))
     let dateObj = payload.date;
     if (typeof dateObj === 'string') {
         // Convert ISO string (from AsyncStorage) back to a Date object
         dateObj = new Date(dateObj);
     }
-    
+
     if (dateObj instanceof Date && !isNaN(dateObj)) {
         const year = dateObj.getFullYear();
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const day = String(dateObj.getDate()).padStart(2, '0');
-        apiPayload.date = `${year}-${month}-${day}`; // Corrected API key: 'date'
+        apiPayload.date_of_delivery = `${year}-${month}-${day}`;
     } else {
         // Fallback for direct date string if parsing failed
-        apiPayload.date = payload.date.split('T')[0];
+        apiPayload.date_of_delivery = payload.date.split('T')[0];
     }
 
-    // 2. Weight (UI: weight (Number) -> API: weight (string))
-    // API expects weight as a string
-    apiPayload.weight = String(Number(payload.weight)); 
+    // 2. Weight (UI: weight (Number) -> API: weight_on_delivery (string))
+    apiPayload.weight_on_delivery = String(Number(payload.weight));
 
-    // 3. Block (UI: block (string) -> API: block (string))
-    apiPayload.block = payload.block;
+    // 3. Block (UI: blockId (string) -> API: block_id (string))
+    apiPayload.block_id = payload.blockId;
 
-    // 4. Grade (UI: grade (string) -> API: grade (string))
-    apiPayload.grade = payload.grade;
+    // 4. Worker Name (UI: workerName (string) -> API: worker_name (string))
+    apiPayload.worker_name = payload.workerName;
 
-    // 5. Cherry Color (UI: cherryColor (string) -> API: cherry_color (string))
-    apiPayload.cherry_color = payload.cherryColor;
-
-    // 6. Name (UI: name (string) -> API: name (string))
-    apiPayload.name = payload.name;
-
-    // 7. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (string))
-    // API expects amount_paid as a string
+    // 5. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (string))
     apiPayload.amount_paid = String(Number(payload.amountPaid));
+
+    // 6. Paid By (UI: paidBy (string) -> API: paid_by (string))
+    apiPayload.paid_by = payload.paidBy;
 
     return apiPayload;
 };
