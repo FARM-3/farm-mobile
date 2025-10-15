@@ -30,10 +30,9 @@ import BottomNav from '../../../components/BottomNav';
 
 // --- Constants for Filters ---
 const BLOCK_OPTIONS = ["All Blocks", "Block A-1", "Block B-2", "Block C-3"];
-const GRADE_OPTIONS = ["All Grades", "Grade 1", "Grade 2", "Grade 3"];
 const SYNC_STATUS_OPTIONS = ["All Statuses", "Synced", "Pending"];
 
-export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
+export default function HarvestSummaryScreen({ route = {}, navigation }) {
     const [allRecords, setAllRecords] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -42,7 +41,6 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
     const [filterBlock, setFilterBlock] = useState(BLOCK_OPTIONS[0]);
-    const [filterGrade, setFilterGrade] = useState(GRADE_OPTIONS[0]);
     const [filterStatus, setFilterStatus] = useState(SYNC_STATUS_OPTIONS[0]);
 
     /**
@@ -72,20 +70,19 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
             const remoteResponse = await fetchAllHarvestRecords();
             if (remoteResponse.success && Array.isArray(remoteResponse.remoteData.results)) {
                 // Maping remote data (snake_case) to local data structure (camelCase)
-                remoteRecords = remoteResponse.remoteData.results.map(r => ({
-                    // Map ALL API fields to local camelCase structure
-                    id: r.id, 
-                    grade: r.grade, 
-                    block: r.block,
-                    name: r.name,
-                    isSynced: true,
+                 remoteRecords = remoteResponse.remoteData.results.map(r => ({
+                     // Map ALL API fields to local camelCase structure
+                     id: r.id,
+                     block: r.block_ID,
+                     name: r.Worker_name,
+                     isSynced: true,
 
-                    
-                    weight: `${r.weight} kg`, 
-                    date: r.date, 
-                    cherryColor: r.cherry_color, 
-                    amountPaid: Number(r.amount_paid), 
-                }));
+
+                     weight: `${r.weight_on_delivery} kg`,
+                     date: r.date_of_delivery,
+                     amountPaid: Number(r.amount_paid),
+                     paidBy: r.paid_by,
+                 }));
             }
         } else {
             setSyncStatus("Offline Mode: Data saved locally. Sync will occur when online.");
@@ -96,10 +93,14 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
         if (localResponse.success && Array.isArray(localResponse.records)) {
             // Maping local data and format for display consistency with remote data
             localRecords = localResponse.records.map(r => ({
-                ...r,
-                weight: `${r.weight} kg`, 
-                date: r.dateReadable || r.date.split('T')[0], 
+                id: r.id,
+                block: r.blockId,
+                name: r.workerName,
                 isSynced: false,
+                weight: `${r.weight} kg`,
+                date: r.dateReadable || r.date.split('T')[0],
+                amountPaid: Number(r.amountPaid),
+                paidBy: r.paidBy,
             }));
         }
 
@@ -135,13 +136,7 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
             result = result.filter(record => record.block === filterBlock);
         }
 
-        // 3. Grade Filter
-        if (filterGrade !== GRADE_OPTIONS[0]) {
-            // Both local and remote now use the 'grade' field directly
-            result = result.filter(record => record.grade === filterGrade);
-        }
-
-        // 4. Sync Status Filter
+        // 3. Sync Status Filter
         if (filterStatus === "Synced") {
             result = result.filter(record => record.isSynced === true);
         } else if (filterStatus === "Pending") {
@@ -149,48 +144,47 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
         }
 
         setFilteredData(result);
-    }, [allRecords, searchTerm, filterBlock, filterGrade, filterStatus]);
+    }, [allRecords, searchTerm, filterBlock, filterStatus]);
 
-    // Initial load
+    // Initial load and refresh when screen comes into focus
     useEffect(() => {
         loadAndSyncData();
     }, [loadAndSyncData]);
 
-    // Check for refresh request from form screen (if router supports passing params)
+    // Refresh data whenever the screen comes into focus (e.g., after form submission)
     useEffect(() => {
-        console.log('Route params changed:', route.params);
-        if (route.params?.shouldRefresh) {
+        const unsubscribe = navigation.addListener('focus', () => {
+            console.log('[HarvestSummary] Screen focused, refreshing data...');
             loadAndSyncData();
-            // Relying on the parent navigator to manage the 'shouldRefresh' state.
-        }
-    }, [route?.params?.shouldRefresh, loadAndSyncData]);
+        });
+        return unsubscribe;
+    }, [navigation, loadAndSyncData]);
 
 
     // --- Export Functionality
     const convertToCSV = (rows) => {
-        const header = ['Id', 'Grade', 'Weight(kg)', 'Block', 'Cherry Colour', 'Date', 'Recorder Name', 'Amount Paid(UGX)', 'Sync Status'];
+        const header = ['Id', 'Weight(kg)', 'Block', 'Date', 'Worker Name', 'Amount Paid(UGX)', 'Paid By', 'Sync Status'];
         const csvRows = [header.join(',')];
 
         rows.forEach((row) => {
-            const amountPaidValue = row.amountPaid !== undefined 
-                ? row.amountPaid 
+            const amountPaidValue = row.amountPaid !== undefined
+                ? row.amountPaid
                 : 0; // Fallback
-            
+
             const weightValue = row.weight.replace(' kg', ''); // Remove ' kg' suffix for clean number export
 
             const values = [
                 row.id,
-                row.grade, 
-                weightValue, 
+                weightValue,
                 row.block,
-                row.cherryColor || 'N/A',
                 row.date,
                 row.name || 'N/A',
-                amountPaidValue, 
+                amountPaidValue,
+                row.paidBy || 'N/A',
                 row.isSynced ? 'Synced' : 'Pending',
             ];
             // Quote values for CSV safety and join them
-            csvRows.push(values.map(v => `"${v}"`).join(',')); 
+            csvRows.push(values.map(v => `"${v}"`).join(','));
         });
 
         return csvRows.join('\n');
@@ -223,15 +217,17 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
     const renderRow = ({ item }) => (
         <View style={[styles.row, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
             {/* Display using the cleaned camelCase fields */}
-            <Text style={styles.cell}>{item.grade || 'N/A'}</Text>
             <Text style={styles.cell}>{item.weight}</Text>
             <Text style={styles.cell}>{item.block}</Text>
             <Text style={styles.cell}>{item.date}</Text>
+            <Text style={styles.cell}>{item.name || 'N/A'}</Text>
+            <Text style={styles.cell}>{item.amountPaid ? `${item.amountPaid} UGX` : 'N/A'}</Text>
+            <Text style={styles.cell}>{item.paidBy || 'N/A'}</Text>
             <View style={styles.statusCell}>
-                <Ionicons 
-                    name={item.isSynced ? "cloud-done" : "cloud-upload-outline"} 
-                    size={16} 
-                    color={item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT} 
+                <Ionicons
+                    name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
+                    size={16}
+                    color={item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT}
                 />
                 <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT, marginLeft: 4 }]}>
                     {item.isSynced ? 'Synced' : 'Pending'}
@@ -251,13 +247,13 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <Header title="Harvest Summary" onNavigate={onNavigate} />
+            <Header title="Harvest Summary" onNavigate={(screen) => navigation.navigate(screen)} />
             <View style={styles.container}>
 
                 {/* Add New Harvest Button */}
                 <TouchableOpacity
                     style={styles.addButton}
-                    onPress={() => onNavigate && onNavigate('HarvestForm')}
+                    onPress={() => navigation.navigate('HarvestForm')}
                 >
                     <Ionicons name="add-circle" size={20} color={CoffeeColors.WHITE} />
                     <Text style={styles.addButtonText}>Record New Harvest</Text>
@@ -287,11 +283,6 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
                     </Picker>
                 </View>
                 <View style={styles.pickerWrap}>
-                    <Picker selectedValue={filterGrade} onValueChange={setFilterGrade}>
-                        {GRADE_OPTIONS.map(g => <Picker.Item key={g} label={g} value={g} />)}
-                    </Picker>
-                </View>
-                <View style={styles.pickerWrap}>
                     <Picker selectedValue={filterStatus} onValueChange={setFilterStatus}>
                         {SYNC_STATUS_OPTIONS.map(s => <Picker.Item key={s} label={s} value={s} />)}
                     </Picker>
@@ -310,10 +301,12 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
 
             {/* Header */}
             <View style={[styles.row, styles.headerRow]}>
-                <Text style={styles.headerCell}>Grade</Text>
                 <Text style={styles.headerCell}>Weight</Text>
                 <Text style={styles.headerCell}>Block</Text>
                 <Text style={styles.headerCell}>Date</Text>
+                <Text style={styles.headerCell}>Worker</Text>
+                <Text style={styles.headerCell}>Amount Paid</Text>
+                <Text style={styles.headerCell}>Paid By</Text>
                 <Text style={styles.headerCell}>Status</Text>
             </View>
 
@@ -326,7 +319,7 @@ export default function HarvestSummaryScreen({ route = {}, onNavigate }) {
                 contentContainerStyle={{ paddingBottom: 100 }}
             />
             </View>
-            <BottomNav activeScreen="Harvests" onNavigate={onNavigate} />
+            <BottomNav activeScreen="Harvests" onNavigate={(screen) => navigation.navigate(screen)} />
         </View>
     );
 }
