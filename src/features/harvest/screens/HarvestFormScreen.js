@@ -83,12 +83,11 @@ const PAID_BY_OPTIONS = ["Client", "Manager", "System Transfer"];
 
 const Step1_WorkerAndBlock = ({ formData, updateField }) => {
     
-    // Handler to update both ID and Name when a block is selected
+    // Handler to update block ID when a block is selected
     const handleBlockChange = (selectedId) => {
         const block = BLOCK_DATA.find(b => b.id === selectedId);
         if (block) {
             updateField('blockId', block.id);
-            updateField('blockName', block.name);
         }
     };
 
@@ -105,18 +104,18 @@ const Step1_WorkerAndBlock = ({ formData, updateField }) => {
                 autoCapitalize="words"
             />
 
-            <Text style={styles.label}>Block ID and Name</Text>
+            <Text style={styles.label}>Block ID</Text>
             <View style={styles.pickerWrap}>
                 <Picker 
                     selectedValue={formData.blockId} 
                     onValueChange={handleBlockChange}
                 >
                     {BLOCK_DATA.map((b) => (
-                        <Picker.Item 
-                            key={b.id} 
-                            // Display the ID before the Name as requested
-                            label={`${b.id} - ${b.name}`} 
-                            value={b.id} 
+                        <Picker.Item
+                            key={b.id}
+                            // Display the Block ID
+                            label={`${b.id}`}
+                            value={b.id}
                         />
                     ))}
                 </Picker>
@@ -196,7 +195,6 @@ const initialFormState = {
     // Harvest Details (Removed: grade, cherryColor)
     workerName: "", // maps to Worker_name
     blockId: BLOCK_DATA[0].id, // maps to block_ID
-    blockName: BLOCK_DATA[0].name, // for display purposes
     weight: "", // maps to weight on delivery
     date: new Date(), // maps to date of delivery
     amountPaid: "", // maps to amount paid
@@ -300,11 +298,9 @@ export default function HarvestFormScreen({ onNavigate = (screen) => console.log
                 amount_paid: Number(formData.amountPaid),
                 paid_by: formData.paidBy,
                 Harvest_ID: formData.generatedId,
-                
+
                 // System/Internal fields
-                synced: 0, 
-                // Adding blockName for better context locally if needed
-                block_name: formData.blockName,
+                synced: 0,
                 notes: `Worker: ${formData.workerName}, Block ID: ${formData.blockId}, Weight: ${formData.weight} kg, Paid By: ${formData.paidBy}`,
             };
 
