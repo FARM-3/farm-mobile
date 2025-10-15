@@ -8,10 +8,12 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import Header from '../../components/Header';
+import BottomNav from '../../components/BottomNav';
 
 // Assuming you have a file at this path
 // import CoffeeColors from '../../theme/colors';
-const CoffeeColors = { primary: '#4CAF50', secondary: '#333' }; 
+const CoffeeColors = { primary: '#4CAF50', secondary: '#333' };
 
 // === Success Modal Component (Moved here for simplicity) ===
 const SuccessModal = ({ isVisible, message, blockId, onClose, onGoToSummary }) => (
@@ -60,7 +62,6 @@ const SEEDLING_SOURCES = [
   { label: 'Select Source', value: '' },
   { label: 'Local Nursery', value: 'localNursery' },
   { label: 'Private Farm', value: 'privateFarm' },
-  { label: 'Own Propagated', value: 'ownPropagated' },
   { label: 'Research Institute', value: 'researchInstitute' },
   { label: 'Other (Specify below)', value: 'other' },
 ];
@@ -80,11 +81,15 @@ const FERTILIZER_OPTIONS = {
 const PESTICIDE_OPTIONS = [
   { label: 'Striker', value: 'striker' },
   { label: 'Fungicide', value: 'fungicide' },
+  { label: 'Other', value: 'other' },
 ];
 
 const STANDARD_PRACTICES = [
   { label: 'Stamping', value: 'stamping' },
   { label: 'Pruning', value: 'pruning' },
+  { label: 'Spot Weeding', value: 'spotWeeding' },
+  { label: 'Desuckering', value: 'desuckering' },
+  { label: 'Slashing', value: 'slashing' },
   { label: 'Other', value: 'other' },
 ];
 
@@ -103,6 +108,7 @@ const initialFormState = {
   otherFertilizer: '',
   usePesticides: 'no',
   pesticidesList: [],
+  otherPesticide: '',
   standardPractices: [],
   otherStandardPractice: ''
 };
@@ -116,7 +122,7 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
     if (value === 'robusta') {
       updateField('typeOfSeedling', formData.robustaSubtype ? `Robusta (${formData.robustaSubtype})` : '');
     } else if (value === 'arabica') {
-      updateField('typeOfSeedling', 'Arabica (AR-01)');
+      updateField('typeOfSeedling', 'Arabica');
     } else if (value === 'liberica') {
       updateField('typeOfSeedling', 'Liberica');
     }
@@ -197,14 +203,14 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
         </Picker>
       </View>
 
-      {formData.sourceSeedling === 'other' && (
+      {formData.sourceSeedling !== '' && formData.sourceSeedling !== 'localNursery' && (
         <>
-          <Text style={styles.label}>Specify Source</Text>
+          <Text style={styles.label}>Specify Source Name *</Text>
           <TextInput
             style={styles.input}
             value={formData.otherSourceSeedling}
             onChangeText={v => updateField('otherSourceSeedling', v)}
-            placeholder="Enter source name"
+            placeholder={formData.sourceSeedling === 'privateFarm' ? 'Enter farm name' : formData.sourceSeedling === 'researchInstitute' ? 'Enter institute name' : 'Enter source name'}
           />
         </>
       )}
@@ -336,6 +342,17 @@ const Step2_FertilizersPesticides = ({ formData, updateField }) => {
               <Text style={styles.checkboxText}>{formData.pesticidesList.includes(p.value) ? '☑️' : '⬜'} {p.label}</Text>
             </TouchableOpacity>
           ))}
+          {formData.pesticidesList.includes('other') && (
+            <>
+              <Text style={styles.label}>Specify Other Pesticide</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.otherPesticide}
+                onChangeText={v => updateField('otherPesticide', v)}
+                placeholder="Enter pesticide name"
+              />
+            </>
+          )}
         </>
       )}
     </View>
@@ -401,22 +418,31 @@ const BlockRegistrationStepper = ({ navigation }) => {
 
   const validateStep = (stepIndex) => {
     const required = STEPS[stepIndex].requiredFields;
+    const errors = [];
     for (const field of required) {
       if (!formData[field] || (typeof formData[field] === 'string' && formData[field].trim() === '')) {
-        return false;
+        errors.push(field);
       }
-      if (field === 'sourceSeedling' && formData.sourceSeedling === 'other' && formData.otherSourceSeedling.trim() === '') {
-        return false;
+      if (field === 'sourceSeedling' && formData.sourceSeedling === 'other' && (!formData.otherSourceSeedling || formData.otherSourceSeedling.trim() === '')) {
+        errors.push('otherSourceSeedling');
       }
     }
-    return true;
+    return errors;
   };
 
   const handleNext = () => {
-    if (validateStep(currentStep)) {
+    const errors = validateStep(currentStep);
+    if (errors.length === 0) {
       setCurrentStep(prev => prev < STEPS.length - 1 ? prev + 1 : prev);
     } else {
-      Alert.alert('Validation Error', 'Please fill in all required fields marked with *');
+      const errorMessages = errors.map(field => {
+        if (field === 'numTrees') return 'Number of Trees is required';
+        if (field === 'typeCoffee') return 'Coffee Type is required';
+        if (field === 'sourceSeedling') return 'Seedling Source is required';
+        if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
+        return `${field} is required`;
+      });
+      Alert.alert('Validation Error', errorMessages.join('\n'));
     }
   };
 
@@ -469,8 +495,16 @@ const BlockRegistrationStepper = ({ navigation }) => {
   }, []);
   
   const handleSubmit = async () => {
-    if (!validateStep(currentStep)) {
-      Alert.alert('Validation Error', 'Please fill in all required fields marked with *');
+    const errors = validateStep(currentStep);
+    if (errors.length > 0) {
+      const errorMessages = errors.map(field => {
+        if (field === 'numTrees') return 'Number of Trees is required';
+        if (field === 'typeCoffee') return 'Coffee Type is required';
+        if (field === 'sourceSeedling') return 'Seedling Source is required';
+        if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
+        return `${field} is required`;
+      });
+      Alert.alert('Validation Error', errorMessages.join('\n'));
       return;
     }
 
@@ -485,6 +519,10 @@ const BlockRegistrationStepper = ({ navigation }) => {
         ? formData.otherSourceSeedling
         : formData.sourceSeedling;
 
+      const pesticidesValue = formData.pesticidesList.includes('other')
+        ? formData.pesticidesList.filter(p => p !== 'other').concat(formData.otherPesticide).join(', ')
+        : formData.pesticidesList.join(', ');
+
       const standardPracticesValue = formData.standardPractices.join(', ') +
         (formData.otherStandardPractice && formData.standardPractices.includes('other') ? `, ${formData.otherStandardPractice}` : '');
 
@@ -498,7 +536,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
         fertilizer_type: formData.fertilizerType,
         fertilizer_list: fertilizerValue,
         use_pesticides: formData.usePesticides,
-        pesticides_list: formData.pesticidesList.join(', '),
+        pesticides_list: pesticidesValue,
         standard_practices: standardPracticesValue,
       };
 
@@ -562,10 +600,9 @@ const BlockRegistrationStepper = ({ navigation }) => {
   const isLastStep = currentStep === STEPS.length - 1;
 
   return (
-    <View style={styles.fullScreenContainer}>
+    <View style={{ flex: 1, backgroundColor: CoffeeColors.primary }}>
+      <Header title="Block Registration" onNavigate={(screen) => navigation.navigate(screen)} />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Text style={styles.title}>Block Registration</Text>
-
         <TouchableOpacity onPress={handleViewSummary} style={styles.navLink}>
           <Text style={styles.navLinkText}>View Block Summary 📋</Text>
         </TouchableOpacity>
@@ -577,45 +614,55 @@ const BlockRegistrationStepper = ({ navigation }) => {
 
         {isLoading && <ActivityIndicator size="large" color={CoffeeColors.primary} />}
 
+        <SuccessModal
+          isVisible={showSuccessModal}
+          message={successMessage}
+          blockId={generatedBlockId}
+          onClose={handleModalClose}
+          onGoToSummary={handleGoToSummary}
+        />
+
+        {/* Navigation Buttons - Inside ScrollView */}
+        <View style={styles.buttonGroup}>
+          {currentStep > 0 && (
+            <TouchableOpacity style={styles.backButton} onPress={handleBack} disabled={isLoading}>
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
+          )}
+          {!isLastStep && (
+            <TouchableOpacity
+              style={styles.nextButton}
+              onPress={handleNext}
+              disabled={isLoading}
+            >
+              <Text style={styles.submitButtonText}>Next</Text>
+            </TouchableOpacity>
+          )}
+          {isLastStep && (
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSubmit}
+              disabled={isLoading}
+            >
+              <Text style={styles.submitButtonText}>
+                {isLoading ? 'Submitting...' : 'Submit Block'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
 
-      {/* Navigation Buttons */}
-      <View style={styles.buttonGroup}>
-        {currentStep > 0 && (
-          <TouchableOpacity style={styles.backButton} onPress={handleBack} disabled={isLoading}>
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity 
-          style={isLastStep ? styles.submitButton : styles.nextButton} 
-          onPress={isLastStep ? handleSubmit : handleNext} 
-          disabled={isLoading}
-        >
-          <Text style={styles.submitButtonText}>
-            {isLastStep ? (isLoading ? 'Submitting...' : 'Submit Block') : 'Next'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <SuccessModal
-        isVisible={showSuccessModal}
-        message={successMessage}
-        blockId={generatedBlockId}
-        onClose={handleModalClose}
-        onGoToSummary={handleGoToSummary}
-      />
+      <BottomNav activeScreen="Blocks" onNavigate={(screen) => navigation.navigate(screen)} />
     </View>
   );
 };
 
 // === STYLES ===
 const styles = StyleSheet.create({
-  fullScreenContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
   scrollContainer: {
     padding: 20,
+    paddingBottom: 100, // Add padding to ensure content doesn't get hidden behind buttons
+    backgroundColor: '#fff',
   },
   title: {
     fontSize: 26,

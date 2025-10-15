@@ -327,10 +327,10 @@ import CoffeeColors from './theme/colors';
 // FIX: Importing the correct file name: BlockDetailsForm
 import BlockDetailsForm from './features/blocks/BlockDetailsForm'; 
 // Assuming BlockSummary is correct, but ensuring it's the right component name
-// import BlockSummary from './features/blocks/BlockSummary'; 
-// import DashboardScreen from './features/dashboard/screens/DashboardScreen'; 
-import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen'; 
-import HarvestSummaryScreen from './features/harvest/screens/HarvestSummaryScreen'; // <-- ADDED IMPORT
+import BlockSummary from './features/blocks/BlockSummary'; 
+import DashboardScreen from './features/dashboard/screens/DashboardScreen'; 
+// import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen'; 
+// import HarvestSummaryScreen from './features/harvest/screens/HarvestSummaryScreen'; // <-- ADDED IMPORT
 
 // Initialize the stack navigator
 const Stack = createNativeStackNavigator();
@@ -342,42 +342,49 @@ const App = () => {
             <SafeAreaView style={styles.safeArea}> 
                 <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
                 {/* 4. Define the Stack Navigator and its screens */}
-                <Stack.Navigator 
-                    // Set the starting screen to the Harvest Form
-                    initialRouteName="HarvestForm" 
+                <Stack.Navigator
+                    // Set the starting screen to the Block Summary
+                    initialRouteName="BlockSummary"
                     screenOptions={{
                         headerStyle: { backgroundColor: CoffeeColors.DARK_BROWN },
                         headerTintColor: CoffeeColors.WHITE,
                         headerTitleStyle: { fontWeight: 'bold' },
                     }}
                 >
-                    {/* FIX: Define the Block Details Form screen using the correct import
-                    <Stack.Screen 
-                        name="BlockDetailsForm" 
-                        component={BlockDetailsForm} 
+                    {/* Define the Block Details Form screen */}
+                    <Stack.Screen
+                        name="BlockDetailsForm"
+                        component={BlockDetailsForm}
                         options={{ title: 'Add Block Details' }}
-                    /> */}
+                    />
                     
                     {/* Define the Block Summary screen (where navigation.addListener is used) */}
-                    {/* <Stack.Screen 
-                        name="BlockSummary" 
-                        component={BlockSummary} 
+                    <Stack.Screen
+                        name="BlockSummary"
+                        component={BlockSummary}
                         options={{ title: 'Block Data Summary' }}
-                    /> */}
-                    
+                    />
+
+                    {/* Define the Block Registration screen */}
+                    <Stack.Screen
+                        name="BlockRegistration"
+                        component={BlockDetailsForm}
+                        options={{ title: 'Block Registration' }}
+                    />
+
                     {/* Define the Harvest Form screen */}
-                    <Stack.Screen 
-                        name="HarvestForm" 
-                        component={HarvestFormScreen} 
+                    {/* <Stack.Screen
+                        name="HarvestForm"
+                        component={HarvestFormScreen}
                         options={{ title: 'New Harvest Entry' }}
-                    />
-                    
+                    /> */}
+
                     {/* NEW: Define the Harvest Summary screen */}
-                    <Stack.Screen 
-                        name="HarvestSummary" 
-                        component={HarvestSummaryScreen} 
+                    {/* <Stack.Screen
+                        name="HarvestSummary"
+                        component={HarvestSummaryScreen}
                         options={{ title: 'Harvest History' }}
-                    />
+                    /> */}
 
                     {/* Example of other screens, if needed */}
                     {/* <Stack.Screen name="Dashboard" component={DashboardScreen} /> */}

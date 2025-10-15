@@ -93,10 +93,14 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         if (localResponse.success && Array.isArray(localResponse.records)) {
             // Maping local data and format for display consistency with remote data
             localRecords = localResponse.records.map(r => ({
-                ...r,
-                weight: `${r.weight} kg`, 
-                date: r.dateReadable || r.date.split('T')[0], 
+                id: r.id,
+                block: r.blockId,
+                name: r.workerName,
                 isSynced: false,
+                weight: `${r.weight} kg`,
+                date: r.dateReadable || r.date.split('T')[0],
+                amountPaid: Number(r.amountPaid),
+                paidBy: r.paidBy,
             }));
         }
 
@@ -142,19 +146,19 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         setFilteredData(result);
     }, [allRecords, searchTerm, filterBlock, filterStatus]);
 
-    // Initial load
+    // Initial load and refresh when screen comes into focus
     useEffect(() => {
         loadAndSyncData();
     }, [loadAndSyncData]);
 
-    // Check for refresh request from form screen (if router supports passing params)
+    // Refresh data whenever the screen comes into focus (e.g., after form submission)
     useEffect(() => {
-        console.log('Route params changed:', route.params);
-        if (route.params?.shouldRefresh) {
+        const unsubscribe = navigation.addListener('focus', () => {
+            console.log('[HarvestSummary] Screen focused, refreshing data...');
             loadAndSyncData();
-            // Relying on the parent navigator to manage the 'shouldRefresh' state.
-        }
-    }, [route?.params?.shouldRefresh, loadAndSyncData]);
+        });
+        return unsubscribe;
+    }, [navigation, loadAndSyncData]);
 
 
     // --- Export Functionality

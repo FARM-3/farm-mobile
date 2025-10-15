@@ -1,176 +1,372 @@
 // BlockSummary.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity
+  View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, TextInput, FlatList
 } from 'react-native';
+import NetInfo from "@react-native-community/netinfo";
+import { Picker } from "@react-native-picker/picker";
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { Ionicons } from '@expo/vector-icons';
 
-const CoffeeColors = { primary: '#4CAF50', secondary: '#333' };
+import CoffeeColors from '../../theme/colors';
+import Header from '../../components/Header';
+import BottomNav from '../../components/BottomNav';
 
-const BlockSummary = ({ navigation }) => {
-  const [blocks, setBlocks] = useState([]);
+const BlockSummary = ({ route = {}, navigation }) => {
+  const [allRecords, setAllRecords] = useState([]);
+  const [filteredData, setFilteredData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
 
-  const fetchBlocks = async () => {
+  // Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterBlock, setFilterBlock] = useState("All Blocks");
+
+  /**
+   * Primary function to fetch, sync, and combine all data sources.
+   */
+  const loadAndSyncData = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const response = await fetch('https://api-3181.onrender.com/api/blocks/');
-      if (response.ok) {
-        const data = await response.json();
+    let remoteRecords = [];
+
+    // 1. Checking Internet Connectivity
+    const netState = await NetInfo.fetch();
+    const isConnected = netState.isConnected && netState.isInternetReachable;
+
+    if (isConnected) {
+      setSyncStatus("Online: Initiating data synchronization.");
+
+      // 2. Fetching Remote Data
+      const remoteResponse = await fetch('https://api-3181.onrender.com/api/blocks/');
+      if (remoteResponse.ok) {
+        const data = await remoteResponse.json();
         // Assuming the API returns an array of block objects
-        setBlocks(data);
+        remoteRecords = data.results || data;
       } else {
-        Alert.alert('Error', 'Failed to fetch block data from the server.');
+        setSyncStatus("Online: Failed to fetch remote data.");
       }
+    } else {
+      setSyncStatus("Offline Mode: Data saved locally. Sync will occur when online.");
+    }
+
+    // 5. Set final records
+    let finalRecords = remoteRecords;
+
+    // Sorting by date (newest first)
+    finalRecords.sort((a, b) => new Date(b.created_at || b.date_planted) - new Date(a.created_at || a.date_planted));
+
+    setAllRecords(finalRecords);
+    setIsLoading(false);
+  }, []);
+
+  // --- Filtering & Searching Logic ---
+  useEffect(() => {
+    let result = allRecords;
+
+    // 1. Search Filter (by Block ID or Type)
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(record =>
+        record.block_id?.toLowerCase().includes(lowerSearch) ||
+        record.type_of_coffee?.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    // 2. Block Filter (placeholder for now)
+    if (filterBlock !== "All Blocks") {
+      // Implement block filtering if needed
+    }
+
+    setFilteredData(result);
+  }, [allRecords, searchTerm, filterBlock]);
+
+  // Initial load
+  useEffect(() => {
+    loadAndSyncData();
+  }, [loadAndSyncData]);
+
+  // Check for refresh request from form screen
+  useEffect(() => {
+    if (route.params?.shouldRefresh) {
+      loadAndSyncData();
+    }
+  }, [route?.params?.shouldRefresh, loadAndSyncData]);
+
+  const handleAddNewBlock = () => {
+    navigation.navigate('BlockRegistration');
+  };
+
+  // --- Export Functionality
+  const convertToCSV = (rows) => {
+    const header = ['Block ID', 'Trees', 'Date Planted', 'Coffee Type', 'Seedling Source', 'Fertilizer', 'Pesticides', 'Standard Practices'];
+    const csvRows = [header.join(',')];
+
+    rows.forEach((row) => {
+      const values = [
+        row.block_id,
+        row.no_of_trees,
+        row.date_planted,
+        row.type_of_coffee,
+        row.source_of_seedling,
+        row.fertilizer_list,
+        row.use_pesticides === 'yes' ? 'Yes' : 'No',
+        row.standard_practices,
+      ];
+      csvRows.push(values.map(v => `"${v}"`).join(','));
+    });
+
+    return csvRows.join('\n');
+  };
+
+  const exportToCSV = async () => {
+    if (filteredData.length === 0) {
+      Alert.alert("Export Failed", "There is no data to export.");
+      return;
+    }
+    try {
+      const csv = convertToCSV(filteredData);
+      const fileUri = FileSystem.documentDirectory + 'block_summary.csv';
+
+      await FileSystem.writeAsStringAsync(fileUri, csv, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('Error', 'Sharing is not available on this device');
+        return;
+      }
+
+      await Sharing.shareAsync(fileUri);
     } catch (error) {
-      console.error('Fetch error:', error);
-      Alert.alert('Error', 'Network error. Could not connect to the API.');
-    } finally {
-      setIsLoading(false);
+      Alert.alert('Export Failed', error.message);
     }
   };
 
-  useEffect(() => {
-    // Fetch data on component mount
-    fetchBlocks();
-
-    // Re-fetch data every time the screen is focused (e.g., after navigating back from the form)
-    const unsubscribe = navigation.addListener('focus', () => {
-        fetchBlocks();
-    });
-
-    return unsubscribe; // Cleanup function
-  }, [navigation]);
-
-  const handleAddNewBlock = () => {
-    // Navigate to the Block Registration screen (assuming its route name is 'BlockRegistration')
-    navigation.navigate('BlockRegistration'); 
-  };
+  const renderRow = ({ item }) => (
+    <View style={[styles.row, styles.dataRow]}>
+      <Text style={[styles.cell, { width: 100 }]}>{item.block_id || 'N/A'}</Text>
+      <Text style={[styles.cell, { width: 80 }]}>{item.no_of_trees}</Text>
+      <Text style={[styles.cell, { width: 120 }]}>{item.date_planted}</Text>
+      <Text style={[styles.cell, { width: 120 }]}>{item.type_of_coffee}</Text>
+      <Text style={[styles.cell, { width: 150 }]}>{item.source_of_seedling}</Text>
+      <Text style={[styles.cell, { width: 150 }]}>{item.fertilizer_list}</Text>
+      <Text style={[styles.cell, { width: 100 }]}>{item.use_pesticides === 'yes' ? 'Yes' : 'No'}</Text>
+    </View>
+  );
 
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={CoffeeColors.primary} />
-        <Text style={styles.loadingText}>Fetching block data...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />
+        <Text style={styles.loadingText}>Loading block data...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Block Summary</Text>
-      
-      {/* Navigation Link to Add Block */}
-      <TouchableOpacity onPress={handleAddNewBlock} style={styles.navLink}>
-        <Text style={styles.navLinkText}>Add New Block ➕</Text>
-      </TouchableOpacity>
+    <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
+      <Header title="Block Summary" onNavigate={(screen) => navigation.navigate(screen)} />
+      <View style={styles.container}>
 
-      {blocks.length === 0 ? (
-        <Text style={styles.noData}>No blocks registered yet.</Text>
-      ) : (
-        <ScrollView horizontal>
-          <View>
-            {/* Table Header */}
-            <View style={styles.row}>
-              <Text style={[styles.headerCell, { width: 100 }]}>Block ID</Text>
-              <Text style={[styles.headerCell, { width: 80 }]}>Trees</Text>
-              <Text style={[styles.headerCell, { width: 120 }]}>Date Planted</Text>
-              <Text style={[styles.headerCell, { width: 120 }]}>Coffee Type</Text>
-              <Text style={[styles.headerCell, { width: 150 }]}>Seedling Source</Text>
-              <Text style={[styles.headerCell, { width: 150 }]}>Fertilizer</Text>
-              <Text style={[styles.headerCell, { width: 100 }]}>Pesticides</Text>
-            </View>
+        {/* Add New Block Button */}
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleAddNewBlock}
+        >
+          <Ionicons name="add-circle" size={20} color={CoffeeColors.WHITE} />
+          <Text style={styles.addButtonText}>Register New Block</Text>
+        </TouchableOpacity>
 
-            {/* Table Rows */}
-            {blocks.map((block, index) => (
-              <View key={index} style={[styles.row, index % 2 === 0 ? styles.evenRow : styles.oddRow]}>
-                <Text style={[styles.dataCell, { width: 100 }]}>{block.block_id || 'N/A'}</Text>
-                <Text style={[styles.dataCell, { width: 80 }]}>{block.no_of_trees}</Text>
-                <Text style={[styles.dataCell, { width: 120 }]}>{block.date_planted}</Text>
-                <Text style={[styles.dataCell, { width: 120 }]}>{block.type_of_coffee}</Text>
-                <Text style={[styles.dataCell, { width: 150 }]}>{block.source_of_seedling}</Text>
-                <Text style={[styles.dataCell, { width: 150 }]}>{block.fertilizer_list}</Text>
-                <Text style={[styles.dataCell, { width: 100 }]}>{block.use_pesticides === 'yes' ? 'Yes' : 'No'}</Text>
-              </View>
-            ))}
+        {/* Sync Status Banner */}
+        <View style={styles.syncBanner}>
+          <Text style={styles.syncText}>{syncStatus}</Text>
+          <TouchableOpacity onPress={loadAndSyncData} style={{ marginLeft: 10 }}>
+            <Ionicons name="reload-circle-sharp" size={24} color={CoffeeColors.WHITE} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Bar */}
+        <TextInput
+          style={styles.searchBar}
+          placeholder="Search by block ID or coffee type..."
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+        />
+
+        {/* Filters */}
+        <View style={styles.filtersContainer}>
+          <View style={styles.pickerWrap}>
+            <Picker selectedValue={filterBlock} onValueChange={setFilterBlock}>
+              <Picker.Item label="All Blocks" value="All Blocks" />
+            </Picker>
           </View>
-        </ScrollView>
-      )}
-    </ScrollView>
+        </View>
+
+        {/* Export Button */}
+        <TouchableOpacity
+          style={styles.exportButton}
+          onPress={exportToCSV}
+          disabled={filteredData.length === 0}
+        >
+          <Ionicons name="download-outline" size={18} color={CoffeeColors.WHITE} />
+          <Text style={styles.exportText}>Export {filteredData.length} Records to CSV</Text>
+        </TouchableOpacity>
+
+        {/* Header */}
+        <View style={[styles.row, styles.headerRow]}>
+          <Text style={[styles.headerCell, { width: 100 }]}>Block ID</Text>
+          <Text style={[styles.headerCell, { width: 80 }]}>Trees</Text>
+          <Text style={[styles.headerCell, { width: 120 }]}>Date Planted</Text>
+          <Text style={[styles.headerCell, { width: 120 }]}>Coffee Type</Text>
+          <Text style={[styles.headerCell, { width: 150 }]}>Seedling Source</Text>
+          <Text style={[styles.headerCell, { width: 150 }]}>Fertilizer</Text>
+          <Text style={[styles.headerCell, { width: 100 }]}>Pesticides</Text>
+        </View>
+
+        {/* Data Rows */}
+        <FlatList
+          data={filteredData}
+          renderItem={renderRow}
+          keyExtractor={(item, index) => item.block_id?.toString() || index.toString()}
+          ListEmptyComponent={<Text style={styles.emptyText}>No block records found matching your filters.</Text>}
+          contentContainerStyle={{ paddingBottom: 100 }}
+        />
+      </View>
+      <BottomNav activeScreen="Blocks" onNavigate={(screen) => navigation.navigate(screen)} />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: CoffeeColors.LIGHT_GRAY,
+    padding: 10,
   },
-  centerContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: CoffeeColors.LIGHT_GRAY,
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 16,
-    color: CoffeeColors.secondary,
+    color: CoffeeColors.DARK_BROWN,
   },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
+  addButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: CoffeeColors.ACCENT,
+    padding: 12,
+    borderRadius: 8,
     marginBottom: 10,
-    color: CoffeeColors.secondary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  navLink: {
-    paddingBottom: 10,
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    alignSelf: 'flex-start',
+  addButtonText: {
+    color: CoffeeColors.WHITE,
+    fontWeight: '700',
+    marginLeft: 8,
+    fontSize: 14,
   },
-  navLinkText: {
-    color: CoffeeColors.primary,
-    fontSize: 16,
-    fontWeight: '600',
+  syncBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: CoffeeColors.DARK_BROWN,
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
   },
-  noData: {
-    fontSize: 18,
-    textAlign: 'center',
-    marginTop: 50,
-    color: '#999',
+  syncText: {
+    color: CoffeeColors.CREAM,
+    fontSize: 12,
+    flexShrink: 1,
   },
-  // Table Styles
+  searchBar: {
+    backgroundColor: CoffeeColors.WHITE,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: CoffeeColors.LIGHT_BROWN,
+  },
+  filtersContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  pickerWrap: {
+    flex: 1,
+    marginHorizontal: 4,
+    backgroundColor: CoffeeColors.WHITE,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: CoffeeColors.LIGHT_BROWN,
+    overflow: 'hidden',
+  },
+  exportButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: CoffeeColors.MEDIUM_BROWN,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  exportText: {
+    color: CoffeeColors.WHITE,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
   row: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    backgroundColor: CoffeeColors.WHITE,
+    marginBottom: 5,
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 5,
+    justifyContent: 'space-between',
+  },
+  headerRow: {
+    backgroundColor: CoffeeColors.DARK_BROWN,
+    marginBottom: 8,
+    borderRadius: 6,
   },
   headerCell: {
-    padding: 10,
-    fontWeight: 'bold',
-    backgroundColor: CoffeeColors.primary,
-    color: '#fff',
-    borderRightWidth: 1,
-    borderRightColor: '#fff',
+    flex: 1,
+    fontWeight: '700',
+    color: CoffeeColors.CREAM,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 12,
   },
-  dataCell: {
-    padding: 10,
-    borderRightWidth: 1,
-    borderRightColor: '#eee',
-    fontSize: 14,
-    color: CoffeeColors.secondary,
+  dataRow: {
+    borderLeftWidth: 5,
+    borderLeftColor: CoffeeColors.GREEN,
+  },
+  cell: {
+    flex: 1,
+    color: CoffeeColors.GRAY_TEXT,
     textAlign: 'center',
-    // flexWrap: 'wrap', // Doesn't work well in fixed-width cells for RN
+    fontSize: 12,
+    alignSelf: 'center',
   },
-  evenRow: {
-    backgroundColor: '#f9f9f9',
-  },
-  oddRow: {
-    backgroundColor: '#fff',
-  },
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: CoffeeColors.MEDIUM_BROWN,
+    fontStyle: 'italic',
+  }
 });
 
 export default BlockSummary;

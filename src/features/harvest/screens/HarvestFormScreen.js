@@ -323,8 +323,8 @@ export default function HarvestFormScreen({ navigation }) {
             setFormData(initialFormState);
             setCurrentStep(0); // Go back to the first step
 
-            // Navigate back to summary
-            navigation.navigate('HarvestSummary');
+            // Navigate back to summary with refresh parameter
+            navigation.navigate('HarvestSummary', { shouldRefresh: true });
             
         } catch (error) {
             console.error('[HarvestForm] Local save failed:', error);
