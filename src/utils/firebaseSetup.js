@@ -53,7 +53,7 @@ export const initializeAuth = async () => {
 export const fetchFarmers = async () => {
     try {
         console.log('[firebaseSetup] Fetching farmers...');
-        const response = await ApiService.get('/aggregation/Farmer/');
+    const response = await ApiService.get('aggregation/farmer/');
         console.log('[firebaseSetup] Farmers fetched successfully');
         return response.data;
     } catch (error) {
@@ -75,7 +75,46 @@ export const fetchFarmers = async () => {
 export const submitFarmer = async (data) => {
     try {
         console.log('[firebaseSetup] Submitting farmer...');
-        const response = await ApiService.post('/aggregation/Farmer/', data);
+
+        // Transform data to match Django backend API format
+        const apiPayload = {
+            farmer_id: data.uid || data.farmer_id,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            gender: data.gender,
+            nin: data.nin,
+            date_of_birth: data.date_of_birth,
+            contact: data.contact,
+            email: data.email,
+            farmer_type: data.farmer_type || 'individual', // Default if not provided
+            started_coffee_farming_year: data.started_farming ? new Date(data.started_farming).getFullYear() : null,
+            district: data.district,
+            other_district: data.other_district || '',
+            sub_county: data.sub_county,
+            other_sub_county: data.other_sub_county || '',
+            parish: data.parish,
+            village: data.village,
+            gps_coordinates: data.gps,
+            nearest_landmark: data.nearest_landmark,
+            coffee_variety: data.coffee_variety,
+            number_of_trees: parseInt(data.no_of_trees) || 0,
+            ownership_of_trees: data.all_your_trees !== false, // Convert to boolean
+            planted_date: data.planted_date,
+            land_ownership: data.land_ownership,
+            spacing_between_trees: data.spacing,
+            defforestation_status: data.deforested !== false, // Convert to boolean
+            source_of_seedlings: data.seedling_source,
+            type_of_seedlings: data.seedling_type,
+            age_of_seedlings: data.age_of_seedlings || '',
+            standard_practices: Array.isArray(data.practices) && data.practices.length > 0, // Convert array to boolean
+            irrigation_source: data.irrigation,
+            fertilizers: Array.isArray(data.fertilizers) ? data.fertilizers.join(', ') : data.fertilizers || '',
+            pesticide: Array.isArray(data.pesticides) ? data.pesticides.join(', ') : data.pesticides || '',
+        };
+
+        console.log('[firebaseSetup] API payload:', JSON.stringify(apiPayload, null, 2));
+
+        const response = await ApiService.post('aggregation/farmer/', apiPayload);
         console.log('[firebaseSetup] Farmer submitted successfully');
         return response.data;
     } catch (error) {
@@ -104,9 +143,37 @@ export const submitFarmer = async (data) => {
 export const fetchHarvests = async () => {
     try {
         console.log('[firebaseSetup] Fetching harvests...');
-        const response = await ApiService.get('aggregation/FarmerHarvest');
+    const response = await ApiService.get('aggregation/farmer-harvest/');
         console.log('[firebaseSetup] Harvests fetched successfully');
-        return response.data;
+        let payload = response.data;
+        // If paginated, use results
+        if (payload && Array.isArray(payload.results)) payload = payload.results;
+
+        // Normalize records to client-side shape expected by AggregationScreen
+        const normalized = (Array.isArray(payload) ? payload : []).map(item => {
+            // attempt to extract farmer display name if backend returned nested object
+            const farmerName = item.farmer_name || (item.farmer && typeof item.farmer === 'object' && (item.farmer.name || item.farmer.full_name)) || (item.farmer ? String(item.farmer) : '');
+            return {
+                // id: prefer numeric id, fallback to harvest id string
+                id: item.id ?? item.harvest ?? null,
+                farmer_name: farmerName,
+                weight_on_delivery: (item.weight_on_delivery != null) ? parseFloat(item.weight_on_delivery) : (item.quantity != null ? parseFloat(item.quantity) : 0),
+                weight_after_floating: item.weight_after_floating != null ? parseFloat(item.weight_after_floating) : (item.weight_after_floating || 0),
+                date_of_delivery: item.date_of_delivery || item.date_harvested || item.date || '',
+                grade: item.grade || item.grade || '',
+                cherry_colour: item.cherry_colour || item.cherryColor || '',
+                stage: item.stage || '',
+                amount_paid: (item.amount_paid != null) ? parseFloat(item.amount_paid) : (item.amount_paid || 0),
+                who_paid: item.who_paid || item.payer || '',
+                recorder_id: item.recorder_id || item.recorder || '',
+                timestamp: item.timestamp || null,
+                // preserve original payload for debugging
+                __raw: item,
+            };
+        });
+
+        console.log('[firebaseSetup] Normalized harvest count:', normalized.length);
+        return normalized;
     } catch (error) {
         console.error('[firebaseSetup] Error fetching harvests:', error.response?.data || error.message);
 
@@ -125,7 +192,7 @@ export const fetchHarvests = async () => {
 export const submitHarvest = async (data) => {
     try {
         console.log('[firebaseSetup] Submitting harvest...');
-        const response = await ApiService.post('aggregation/FarmerHarvest/', data);
+    const response = await ApiService.post('aggregation/farmer-harvest/', data);
         console.log('[firebaseSetup] Harvest submitted successfully');
         return response.data;
     } catch (error) {

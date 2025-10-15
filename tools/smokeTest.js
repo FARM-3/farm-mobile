@@ -7,7 +7,7 @@ function getFarmers() {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: API_HOST,
-      path: `${API_BASE}/aggregation/Farmer/`,
+  path: `${API_BASE}/aggregation/farmer/`,
       method: 'GET',
       headers: { 'Accept': 'application/json' }
     };
@@ -30,7 +30,7 @@ function postHarvest(payload) {
     const data = JSON.stringify(payload);
     const options = {
       hostname: API_HOST,
-      path: `${API_BASE}/aggregation/FarmerHarvest/`,
+  path: `${API_BASE}/aggregation/farmer-harvest/`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
     };
