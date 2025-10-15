@@ -149,7 +149,7 @@ class SyncService {
     // Map table names to API endpoints
     const endpointMap = {
       harvests: 'harvests',
-      farmers: 'aggregation/Farmer',
+  farmers: 'aggregation/farmer',
       processing: 'processing',
     };
 

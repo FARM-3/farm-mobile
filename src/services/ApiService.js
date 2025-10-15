@@ -38,6 +38,12 @@ class ApiService {
           config.headers.Authorization = `Bearer ${token}`;
         }
 
+        // Normalize the request URL to avoid double-slash when baseURL already ends with '/'
+        if (config.url) {
+          // remove any leading slashes so axios joins baseURL + url cleanly
+          config.url = String(config.url).replace(/^\/+/, '');
+        }
+
         // Log request
         const fullUrl = config.baseURL + (config.url || '');
         console.log('[ApiService] Request:', config.method?.toUpperCase(), fullUrl);

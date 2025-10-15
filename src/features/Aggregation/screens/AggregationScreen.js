@@ -1,283 +1,424 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
-// Utilities and Theme Imports
+// --- UTILITIES AND THEME IMPORTS ---
+// NOTE: Assuming these imports are correctly path-resolved in your environment
 import CoffeeColors from '../../../theme/colors';
 import Header from '../../../components/Header';
 import BottomNav from '../../../components/BottomNav';
-// IMPORTING THE AGGREGATION SERVICE
+import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest } from '../../../services/aggregationService'; 
+import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings';
 
-// --- CONSTANTS ---
-const GRADES = ['A', 'B', 'C', 'D'];
-const CHERRY_COLORS = ['Red', 'Yellow', 'Green'];
-const STAGES = ['dried', 'fresh_cherry'];
 
-// --- COMPONENTS ---
+// ===============================================
+// === 1. FORM & TABLE FIELD DEFINITIONS (NEW) ===
+// ===============================================
+
+const farmerFieldDefinitions = [
+    // Step 1: Personal Info
+    {
+        title: 'Step 1: Personal & Contact Info',
+        fields: [
+            { key: 'first_name', label: 'First Name', keyboardType: 'default', required: true },
+            { key: 'last_name', label: 'Last Name', keyboardType: 'default' },
+            { key: 'gender', label: 'Gender', type: 'picker', pickerKey: 'gender' },
+            { key: 'nin', label: 'NIN', keyboardType: 'default' },
+            { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
+            { key: 'contact', label: 'Contact', keyboardType: 'phone-pad', required: true },
+            { key: 'email', label: 'Email (optional)', keyboardType: 'email-address' },
+            { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'picker', pickerKey: 'all_your_trees' },
+            { key: 'cooperative', label: 'Cooperative Name', keyboardType: 'default', dependsOn: { field: 'in_cooperative', value: true } },
+            { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date' },
+        ]
+    },
+    // Step 2: Location & UID
+    {
+        title: 'Step 2: Location & ID',
+        fields: [
+            { key: 'district', label: 'District', type: 'picker', pickerKey: 'district' },
+            { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county' },
+            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish' },
+            { key: 'village', label: 'Village', keyboardType: 'default' },
+            { key: 'gps', label: 'GPS Location (optional)', keyboardType: 'default' },
+            { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default' },
+            { key: 'uid', label: 'Farmer UID (Generated)', special: 'generate_uid', readOnly: true },
+        ]
+    },
+    // Step 3: Farm Details
+    {
+        title: 'Step 3: Farm Details',
+        fields: [
+            { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety' },
+            { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric' },
+            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'picker', pickerKey: 'all_your_trees' },
+            { key: 'other_farms', label: 'If no, which farms (location, owner)', keyboardType: 'default', dependsOn: { field: 'all_your_trees', value: false } },
+            { key: 'planted_date', label: 'Date planted', type: 'date' },
+            { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing' },
+            { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership' },
+            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'picker', pickerKey: 'all_your_trees' },
+            { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source' },
+            { key: 'seedling_type', label: 'Type of seedlings', keyboardType: 'default' },
+        ]
+    },
+    // Step 4: Practices & Chemicals
+    {
+        title: 'Step 4: Farming Practices',
+        fields: [
+            { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices' },
+            { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation' },
+            { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true },
+            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'picker', pickerKey: 'all_your_trees' },
+            { key: 'pesticides', label: 'If yes, list pesticides (comma separated)', array: true, dependsOn: { field: 'uses_pesticides', value: true } },
+        ]
+    }
+];
+
+const harvestFieldDefinitions = [
+    // Step 1: Farmer & Weight
+    {
+        title: "Step 1: Farmer's Harvest Details",
+        fields: [
+            { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
+            { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
+            { key: 'number_of_bags', label: 'Number of Bags', keyboardType: 'numeric' },
+            { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
+        ]
+    },
+    // Step 2: Quality & Payment
+    {
+        title: 'Step 2: Quality & Payment',
+        fields: [
+            { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type' },
+            { key: 'moisture_content', label: 'Moisture Content (%)', keyboardType: 'numeric' },
+            { key: 'amount_paid', label: 'Amount Paid', keyboardType: 'numeric' },
+            { key: 'paid_by', label: 'Paid By', keyboardType: 'default' },
+            { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
+        ]
+    }
+];
+
+const farmerTableFields = [
+    { key: 'name', label: 'Name', width: '30%' },
+    { key: 'contact', label: 'Contact', width: '20%' },
+    { key: 'district', label: 'District', width: '20%' },
+    { key: 'num_trees', label: 'Trees', width: '15%' },
+    { key: 'id', label: 'ID', width: '15%' },
+];
+
+const harvestTableFields = [
+    { key: 'farmer_name', label: 'Farmer', width: '30%' },
+    { key: 'date_of_delivery', label: 'Date', width: '20%' },
+    { key: 'weight_on_delivery', label: 'Weight (kg)', width: '20%' },
+    { key: 'amount_paid', label: 'Paid', width: '15%' },
+    { key: 'id', label: 'ID', width: '15%' },
+];
+
+// ===============================================
+// === 2. LIGHTWEIGHT LOCAL UI HELPERS (POLISHED)===
+// ===============================================
+
 const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true }) => (
-    <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>{label}</Text>
-        <TextInput
-            style={[styles.textInput, !editable && styles.textInputDisabled]}
-            value={value}
-            onChangeText={onChangeText}
-            keyboardType={keyboardType}
-            placeholder={`Enter ${label.toLowerCase()}`}
-            placeholderTextColor={CoffeeColors.GRAY_TEXT}
+    <View style={{ marginBottom: 15 }}>
+        {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
+        <TextInput 
+            value={value} 
+            onChangeText={onChangeText} 
+            keyboardType={keyboardType} 
+            style={[styles.textInput, !editable && styles.readOnlyInput]} 
             editable={editable}
         />
     </View>
 );
 
-const CustomPicker = ({ label, selectedValue, onValueChange, items }) => (
-    <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>{label}</Text>
+const CustomPicker = ({ label, selectedValue, onValueChange, items = [] }) => (
+    <View style={{ marginBottom: 15 }}>
+        {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
         <View style={styles.pickerContainer}>
-            <Picker
-                selectedValue={selectedValue}
-                onValueChange={onValueChange}
-                style={styles.picker}
-                itemStyle={{ color: CoffeeColors.DARK_BROWN, fontSize: 16 }}
-            >
-                {items && items.length > 0 ? (
-                    items.map((item) => (
-                        <Picker.Item key={item} label={item} value={item} />
-                    ))
-                ) : (
-                    <Picker.Item label={`-- No ${label} available --`} value="" />
-                )}
+            <Picker selectedValue={selectedValue} onValueChange={onValueChange} style={styles.picker}>
+                <Picker.Item label="-- Select --" value="" />
+                {items.map((it) => (
+                    <Picker.Item key={it.value ?? it} label={it.label ?? String(it)} value={it.value ?? it} />
+                ))}
             </Picker>
         </View>
     </View>
 );
 
+const CustomToggle = ({ label, value, onValueChange }) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, paddingVertical: 5 }}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <Switch value={!!value} onValueChange={onValueChange} trackColor={{ true: CoffeeColors.MEDIUM_BROWN }} thumbColor={value ? CoffeeColors.CREAM : '#fff'} />
+    </View>
+);
+
+const CustomMultiSelect = ({ label, selectedValues = [], onValueChange, items = [] }) => {
+    const [modalVisible, setModalVisible] = useState(false);
+
+    const toggleSelection = (item) => {
+        const newSelection = selectedValues.includes(item)
+            ? selectedValues.filter(val => val !== item)
+            : [...selectedValues, item];
+        onValueChange(newSelection);
+    };
+
+    const displayValue = selectedValues.length > 0 ? selectedValues.join(', ') : 'Select practices';
+
+    return (
+        <View style={{ marginBottom: 15 }}>
+            {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
+            <TouchableOpacity
+                style={styles.multiSelectButton}
+                onPress={() => setModalVisible(true)}
+            >
+                <Text style={styles.multiSelectText}>{displayValue}</Text>
+                <Ionicons name="chevron-down" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+            </TouchableOpacity>
+
+            <Modal
+                visible={modalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.multiSelectModal}>
+                        <Text style={styles.modalTitle}>Select Practices</Text>
+                        <ScrollView style={styles.multiSelectScroll}>
+                            {items.map((item, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={styles.multiSelectItem}
+                                    onPress={() => toggleSelection(item)}
+                                >
+                                    <Text style={styles.multiSelectItemText}>{item}</Text>
+                                    <View style={styles.checkbox}>
+                                        {selectedValues.includes(item) && (
+                                            <Ionicons name="checkmark" size={16} color={CoffeeColors.MEDIUM_BROWN} />
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                        <TouchableOpacity
+                            style={styles.modalCloseButton}
+                            onPress={() => setModalVisible(false)}
+                        >
+                            <Text style={styles.modalCloseText}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        </View>
+    );
+};
+
+const CustomDatePicker = ({ label, value, onChange }) => {
+    const [showPicker, setShowPicker] = useState(false);
+    const [date, setDate] = useState(value ? new Date(value) : new Date());
+
+    const handleDateChange = (event, selectedDate) => {
+        setShowPicker(false);
+        if (selectedDate) {
+            setDate(selectedDate);
+            onChange(selectedDate.toISOString().split('T')[0]); // Format as YYYY-MM-DD
+        }
+    };
+
+    const displayValue = value || 'Select Date';
+
+    return (
+        <View style={{ marginBottom: 15 }}>
+            {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
+            <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={() => setShowPicker(true)}
+            >
+                <Text style={styles.datePickerText}>{displayValue}</Text>
+                <Ionicons name="calendar" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+            </TouchableOpacity>
+            {showPicker && (
+                <DateTimePicker
+                    value={date}
+                    mode="date"
+                    display="default"
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                />
+            )}
+        </View>
+    );
+};
+
 const SuccessMessage = ({ message, onExit, onView }) => (
-    <View style={styles.overlay}>
+    <View style={[styles.overlay]}>
         <View style={styles.modal}>
-            <Ionicons name="checkmark-circle" size={60} color="#4CAF50" />
-            <Text style={styles.modalTitle}>Success!</Text>
+            <Text style={styles.modalTitle}>Success 🎉</Text>
             <Text style={styles.modalMessage}>{message}</Text>
-            
             <View style={styles.modalActions}>
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: CoffeeColors.MEDIUM_BROWN }]} onPress={onView}>
-                    <Text style={styles.modalButtonText}>View Records</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: CoffeeColors.LIGHT_GRAY, borderWidth: 1, borderColor: CoffeeColors.GRAY_TEXT }]} onPress={onExit}>
-                    <Text style={[styles.modalButtonText, { color: CoffeeColors.GRAY_TEXT }]}>Continue Recording</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalButton, { backgroundColor: CoffeeColors.MEDIUM_BROWN }]} onPress={onView}><Text style={styles.modalButtonText}>View Records</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.modalButton, { backgroundColor: CoffeeColors.GRAY_TEXT, marginTop: 8 }]} onPress={onExit}><Text style={styles.modalButtonText}>Close</Text></TouchableOpacity>
             </View>
         </View>
     </View>
 );
 
-const RecordsTable = ({ records, title, onExit, fields }) => {
-    const sortedRecords = useMemo(() => 
-        [...records].sort((a, b) => (b.timestamp || b.id) - (a.timestamp || a.id)), 
-        [records]
-    );
-
-    // derive flex weights from fields' width (percent strings like '25%') or default weight
-    const flexWeights = fields.map(f => {
-        if (f.width && typeof f.width === 'string' && f.width.trim().endsWith('%')) {
-            const num = parseFloat(f.width.trim().replace('%',''));
-            return isNaN(num) ? 10 : num;
-        }
-        return 10; // default weight
-    });
-
-    return (
-        <View style={styles.recordsContainer}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>{title} Records</Text>
-                <TouchableOpacity onPress={onExit} style={styles.exitButton}>
-                    <Ionicons name="close-circle-outline" size={30} color={CoffeeColors.CREAM} />
-                </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.tableScroll}>
-                <View style={styles.table}>
-                    {/* Table Header */}
-                    <View style={styles.tableRow}>
-                        {fields.map((field, idx) => (
-                            <Text key={field.key} style={[styles.tableHeader, { flex: flexWeights[idx], minWidth: 0 }] }>
-                                {field.label}
-                            </Text>
-                        ))}
-                    </View>
-                    {/* Table Rows */}
-                    {sortedRecords.length === 0 ? (
-                        <Text style={styles.noRecords}>No records found.</Text>
-                    ) : (
-                        sortedRecords.map((record, index) => (
-                            <View key={record.id || index} style={[styles.tableRow, index % 2 && styles.tableRowAlt]}>
-                                {fields.map((field, idx) => (
-                                    <Text 
-                                        key={`${record.id}-${field.key}`} 
-                                        style={[styles.tableCell, { flex: flexWeights[idx], minWidth: 0, flexShrink: 1 }]}
-                                    >
-                                        {String(record[field.key] ?? '')}
-                                    </Text>
-                                ))}
-                            </View>
-                        ))
-                    )}
+const RecordsTable = ({ records = [], fields = [], title = '', onExit, onEdit }) => (
+    <View style={styles.recordsContainer}>
+        <View style={styles.tableHeaderSection}>
+            <Text style={styles.tableTitle}>{title}</Text>
+            <TouchableOpacity style={{ marginTop: 8 }} onPress={onExit}><Text style={styles.backToFormText}>← Back to form</Text></TouchableOpacity>
+        </View>
+        <ScrollView horizontal style={styles.tableScrollHorizontal}>
+            <View style={styles.table}>
+                {/* Header */}
+                <View style={[styles.tableRow, styles.tableHeaderRow]}>
+                    {fields.map(f => (<Text key={f.key} style={[styles.tableHeader, { width: f.width }]}>{f.label}</Text>))}
+                    <Text style={[styles.tableHeader, { width: '10%' }]}>Actions</Text>
                 </View>
-            </ScrollView>
+                {/* Rows */}
+                <ScrollView style={styles.tableScrollVertical}>
+                    {records && records.length > 0 ? records.map((r, idx) => (
+                        <View key={r.id ?? idx} style={[styles.tableRow, idx % 2 === 0 ? styles.tableRowAlt : null]}>
+                            {fields.map(f => (
+                                <Text key={f.key} style={[styles.tableCell, { width: f.width }]}>{String(r[f.key] ?? r[f.key.replace(/_/g, '')] ?? '')}</Text>
+                            ))}
+                            <TouchableOpacity style={[styles.editRowBtn, { width: '10%' }]} onPress={() => onEdit && onEdit(r)}><Text style={styles.editRowText}>Edit</Text></TouchableOpacity>
+                        </View>
+                    )) : <Text style={styles.noRecords}>No records found</Text>}
+                </ScrollView>
+            </View>
+        </ScrollView>
+    </View>
+);
+
+const ProgressBar = ({ currentStep, totalSteps }) => {
+    const progress = (currentStep / totalSteps) * 100;
+    return (
+        <View style={styles.progressBarContainer}>
+            <View style={[styles.progressBar, { width: `${progress}%` }]} />
+            <Text style={styles.progressText}>Step {currentStep} of {totalSteps}</Text>
         </View>
     );
 };
 
 
-// --- MAIN AGGREGATION SCREEN ---
+// ===============================================
+// === 3. MAIN COMPONENT (POLISHED)            ===
+// ===============================================
 
-const AggregationScreen = ({ onNavigate }) => {
-    // App State
-    const [activeTab, setActiveTab] = useState('farmers'); 
-    const [viewMode, setViewMode] = useState('form'); 
-    const [successMessage, setSuccessMessage] = useState('');
+const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
+    // Ensure onNavigate exists for Header/BottomNav; fallback to navigation.navigate when available
+    const onNavigate = onNavigateProp ?? ((screen) => { if (navigation && navigation.navigate) navigation.navigate(screen); });
+    
+    // --- State declarations ---
     const [farmersList, setFarmersList] = useState([]);
     const [harvestsList, setHarvestsList] = useState([]);
-    const [userId, setUserId] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    // Form States
-    const [farmerForm, setFarmerForm] = useState({ name: '', location: '', trees: '', contact: '' });
-    const [harvestForm, setHarvestForm] = useState({
-        farmerName: '', 
-        manualFarmerName: '',
-        weightOnDelivery: '',
-        weightAfterFloating: '',
-        grade: GRADES[0],
-        cherryColour: CHERRY_COLORS[0],
-        stage: STAGES[0],
-        amountPaid: '',
-        whoPaid: '',
-        date: new Date().toISOString().slice(0, 10),
+    const [farmerForm, setFarmerForm] = useState({
+        first_name: '', last_name: '', gender: '', nin: '', date_of_birth: '', contact: '', email: '', in_cooperative: false, cooperative: '', started_farming: '',
+        district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
+        coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', moisture_content: '', amount_paid: '', paid_by: '', number_of_bags: '' });
 
-    // API Data Fetching (Replaces Real-time Firestore Listener)
+    const [farmerStep, setFarmerStep] = useState(0);
+    const [harvestStep, setHarvestStep] = useState(0);
+    const [viewMode, setViewMode] = useState('form');
+    const [activeTab, setActiveTab] = useState('farmers');
+    const [loading, setLoading] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
+    const isSubmittingRef = useRef(false);
+    // Placeholder for actual user ID from auth service
+    const [userId, setUserId] = useState('user123'); 
+
+    // --- Data Loading and Initialization ---
     const loadRecords = async () => {
         setLoading(true);
         try {
-            const fetchedFarmers = await fetchFarmers();
-            // Log raw response so we can see whether the backend returned a list or a paginated object
-            console.log('fetchFarmers raw response:', fetchedFarmers);
-            // Handle common Django/DRF patterns: either an array or a paginated object { results: [...] }
-            if (Array.isArray(fetchedFarmers)) {
-                setFarmersList(fetchedFarmers);
-            } else if (fetchedFarmers && Array.isArray(fetchedFarmers.results)) {
-                setFarmersList(fetchedFarmers.results);
-            } else {
-                // Fallback: if server returned null/undefined or an unexpected shape, set empty array
-                console.warn('fetchFarmers returned unexpected shape, populating empty array');
-                setFarmersList([]);
-            }
-            
-            const fetchedHarvests = await fetchHarvests();
-            setHarvestsList(fetchedHarvests); 
-        } catch (error) {
-            console.error("Failed to load all records from Django:", error);
-            Alert.alert("API Error", "Could not load data from the Django server. Check the API_BASE_URL.");
-        } finally {
-            setLoading(false);
+            const f = await fetchFarmers();
+            setFarmersList(f || []);
+        } catch (e) {
+            console.warn('Failed to load farmers', e);
         }
+        try {
+            const h = await fetchHarvests();
+            setHarvestsList(h || []);
+        } catch (e) {
+            console.warn('Failed to load harvests', e);
+        }
+        setLoading(false);
     };
 
-    // Initial Auth & Data Load
     useEffect(() => {
-        const init = async () => {
-            const id = await initializeAuth(); 
-            if (id) {
-                setUserId(id);
+        (async () => {
+            try {
+                // Initialize auth service (assuming this fetches the real userId)
+                await initializeAuth();
+            } catch (e) {
+                console.warn('init auth failed', e);
             }
-            await loadRecords(); // Initial data load
-        };
-        init();
-    }, []); 
-
-    // --- FORM SUBMISSION LOGIC ---
-    const isSubmittingRef = useRef(false);
+            await loadRecords();
+        })();
+    }, []);
 
     const resetForms = () => {
-        setFarmerForm({ name: '', location: '', trees: '', contact: '' });
-        setHarvestForm(p => ({
-            ...p,
-            farmerName: getFarmerDisplayName(farmersList[0]) || '',
-            manualFarmerName: '',
-            weightOnDelivery: '',
-            weightAfterFloating: '',
-            amountPaid: '',
-            whoPaid: '',
-            date: new Date().toISOString().slice(0, 10),
-        }));
+        setFarmerForm({
+            first_name: '', last_name: '', gender: '', nin: '', date_of_birth: '', contact: '', email: '', in_cooperative: false, cooperative: '', started_farming: '',
+            district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
+            coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
+        });
+
+        setHarvestForm({
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', moisture_content: '', amount_paid: '', paid_by: '', number_of_bags: '',
+        });
+        setFarmerStep(0);
+        setHarvestStep(0);
     };
 
-    // Helper to safely extract a farmer's display name from various backend shapes
     const getFarmerDisplayName = (f) => {
         if (!f) return '';
-        return f.name || f.full_name || f.farmer_name || f.displayName || '';
+        // Prioritize full name or explicit display name
+        return f.name || f.full_name || f.farmer_name || f.displayName || `${f.first_name || ''} ${f.last_name || ''}`.trim();
     };
 
-    // When the farmersList changes, ensure harvestForm has a sensible default farmer selection
-    useEffect(() => {
-        if (farmersList && farmersList.length > 0) {
-            const firstName = getFarmerDisplayName(farmersList[0]) || '';
-            setHarvestForm(p => ({ ...p, farmerName: p.farmerName || firstName }));
-        }
-    }, [farmersList]);
-
-    // Derive farmer options with ids for use when submitting harvests
-    const _safeFarmers = Array.isArray(farmersList) ? farmersList : (farmersList?.results ?? []);
-    const farmerOptions = _safeFarmers.map(f => ({
-        id: f.id ?? f.pk ?? f._id ?? f.ID ?? null,
-        name: getFarmerDisplayName(f),
-    })).filter(o => o.name);
-
+    // --- Submission Handlers ---
     const handleFarmerSubmit = async () => {
-        if (!farmerForm.name || !farmerForm.contact || !userId) {
-            Alert.alert("Validation", "Please fill in Name and Contact.");
+        if (!farmerForm.first_name || !farmerForm.contact || !userId) {
+            Alert.alert("Validation", "Please ensure First name, Contact, and User ID are present.");
             return;
         }
 
-        // Prevent double submissions (fast double-tap or remounts)
-        if (isSubmittingRef.current) {
-            console.log('Submission already in progress, ignoring duplicate submit');
-            return;
-        }
+        if (isSubmittingRef.current) return;
         isSubmittingRef.current = true;
-
         setLoading(true);
-        const newRecordId = generateRecordId('FD');
-        // NOTE: Omit client-side id to avoid server conflicts; backend typically assigns PKs
+
+        const newRecordId = farmerForm.uid || generateRecordId('FD');
+        const name = `${farmerForm.first_name} ${farmerForm.last_name}`.trim();
+        const location = `${farmerForm.district || ''}${farmerForm.sub_county ? ', ' + farmerForm.sub_county : ''}`;
+        
+        // Final record object construction before sending
         const farmerRecord = {
-            name: farmerForm.name,
-            location: farmerForm.location,
-            num_trees: parseInt(farmerForm.trees) || 0, // Snake_case for Django
-            contact: farmerForm.contact,
-            recorder_id: userId, // Provide recorder id expected by backend
+            ...farmerForm, // Include all form fields
+            name: name,
+            uid: newRecordId,
+            location: location,
+            num_trees: parseInt(farmerForm.no_of_trees) || 0,
+            recorder_id: userId,
             timestamp: Date.now(),
         };
-        console.log(" Farmer JSON about to be sent:", JSON.stringify(farmerRecord, null, 2));
 
         try {
             await submitFarmer(farmerRecord);
-
-            setSuccessMessage(`Farmer '${farmerForm.name}' recorded successfully! ID: ${newRecordId}`);
+            setSuccessMessage(`Farmer '${name}' recorded successfully! UID: ${newRecordId}`);
             setViewMode('success');
             resetForms();
-            await loadRecords(); // Refresh data from API
+            await loadRecords(); 
         } catch (e) {
             console.error("Error adding farmer:", e);
-            // If the axios error contains a server response, surface it in dev
-            const serverBody = e.response?.data;
-            if (__DEV__ && serverBody) {
-                // Show a truncated version in an Alert for quick copy/paste
-                const bodyText = typeof serverBody === 'string' ? serverBody : JSON.stringify(serverBody, null, 2);
-                Alert.alert('Submission Failed (server response)', bodyText.slice(0, 2000));
-            } else {
-                Alert.alert("Submission Failed", e.message || "Failed to save farmer details. Check server logs for a 500 error.");
-            }
+            Alert.alert("Submission Failed", e.message || "Failed to save farmer details.");
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -285,521 +426,640 @@ const AggregationScreen = ({ onNavigate }) => {
     };
 
     const handleHarvestSubmit = async () => {
-        // Prefer manual entry when present, otherwise use selected farmer from picker
-        const effectiveFarmerName = (harvestForm.manualFarmerName || harvestForm.farmerName || '').trim();
-
-        console.log('handleHarvestSubmit invoked', { effectiveFarmerName, harvestForm, userId });
-
-        if (!effectiveFarmerName || !harvestForm.weightOnDelivery || !userId) {
-            Alert.alert("Validation", "Please fill in Farmer's Name and Weight on Delivery.");
+        if (!harvestForm.farmer_uid || !harvestForm.weight_on_delivery || !userId) {
+            Alert.alert('Validation', 'Please fill Farmer UID, Weight and ensure you are logged in.');
             return;
         }
-
+        
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
         setLoading(true);
-        const newRecordId = generateRecordId('PA');
 
-        // Resolve farmer id: prefer existing farmer id when a picker selection was made
-        let farmerId = null;
-        // try to find a matching farmer by display name
-        const matched = farmerOptions.find(f => f.name === harvestForm.farmerName);
-        if (matched && matched.id) {
-            farmerId = matched.id;
-        }
-
-        // If no existing farmer and user provided a manual name, create a farmer on the backend
-        if (!farmerId && harvestForm.manualFarmerName) {
-            try {
-                // Provide a minimal non-empty contact/location to satisfy server-side validation
-                const created = await submitFarmer({ name: harvestForm.manualFarmerName, contact: 'N/A', location: 'N/A', num_trees: 0, recorder_id: userId });
-                // backend may return an object or id; try to extract id
-                farmerId = created?.id ?? created?.pk ?? created;
-            } catch (e) {
-                console.error('Failed to create farmer for manual name:', e);
-                // continue to validation fail below
-            }
-        }
+        const newRecordId = harvestForm.harvest_id || generateRecordId('PA');
 
         const harvestRecord = {
+            ...harvestForm,
             id: newRecordId,
-            farmer_name: effectiveFarmerName,
-            weight_on_delivery: parseFloat(harvestForm.weightOnDelivery) || 0,
-            weight_after_floating: parseFloat(harvestForm.weightAfterFloating) || 0,
-            date_of_delivery: harvestForm.date,
-            grade: harvestForm.grade,
-            cherry_colour: harvestForm.cherryColour,
-            stage: harvestForm.stage,
-            amount_paid: parseFloat(harvestForm.amountPaid) || 0,
-            who_paid: harvestForm.whoPaid,
+            weight_on_delivery: Number(harvestForm.weight_on_delivery) || 0,
+            amount_paid: Number(harvestForm.amount_paid) || 0,
+            number_of_bags: Number(harvestForm.number_of_bags) || 0,
             recorder_id: userId,
             timestamp: Date.now(),
-            // Add farmer id expected by Django serializer
-            farmer: farmerId,
         };
 
         try {
             await submitHarvest(harvestRecord);
-
-            setSuccessMessage(`Harvest for '${effectiveFarmerName}' recorded successfully! ID: ${newRecordId}`);
+            setSuccessMessage(`Harvest for '${harvestForm.farmer_name || harvestForm.farmer_uid}' recorded successfully! ID: ${newRecordId}`);
             setViewMode('success');
             resetForms();
-            await loadRecords(); // Refresh data from API
+            await loadRecords();
         } catch (e) {
-            console.error("Error adding harvest:", e);
-            Alert.alert("Submission Failed", e.message || "Failed to save harvest details.");
+            console.error('Error adding harvest:', e);
+            Alert.alert('Submission Failed', e.message || 'Failed to save harvest details.');
         } finally {
             setLoading(false);
+            isSubmittingRef.current = false;
         }
     };
+    
+    // --- Step Form Renderer (Unified Logic) ---
 
-    // --- RENDER CONTENT BASED ON MODE ---
+    const renderGroupedStepForm = (type) => {
+        const isFarmer = type === 'farmers';
+        const steps = isFarmer ? farmerFieldDefinitions : harvestFieldDefinitions;
+        const currentStep = isFarmer ? farmerStep : harvestStep;
+        const setStep = isFarmer ? setFarmerStep : setHarvestStep;
+        const formData = isFarmer ? farmerForm : harvestForm;
+        const setFormData = isFarmer ? setFarmerForm : setHarvestForm;
+        const currentStepFields = steps[currentStep];
 
+        const updateForm = (key, value) => {
+            setFormData(p => ({ ...p, [key]: value }));
+        };
+        
+        const handleNext = () => {
+            // Basic required field validation for current step
+            const missingRequired = currentStepFields.fields.some(f =>
+                f.required && (!formData[f.key] || (typeof formData[f.key] === 'string' && formData[f.key].trim() === ''))
+            );
+
+            if (missingRequired) {
+                Alert.alert("Validation", "Please fill all required fields in this step.");
+                return;
+            }
+
+            // Handle step-specific actions (e.g., UID generation, Farmer lookup) BEFORE advancing
+            currentStepFields.fields.forEach(f => {
+                if (f.special === 'generate_uid' && isFarmer) {
+                    // Generate UID only if it hasn't been generated yet
+                    if (!formData.uid) {
+                        setFormData(p => ({ ...p, uid: generateRecordId('FD') }));
+                        Alert.alert('UID Generated', 'Farmer UID created.');
+                    }
+                } else if (f.special === 'generate_harvest_id' && !isFarmer) {
+                    if (!formData.harvest_id) {
+                         setFormData(p => ({ ...p, harvest_id: generateRecordId('PA') }));
+                         Alert.alert('ID Generated', 'Harvest ID created.');
+                    }
+                } else if (f.action === 'lookup' && !isFarmer) {
+                    const farmerUID = formData.farmer_uid;
+                    const found = farmersList.find(f => String(f.id) === String(farmerUID) || String(f.uid) === String(farmerUID));
+                    if (found) {
+                        setFormData(p => ({ ...p, farmer_name: getFarmerDisplayName(found) }));
+                        Alert.alert('Farmer Found', `Name: ${getFarmerDisplayName(found)}`);
+                    } else {
+                        Alert.alert('Farmer Not Found', 'No farmer with that UID was found in local records.');
+                    }
+                }
+            });
+
+            if (currentStep < steps.length - 1) {
+                setStep(s => s + 1);
+            } else {
+                // Final step - trigger submission
+                isFarmer ? handleFarmerSubmit() : handleHarvestSubmit();
+            }
+        };
+
+        const handleBack = () => {
+            if (currentStep > 0) setStep(s => s - 1);
+        };
+
+        return (
+            <View style={styles.formSection}>
+                <Text style={styles.formTitle}>{currentStepFields.title}</Text>
+                <ProgressBar currentStep={currentStep + 1} totalSteps={steps.length} />
+
+                {/* Form Fields */}
+                <ScrollView style={styles.stepFormScroll}>
+                    {currentStepFields.fields.map(field => {
+                        // Handle conditional visibility
+                        if (field.dependsOn && formData[field.dependsOn.field] !== field.dependsOn.value) {
+                            return null;
+                        }
+                        
+                        // Handle special case for UID/Harvest ID to show the generated value
+                        const fieldValue = (field.special === 'generate_uid' || field.special === 'generate_harvest_id')
+                            ? formData[field.key] || 'Press Next to Generate ID'
+                            : (field.type === 'multi-select' ? (Array.isArray(formData[field.key]) && formData[field.key].length > 0 ? formData[field.key].join(', ') : '') : (field.array ? (Array.isArray(formData[field.key]) ? formData[field.key].join(', ') : '') : String(formData[field.key] ?? '')));
+
+                        // Determine field type and render
+                        if (field.type === 'toggle') {
+                            return <CustomToggle key={field.key} label={field.label} value={!!formData[field.key]} onValueChange={(v) => updateForm(field.key, v)} />;
+                        }
+                        if (field.type === 'picker' && field.pickerKey === 'all_your_trees') {
+                            // Special handling for yes/no picker
+                            const yesNoItems = ['Yes', 'No'];
+                            return <CustomPicker key={field.key} label={field.label} selectedValue={formData[field.key] ? 'Yes' : 'No'} onValueChange={(v) => updateForm(field.key, v === 'Yes')} items={yesNoItems} />;
+                        }
+                        if (field.type === 'multi-select') {
+                            const items = PICKER_MAP[field.pickerKey] || [];
+                            return <CustomMultiSelect key={field.key} label={field.label} selectedValues={formData[field.key] || []} onValueChange={(v) => updateForm(field.key, v)} items={items} />;
+                        }
+                        if (field.type === 'picker') {
+                            let items = PICKER_MAP[field.pickerKey] || [];
+
+                            // Special handling for parish picker - filter based on selected sub-county
+                            if (field.pickerKey === 'parish' && formData.sub_county) {
+                                items = PARISHES_BY_SUB_COUNTY[formData.sub_county] || [];
+                            }
+
+                            return <CustomPicker key={field.key} label={field.label} selectedValue={formData[field.key]} onValueChange={(v) => updateForm(field.key, v)} items={items} />;
+                        }
+                        if (field.type === 'date') {
+                            return <CustomDatePicker key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} value={formData[field.key]} onChange={(v) => updateForm(field.key, v)} />;
+                        }
+
+                        // Default to CustomInput
+                        const handleTextChange = (v) => {
+                            let processedValue = v;
+                            if (field.keyboardType === 'numeric') {
+                                // Allow decimal points for harvest weight/moisture
+                                processedValue = v.replace(/[^0-9.]/g, '');
+                            }
+                            if (field.array) {
+                                processedValue = v.split(',').map(s => s.trim()).filter(Boolean);
+                            }
+                            updateForm(field.key, processedValue);
+                        };
+
+
+                        return (
+                            <CustomInput
+                                key={field.key}
+                                label={`${field.label}${field.required ? ' *' : ''}`}
+                                value={fieldValue}
+                                onChangeText={field.readOnly ? null : handleTextChange}
+                                keyboardType={field.keyboardType}
+                                editable={!field.readOnly}
+                            />
+                        );
+                    })}
+
+                    {/* GPS special case: button for generation */}
+                    {isFarmer && currentStepFields.fields.some(f => f.key === 'gps') && (
+                        <TouchableOpacity style={styles.generateButton} onPress={() => updateForm('gps', formData.gps || '0.0000,0.0000')}>
+                            <Text style={styles.generateButtonText}>Get Current GPS Location</Text>
+                        </TouchableOpacity>
+                    )}
+
+                </ScrollView>
+
+                {/* Step Navigation */}
+                <View style={styles.stepNav}>
+                    {currentStep > 0 && <TouchableOpacity style={styles.stepButton} onPress={handleBack}><Text style={styles.stepButtonText}>Back</Text></TouchableOpacity>}
+                    <TouchableOpacity
+                        style={[styles.submitButton, currentStep < steps.length - 1 ? styles.nextButton : null]}
+                        onPress={handleNext}
+                        disabled={loading}
+                    >
+                        {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : (
+                            <Text style={styles.submitButtonText}>{currentStep < steps.length - 1 ? 'Next' : `Submit ${isFarmer ? 'Farmer' : 'Harvest'}`}</Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
+                <TouchableOpacity style={[styles.viewRecordsButton, { marginTop: 10 }]} onPress={() => { setActiveTab(type); setViewMode('table'); }}>
+                    <Text style={styles.viewRecordsButtonText}>View {isFarmer ? 'Farmer' : 'Harvest'} Records</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    };
+
+    // --- Main Content Renderers ---
     const renderFormContent = () => {
+        return activeTab === 'farmers' ? renderGroupedStepForm('farmers') : renderGroupedStepForm('harvests');
+    };
+    
+    const renderTableContent = () => {
         if (activeTab === 'farmers') {
             return (
-                <View style={styles.formSection}>
-                    <Text style={styles.formTitle}>Farmer's Details</Text>
-                    <CustomInput label="Name" value={farmerForm.name} onChangeText={(name) => setFarmerForm(p => ({ ...p, name }))} />
-                    <CustomInput label="Location" value={farmerForm.location} onChangeText={(location) => setFarmerForm(p => ({ ...p, location }))} />
-                    <CustomInput label="Number of Trees" value={farmerForm.trees} onChangeText={(trees) => setFarmerForm(p => ({ ...p, trees }))} keyboardType="numeric" />
-                    <CustomInput label="Contact" value={farmerForm.contact} onChangeText={(contact) => setFarmerForm(p => ({ ...p, contact }))} keyboardType="phone-pad" />
-                    
-                    <TouchableOpacity style={styles.submitButton} onPress={handleFarmerSubmit} disabled={loading}>
-                        {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : <Text style={styles.submitButtonText}>Submit Farmer Details</Text>}
-                    </TouchableOpacity>
-                    {/* Always-available View Records button */}
-                    <TouchableOpacity style={[styles.viewRecordsButton, { marginTop: 10 }]} onPress={() => { setActiveTab('farmers'); setViewMode('table'); }}>
-                        <Text style={styles.viewRecordsButtonText}>View Records</Text>
-                    </TouchableOpacity>
-                </View>
+                <RecordsTable
+                    records={farmersList}
+                    fields={farmerTableFields}
+                    title="Farmer Records"
+                    onExit={() => setViewMode('form')}
+                    onEdit={(r) => Alert.alert('Edit Farmer', `Edit functionality not implemented yet for: ${r.name}`)}
+                />
             );
         } else {
-            const availableFarmers = farmersList.map(f => getFarmerDisplayName(f)).filter(Boolean);
-            // prefer manual farmer name when provided so users can submit even if no registered farmers exist
-            const effectiveFarmerName = (harvestForm.manualFarmerName || harvestForm.farmerName || '').trim();
-
             return (
-                <View style={styles.formSection}>
-                    <Text style={styles.formTitle}>Farmer's Harvest Details</Text>
-
-                    {availableFarmers.length > 0 ? (
-                        <CustomPicker 
-                            label="Farmer's Name" 
-                            // selectedValue must reflect actual state so effectiveFarmerName is computed correctly
-                            selectedValue={harvestForm.farmerName} 
-                            onValueChange={(name) => setHarvestForm(p => ({ ...p, farmerName: name }))} 
-                            items={availableFarmers} 
-                        />
-                    ) : (
-                        <Text style={styles.noFarmersWarning}>No farmers registered. Please register a farmer first.</Text>
-                    )}
-                    {/* Manual entry fallback if farmer not listed */}
-                    <CustomInput label="Manual Farmer Name (optional)" value={harvestForm.manualFarmerName} onChangeText={(v) => setHarvestForm(p => ({ ...p, manualFarmerName: v }))} />
-                    {/* <customInput label="Farmer's Name" value={harvestForm.farmerName} onChangeText={(v) => setHarvestForm(p => ({ ...p, farmerName: v }))} editable={availableFarmers.length > 0} /> */}
-                    <CustomInput label="Weight on Delivery (kg)" value={harvestForm.weightOnDelivery} onChangeText={(v) => setHarvestForm(p => ({ ...p, weightOnDelivery: v }))} keyboardType="numeric" />
-                    <CustomInput label="Weight after Floating (kg)" value={harvestForm.weightAfterFloating} onChangeText={(v) => setHarvestForm(p => ({ ...p, weightAfterFloating: v }))} keyboardType="numeric" />
-                    <CustomInput label="Date of Delivery (YYYY-MM-DD)" value={harvestForm.date} onChangeText={(v) => setHarvestForm(p => ({ ...p, date: v }))} />
-
-                    <CustomPicker label="Grade" selectedValue={harvestForm.grade} onValueChange={(v) => setHarvestForm(p => ({ ...p, grade: v }))} items={GRADES} />
-                    <CustomPicker label="Cherry Colour" selectedValue={harvestForm.cherryColour} onValueChange={(v) => setHarvestForm(p => ({ ...p, cherryColour: v }))} items={CHERRY_COLORS} />
-                    <CustomPicker label="Stage" selectedValue={harvestForm.stage} onValueChange={(v) => setHarvestForm(p => ({ ...p, stage: v }))} items={STAGES} />
-
-                    <CustomInput label="Amount Paid" value={harvestForm.amountPaid} onChangeText={(v) => setHarvestForm(p => ({ ...p, amountPaid: v }))} keyboardType="numeric" />
-                    <CustomInput label="Who Paid" value={harvestForm.whoPaid} onChangeText={(v) => setHarvestForm(p => ({ ...p, whoPaid: v }))} />
-
-                    <TouchableOpacity 
-                        testID="submit-harvest-button"
-                        accessibilityLabel="submit-harvest-button"
-                        style={[styles.submitButton, {opacity: (!effectiveFarmerName || loading) ? 0.5 : 1}]} 
-                        onPress={handleHarvestSubmit} 
-                        disabled={!effectiveFarmerName || loading}
-                    >
-                        {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : <Text style={styles.submitButtonText}>Submit Harvest Details</Text>}
-                    </TouchableOpacity>
-                    {/* Always-available View Records button for harvests */}
-                    <TouchableOpacity style={[styles.viewRecordsButton, { marginTop: 10 }]} onPress={() => { setActiveTab('harvests'); setViewMode('table'); }}>
-                        <Text style={styles.viewRecordsButtonText}>View Records</Text>
-                    </TouchableOpacity>
-                </View>
+                <RecordsTable
+                    records={harvestsList}
+                    fields={harvestTableFields}
+                    title="Harvest Records"
+                    onExit={() => setViewMode('form')}
+                    onEdit={(r) => Alert.alert('Edit Harvest', `Edit functionality not implemented yet for: ${r.farmer_name}`)}
+                />
             );
         }
     };
-
-    if (loading && viewMode === 'form') {
-        return (
-            <View style={[styles.container, styles.loadingContainer]}>
-                <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />
-                <Text style={styles.loadingText}>Loading data from Django...</Text>
-            </View>
-        );
-    }
     
-    // Determine the current view to render
-    let mainContent;
-    
-    if (viewMode === 'success') {
-        mainContent = (
-            <SuccessMessage
-                message={successMessage}
-                onExit={() => setViewMode('form')}
-                onView={() => setViewMode('table')}
-            />
-        );
-    } else if (viewMode === 'table') {
-        const tableFields = activeTab === 'farmers' 
-            ? [
-                { key: 'id', label: 'ID', width: '25%' },
-                { key: 'name', label: 'Name', width: '35%' },
-                { key: 'num_trees', label: 'Trees', width: '20%' },
-                { key: 'location', label: 'location', width: '35%' }, // Assumes Django returns snake_case
-                { key: 'contact', label: 'Contact', width: '20%' },
-              ]
-            : [
-                { key: 'id', label: 'ID', width: '20%' },
-                { key: 'farmer_name', label: 'Farmer', width: '25%' }, // Assumes Django returns snake_case
-                { key: 'weight_on_delivery', label: 'Wgt (kg)', width: '15%' }, // Assumes Django returns snake_case
-                { key: 'grade', label: 'Grade', width: '10%' },
-                { key: 'amount_paid', label: 'Paid', width: '15%' }, // Assumes Django returns snake_case
-                { key: 'date_of_delivery', label: 'Date', width: '15%' }, // Assumes Django returns snake_case
-              ];
-
-        mainContent = (
-            <RecordsTable 
-                records={activeTab === 'farmers' ? farmersList : harvestsList}
-                title={activeTab === 'farmers' ? "Farmer Details" : "Farmer's Harvest"}
-                onExit={() => setViewMode('form')}
-                fields={tableFields}
-            />
-        );
-    } else {
-        // Default to Form View
-        mainContent = <ScrollView contentContainerStyle={styles.scrollContent}>{renderFormContent()}</ScrollView>;
-    }
-
-
+    // --- Screen Layout ---
     return (
-        <View style={styles.container}>
-            {/* Unified Header */}
-            <Header title="Aggregation" onNavigate={onNavigate} />
+        <View style={styles.screen}>
+            <Header title="Aggregation & Data Entry" onNavigate={onNavigate} />
+            <View style={styles.container}>
+                
+                {/* Tab Navigation */}
+                {viewMode === 'form' && (
+                    <View style={styles.tabContainer}>
+                        <TouchableOpacity 
+                            style={[styles.tabButton, activeTab === 'farmers' && styles.activeTab]} 
+                            onPress={() => { setActiveTab('farmers'); resetForms(); setViewMode('form'); }}>
+                            <Text style={[styles.tabText, activeTab === 'farmers' && styles.activeTabText]}>Register Farmer</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={[styles.tabButton, activeTab === 'harvests' && styles.activeTab]} 
+                            onPress={() => { setActiveTab('harvests'); resetForms(); setViewMode('form'); }}>
+                            <Text style={[styles.tabText, activeTab === 'harvests' && styles.activeTabText]}>Record Harvest</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
 
-            {/* Tab Navigation for Farmers/Harvests */}
-            <View style={styles.tabBar}>
-                <TouchableOpacity
-                    style={[styles.tabItem, activeTab === 'farmers' && styles.activeTabItem]}
-                    onPress={() => { setActiveTab('farmers'); setViewMode('form'); }}
-                >
-                    <Ionicons
-                        name="person-add-outline"
-                        size={20}
-                        color={activeTab === 'farmers' ? CoffeeColors.WHITE : CoffeeColors.GRAY_TEXT}
-                    />
-                    <Text style={[styles.tabText, activeTab === 'farmers' && styles.activeTabText]}>
-                        Farmers
-                    </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.tabItem, activeTab === 'harvests' && styles.activeTabItem]}
-                    onPress={() => { setActiveTab('harvests'); setViewMode('form'); }}
-                >
-                    <Ionicons
-                        name="leaf-outline"
-                        size={20}
-                        color={activeTab === 'harvests' ? CoffeeColors.WHITE : CoffeeColors.GRAY_TEXT}
-                    />
-                    <Text style={[styles.tabText, activeTab === 'harvests' && styles.activeTabText]}>
-                        Harvests
-                    </Text>
-                </TouchableOpacity>
+                {/* Main Content Area */}
+                <ScrollView contentContainerStyle={styles.contentContainer}>
+                    {loading && viewMode !== 'table' && <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />}
+                    
+                    {viewMode === 'form' && renderFormContent()}
+                    
+                    {viewMode === 'table' && renderTableContent()}
+                </ScrollView>
             </View>
 
-            <View style={styles.contentArea}>
-                {mainContent}
-            </View>
-
-            {/* Unified Bottom Navigation */}
-            <BottomNav activeScreen="Aggregation" onNavigate={onNavigate} />
+            {/* Modals and Overlays */}
+            {viewMode === 'success' && (
+                <SuccessMessage 
+                    message={successMessage} 
+                    onExit={() => setViewMode('form')} 
+                    onView={() => { setViewMode('table'); setSuccessMessage(''); }}
+                />
+            )}
+            
+            <BottomNav onNavigate={onNavigate} active="Aggregation" />
         </View>
     );
 };
 
+
+// ===============================================
+// === 4. STYLESHEET (POLISHED)                ===
+// ===============================================
+
 const styles = StyleSheet.create({
-    container: {
+    screen: {
         flex: 1,
         backgroundColor: CoffeeColors.LIGHT_GRAY,
     },
-    loadingContainer: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    loadingText: {
-        marginTop: 10,
-        color: CoffeeColors.DARK_BROWN,
-    },
-    header: {
-        paddingTop: 50,
-        paddingHorizontal: 20,
-        paddingBottom: 15,
-        backgroundColor: CoffeeColors.DARK_BROWN,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: CoffeeColors.WHITE,
-    },
-    userIdText: {
-        fontSize: 12,
-        color: CoffeeColors.LIGHT_BROWN,
-    },
-    contentArea: {
+    container: {
         flex: 1,
+        paddingHorizontal: 15,
+        paddingTop: 10,
     },
-    scrollContent: {
-        padding: 20,
-        paddingBottom: 100, // Space for the floating nav bar
+    contentContainer: {
+        flexGrow: 1,
+        paddingBottom: 100, // Make room for BottomNav
     },
+    // --- Tabs ---
+    tabContainer: {
+        flexDirection: 'row',
+        marginBottom: 20,
+        backgroundColor: CoffeeColors.CREAM,
+        borderRadius: 10,
+        padding: 5,
+    },
+    tabButton: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 8,
+    },
+    activeTab: {
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+    },
+    tabText: {
+        color: CoffeeColors.DARK_BROWN,
+        fontWeight: '500',
+    },
+    activeTabText: {
+        color: CoffeeColors.WHITE,
+        fontWeight: '700',
+    },
+    // --- Forms ---
     formSection: {
         backgroundColor: CoffeeColors.WHITE,
         borderRadius: 10,
-        padding: 20,
-        elevation: 2,
+        padding: 15,
+        elevation: 3,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
     },
     formTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
+        fontSize: 18,
+        fontWeight: '700',
         color: CoffeeColors.DARK_BROWN,
-        marginBottom: 15,
-    },
-    inputGroup: {
-        marginBottom: 15,
+        marginBottom: 10,
     },
     inputLabel: {
         fontSize: 14,
-        fontWeight: '600',
-        color: CoffeeColors.MEDIUM_BROWN,
+        color: CoffeeColors.DARK_BROWN,
         marginBottom: 5,
+        fontWeight: '600',
     },
     textInput: {
         borderWidth: 1,
-        borderColor: CoffeeColors.LIGHT_BROWN,
-        borderRadius: 8,
-        paddingHorizontal: 15,
-        paddingVertical: 10,
+        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderRadius: 6,
+        padding: 10,
+        backgroundColor: CoffeeColors.WHITE,
         fontSize: 16,
-        color: CoffeeColors.DARK_BROWN,
     },
-    textInputDisabled: {
+    readOnlyInput: {
         backgroundColor: CoffeeColors.LIGHT_GRAY,
+        color: CoffeeColors.GRAY_TEXT,
     },
     pickerContainer: {
         borderWidth: 1,
-        borderColor: CoffeeColors.LIGHT_BROWN,
-        borderRadius: 8,
+        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderRadius: 6,
+        backgroundColor: CoffeeColors.WHITE,
         overflow: 'hidden',
-        backgroundColor: CoffeeColors.CREAM,
     },
     picker: {
         height: 50,
         width: '100%',
-        color: CoffeeColors.DARK_BROWN,
     },
-    noFarmersWarning: {
-        color: '#FF6347',
-        textAlign: 'center',
-        paddingVertical: 10,
-        fontSize: 16,
-        marginBottom: 15,
+    stepFormScroll: {
+        maxHeight: 450, 
+        paddingRight: 10,
     },
-    submitButton: {
-        backgroundColor: '#d1580dff',
-        padding: 15,
+    // --- Progress Bar ---
+    progressBarContainer: {
+        height: 15,
+        backgroundColor: CoffeeColors.CREAM,
         borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 20,
+        overflow: 'hidden',
+        marginBottom: 15,
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
     },
-    submitButtonText: {
-        color: CoffeeColors.WHITE,
-        fontSize: 16,
+    progressBar: {
+        height: '100%',
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        borderRadius: 8,
+        position: 'absolute',
+        left: 0,
+    },
+    progressText: {
+        color: CoffeeColors.DARK_BROWN,
+        fontSize: 10,
         fontWeight: 'bold',
+        textAlign: 'center',
+        zIndex: 1,
     },
-    viewRecordsButton: {
+    // --- Step Navigation ---
+    stepNav: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
+        paddingHorizontal: 5,
+    },
+    stepButton: {
         backgroundColor: CoffeeColors.CREAM,
         padding: 12,
         borderRadius: 8,
+        flex: 1,
+        marginHorizontal: 5,
         alignItems: 'center',
         borderWidth: 1,
         borderColor: CoffeeColors.MEDIUM_BROWN,
     },
-    viewRecordsButtonText: {
-        color: CoffeeColors.MEDIUM_BROWN,
-        fontWeight: '700',
+    stepButtonText: {
+        color: CoffeeColors.DARK_BROWN,
+        fontWeight: 'bold',
     },
-
-    // --- Modal/Success Styles ---
+    nextButton: {
+        backgroundColor: CoffeeColors.DARK_BROWN,
+        borderWidth: 0,
+    },
+    submitButton: {
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        padding: 12,
+        borderRadius: 8,
+        flex: 1,
+        marginHorizontal: 5,
+        alignItems: 'center',
+    },
+    submitButtonText: {
+        color: CoffeeColors.WHITE,
+        fontWeight: 'bold',
+    },
+    generateButton: {
+        marginTop: 5,
+        marginBottom: 10,
+        padding: 5,
+        backgroundColor: CoffeeColors.CREAM,
+        borderRadius: 5,
+        alignItems: 'center',
+    },
+    generateButtonText: {
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontWeight: '600',
+        fontSize: 12,
+    },
+    viewRecordsButton: {
+        padding: 10,
+        alignItems: 'center',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: CoffeeColors.DARK_BROWN,
+    },
+    viewRecordsButtonText: {
+        color: CoffeeColors.DARK_BROWN,
+        fontWeight: '600',
+    },
+    // --- Modal/Success ---
     overlay: {
         ...StyleSheet.absoluteFillObject,
-        // backgroundColor: '#7c7c3c',
-        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         alignItems: 'center',
-        zIndex: 100,
+        justifyContent: 'center',
+        zIndex: 10,
     },
     modal: {
+        width: '80%',
         backgroundColor: CoffeeColors.WHITE,
-        borderRadius: 15,
-        padding: 30,
-        width: '85%',
+        borderRadius: 10,
+        padding: 20,
         alignItems: 'center',
     },
     modalTitle: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
-        color: '#4CAF50',
-        marginTop: 10,
+        color: CoffeeColors.DARK_BROWN,
+        marginBottom: 10,
     },
     modalMessage: {
         fontSize: 16,
-        color: CoffeeColors.DARK_BROWN,
         textAlign: 'center',
-        marginVertical: 15,
+        color: CoffeeColors.GRAY_TEXT,
+        marginBottom: 20,
     },
     modalActions: {
         width: '100%',
-        marginTop: 15,
     },
     modalButton: {
         padding: 12,
         borderRadius: 8,
         alignItems: 'center',
-        marginVertical: 5,
     },
     modalButtonText: {
         color: CoffeeColors.WHITE,
-        fontSize: 16,
-        fontWeight: '600',
+        fontWeight: 'bold',
     },
-
-    // --- Table/Records Styles ---
+    // --- Table ---
     recordsContainer: {
         flex: 1,
-    },
-    tableScroll: {
-        flex: 1,
-        paddingHorizontal: 20,
-    },
-    table: {
         backgroundColor: CoffeeColors.WHITE,
         borderRadius: 10,
-        overflow: 'hidden',
-        marginBottom: 100,
-        borderWidth: 1,
-        borderColor: CoffeeColors.LIGHT_BROWN,
+        elevation: 3,
+        paddingBottom: 10,
+    },
+    tableHeaderSection: {
+        padding: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+    },
+    tableTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: CoffeeColors.DARK_BROWN,
+    },
+    backToFormText: {
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontWeight: '600',
+    },
+    tableScrollHorizontal: {
+        flexDirection: 'row',
+    },
+    tableScrollVertical: {
+        // Enforce maximum height for vertical scrolling within horizontal container
+        maxHeight: 350, 
+    },
+    table: {
+        minWidth: 500, // Ensure minimum width for horizontal scroll
+    },
+    tableHeaderRow: {
+        backgroundColor: CoffeeColors.CREAM,
+        borderTopWidth: 1,
+        borderTopColor: CoffeeColors.GRAY_TEXT_LIGHT,
     },
     tableRow: {
         flexDirection: 'row',
+        alignItems: 'center',
         paddingVertical: 10,
+        paddingHorizontal: 5,
         borderBottomWidth: 1,
         borderBottomColor: CoffeeColors.LIGHT_GRAY,
     },
     tableRowAlt: {
-        backgroundColor: CoffeeColors.CREAM + '40', // Slightly transparent cream
+        backgroundColor: '#f9f9f9',
     },
     tableHeader: {
         fontWeight: 'bold',
-        fontSize: 12,
         color: CoffeeColors.DARK_BROWN,
-        textAlign: 'left',
-        paddingHorizontal: 8,
+        paddingHorizontal: 5,
     },
     tableCell: {
-        fontSize: 12,
         color: CoffeeColors.GRAY_TEXT,
-        textAlign: 'left',
+        fontSize: 14,
+        paddingHorizontal: 5,
+    },
+    editRowBtn: {
         paddingHorizontal: 8,
-        paddingVertical: 6,
+        paddingVertical: 4,
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        borderRadius: 4,
+        marginLeft: 10,
+        alignItems: 'center',
+    },
+    editRowText: {
+        color: CoffeeColors.WHITE,
+        fontSize: 12,
+        fontWeight: 'bold',
     },
     noRecords: {
-        padding: 20,
         textAlign: 'center',
+        padding: 20,
         color: CoffeeColors.GRAY_TEXT,
     },
-    exitButton: {
-        padding: 5,
-    },
-
-    // --- Tab Bar Styles ---
-    tabBar: {
-        flexDirection: 'row',
+    // --- Multi-Select Styles ---
+    multiSelectButton: {
+        borderWidth: 1,
+        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderRadius: 6,
+        padding: 10,
         backgroundColor: CoffeeColors.WHITE,
-        borderBottomWidth: 1,
-        borderBottomColor: CoffeeColors.LIGHT_BROWN,
-        paddingHorizontal: 10,
-    },
-    tabItem: {
-        flex: 1,
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        gap: 8,
     },
-    activeTabItem: {
+    multiSelectText: {
+        color: CoffeeColors.DARK_BROWN,
+        fontSize: 16,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    multiSelectModal: {
+        width: '80%',
+        backgroundColor: CoffeeColors.WHITE,
+        borderRadius: 10,
+        padding: 20,
+        maxHeight: '70%',
+    },
+    multiSelectScroll: {
+        maxHeight: 300,
+    },
+    multiSelectItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 5,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+    },
+    multiSelectItemText: {
+        fontSize: 16,
+        color: CoffeeColors.DARK_BROWN,
+    },
+    checkbox: {
+        width: 20,
+        height: 20,
+        borderWidth: 1,
+        borderColor: CoffeeColors.MEDIUM_BROWN,
+        borderRadius: 3,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: CoffeeColors.WHITE,
+    },
+    modalCloseButton: {
+        marginTop: 20,
+        padding: 12,
         backgroundColor: CoffeeColors.MEDIUM_BROWN,
         borderRadius: 8,
+        alignItems: 'center',
     },
-    tabText: {
-        fontSize: 14,
-        color: CoffeeColors.GRAY_TEXT,
-        fontWeight: '600',
-    },
-    activeTabText: {
+    modalCloseText: {
         color: CoffeeColors.WHITE,
+        fontWeight: 'bold',
     },
-
-    // --- Nav Bar Styles ---
-    bottomNavBar: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        backgroundColor: CoffeeColors.DARK_BROWN,
-        borderTopWidth: 1,
-        borderTopColor: CoffeeColors.LIGHT_BROWN,
-        paddingVertical: 15,
-        paddingBottom: 30, // Extra padding for safety on modern devices
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 5,
-        elevation: 20,
-        zIndex: 50,
-    },
-    navItem: {
-        alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingVertical: 5,
-        borderRadius: 10,
-    },
-    activeNavItem: {
-        backgroundColor: CoffeeColors.MEDIUM_BROWN, // Highlight active tab
-    },
-    navText: {
-        fontSize: 10,
-        color: CoffeeColors.LIGHT_BROWN,
-        marginTop: 4,
-        fontWeight: '600',
-    },
-    activeNavText: {
-        color: CoffeeColors.CREAM,
-    }
 });
 
 export default AggregationScreen;
