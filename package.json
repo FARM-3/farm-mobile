@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "main": "src/index.js",
   "scripts": {
-    "start": "expo start",
+    "start": "node --max-old-space-size=8192 ./node_modules/.bin/expo start --reset-cache",
+    "start:normal": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "clear-cache": "watchman watch-del-all && rm -rf $TMPDIR/metro-* && rm -rf $TMPDIR/haste-* && rm -rf node_modules && npm install"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
