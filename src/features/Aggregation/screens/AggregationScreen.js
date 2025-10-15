@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -65,6 +65,7 @@ const farmerFieldDefinitions = [
             { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no' },
             { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source' },
             { key: 'seedling_type', label: 'Type of seedlings', keyboardType: 'default' },
+            { key: 'age_of_seedlings', label: 'Age of seedlings *', keyboardType: 'default', required: true },
         ]
     },
     // Step 4: Practices & Chemicals
@@ -108,7 +109,7 @@ const farmerTableFields = [
     { key: 'name', label: 'Name', width: '30%' },
     { key: 'contact', label: 'Contact', width: '20%' },
     { key: 'district', label: 'District', width: '20%' },
-    { key: 'num_trees', label: 'Trees', width: '15%' },
+    { key: 'number_of_trees', label: 'Trees', width: '15%' },  // FIXED: Changed from num_trees to number_of_trees
     { key: 'uid', label: 'UID', width: '15%' }, // Use UID for farmers
 ];
 
@@ -374,7 +375,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     const [farmerForm, setFarmerForm] = useState({
         first_name: '', last_name: '', gender: '', nin: '', date_of_birth: '', contact: '', email: '', in_cooperative: false, cooperative: '', started_farming: '',
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
-        coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
+        coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
     const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', moisture_content: '', amount_paid: '', paid_by: '', number_of_bags: '' });
 
@@ -423,7 +424,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
             ...p,
             first_name: '', last_name: '', gender: '', nin: '', date_of_birth: '', contact: '', email: '', in_cooperative: false, cooperative: '', started_farming: '',
             district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
-            coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
+            coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
         }));
 
         setHarvestForm(p => ({
@@ -439,8 +440,10 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         return f.name || f.full_name || f.farmer_name || f.displayName || `${f.first_name || ''} ${f.last_name || ''}`.trim();
     };
 
-    // --- Location Dependency Logic ---
+    // --- Form Update Logic ---
+    // FIXED: Update farmer form with special logic for booleans and dependencies
     const updateFarmerForm = (key, value) => {
+        console.log(`[Farmer Form] Updating field: ${key}, value:`, value);
         setFarmerForm(p => {
             let newState = { ...p, [key]: value };
 
@@ -452,15 +455,30 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
             if (['in_cooperative', 'all_your_trees', 'deforested', 'uses_pesticides'].includes(key)) {
                  newState[key] = value === 'Yes' || value === true;
             }
-            
+
+            console.log('[Farmer Form] New state after update:', newState);
+            return newState;
+        });
+    };
+
+    // FIXED: Create proper update function for harvest form
+    const updateHarvestForm = (key, value) => {
+        console.log(`[Harvest Form] Updating field: ${key}, value:`, value);
+        setHarvestForm(p => {
+            const newState = { ...p, [key]: value };
+            console.log('[Harvest Form] New state after update:', newState);
             return newState;
         });
     };
 
     // --- Submission Handlers (Kept clean) ---
     const handleFarmerSubmit = async () => {
+        console.log('[handleFarmerSubmit] ========== STARTING SUBMISSION ==========');
+        console.log('[handleFarmerSubmit] Current form state:', farmerForm);
+
         // ... (Submission logic remains the same)
         if (!farmerForm.first_name || !farmerForm.contact || !userId) {
+            console.error('[handleFarmerSubmit] Validation failed - missing required fields');
             Alert.alert("Validation", "Please ensure First name, Contact, and User ID are present.");
             return;
         }
@@ -472,37 +490,58 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         const newRecordId = farmerForm.uid || generateRecordId('FD');
         const name = `${farmerForm.first_name} ${farmerForm.last_name}`.trim();
         const location = `${farmerForm.district || ''}${farmerForm.sub_county ? ', ' + farmerForm.sub_county : ''}`;
-        
+
+        console.log('[handleFarmerSubmit] Generated ID:', newRecordId);
+        console.log('[handleFarmerSubmit] Farmer name:', name);
+
+        // Prepare farmer record with ALL required fields for Django backend
         const farmerRecord = {
             ...farmerForm,
+            // Display fields (used by UI)
             name: name,
             uid: newRecordId,
             location: location,
-            num_trees: parseInt(farmerForm.no_of_trees) || 0,
+            number_of_trees: parseInt(farmerForm.no_of_trees) || 0,  // FIXED: Changed from num_trees to number_of_trees
             recorder_id: userId,
             timestamp: Date.now(),
-            // Add missing fields for Django API compatibility
+
+            // Backend API fields (match Django model exactly)
             farmer_id: newRecordId,
             farmer_type: 'individual',
             other_district: '',
             other_sub_county: '',
-            ownership_of_trees: farmerForm.all_your_trees !== false,
-            defforestation_status: farmerForm.deforested !== false,
-            standard_practices: Array.isArray(farmerForm.practices) && farmerForm.practices.length > 0,
+
+            // Boolean fields - MUST be true/false (backend expects boolean)
+            ownership_of_trees: Boolean(farmerForm.all_your_trees),
+            defforestation_status: Boolean(farmerForm.deforested),
+            standard_practices: Boolean(Array.isArray(farmerForm.practices) && farmerForm.practices.length > 0),
+
+            // Year as integer
             started_coffee_farming_year: farmerForm.started_farming ? new Date(farmerForm.started_farming).getFullYear() : null,
-            spacing_between_trees: farmerForm.spacing,
-            gps_coordinates: farmerForm.gps,
-            age_of_seedlings: '',
+
+            // String fields
+            spacing_between_trees: farmerForm.spacing || '',
+            gps_coordinates: farmerForm.gps || '',
+            age_of_seedlings: farmerForm.age_of_seedlings || '', // FIXED: Use actual form value!
         };
 
+        console.log('[handleFarmerSubmit] Final farmer record:', JSON.stringify(farmerRecord, null, 2));
+
         try {
+            console.log('[handleFarmerSubmit] Calling submitFarmer...');
             await submitFarmer(farmerRecord);
+            console.log('[handleFarmerSubmit] ✅ Submission successful!');
             setSuccessMessage(`Farmer '${name}' recorded successfully! UID: ${newRecordId}`);
             setViewMode('success');
             resetForms();
-            await loadRecords(); 
+            await loadRecords();
         } catch (e) {
-            console.error("Error adding farmer:", e);
+            console.error("[handleFarmerSubmit] ❌ Submission error:", e);
+            console.error("[handleFarmerSubmit] Error details:", {
+                message: e.message,
+                response: e.response?.data,
+                status: e.response?.status
+            });
             Alert.alert("Submission Failed", e.message || "Failed to save farmer details.");
         } finally {
             setLoading(false);
@@ -556,7 +595,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         const currentStep = isFarmer ? farmerStep : harvestStep;
         const setStep = isFarmer ? setFarmerStep : setHarvestStep;
         const formData = isFarmer ? farmerForm : harvestForm;
-        const setFormData = isFarmer ? updateFarmerForm : setHarvestForm; // Use the enhanced update function for farmer form
+        const setFormData = isFarmer ? updateFarmerForm : updateHarvestForm; // FIXED: Use proper update functions for both forms
         const currentStepFields = steps[currentStep];
 
         const updateForm = (key, value) => {
@@ -608,8 +647,13 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                 <Text style={styles.formTitle}>{currentStepFields.title}</Text>
                 <ProgressBar currentStep={currentStep + 1} totalSteps={steps.length} />
 
-                {/* Form Fields */}
-                <ScrollView style={styles.stepFormScroll}>
+                {/* Form Fields - ScrollView now takes available space */}
+                <ScrollView
+                    style={styles.stepFormScroll}
+                    contentContainerStyle={styles.stepFormContent}
+                    showsVerticalScrollIndicator={true}
+                    keyboardShouldPersistTaps="handled"
+                >
                     {currentStepFields.fields.map(field => {
                         // Handle conditional visibility
                         if (field.dependsOn) {
@@ -741,8 +785,21 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     // --- Screen Layout ---
     return (
         <View style={styles.screen}>
-            <Header title="Aggregation & Data Entry" onNavigate={onNavigate} />
-            <View style={styles.container}>
+            <Header title="Aggregation" onNavigate={onNavigate} />
+
+            {/* FIXED: KeyboardAvoidingView wraps entire scrollable content - optimized for Android */}
+            <KeyboardAvoidingView
+                style={styles.container}
+                behavior="height"
+                enabled={Platform.OS === 'android'}
+            >
+                <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
+                    keyboardShouldPersistTaps="always"
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                >
                 
                 {/* Tab Navigation */}
                 {viewMode === 'form' && (
@@ -761,24 +818,26 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                 )}
 
                 {/* Main Content Area */}
-                <ScrollView contentContainerStyle={styles.contentContainer}>
+                <View style={styles.contentWrapper}>
                     {loading && viewMode !== 'table' && <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />}
-                    
+
                     {viewMode === 'form' && renderFormContent()}
-                    
+
                     {viewMode === 'table' && renderTableContent()}
+                </View>
+
                 </ScrollView>
-            </View>
+            </KeyboardAvoidingView>
 
             {/* Modals and Overlays */}
             {viewMode === 'success' && (
-                <SuccessMessage 
-                    message={successMessage} 
-                    onExit={() => setViewMode('form')} 
+                <SuccessMessage
+                    message={successMessage}
+                    onExit={() => setViewMode('form')}
                     onView={() => { setActiveTab(activeTab); setViewMode('table'); setSuccessMessage(''); }}
                 />
             )}
-            
+
             <BottomNav onNavigate={onNavigate} active="Aggregation" />
         </View>
     );
@@ -798,6 +857,10 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: 15,
         paddingTop: 10,
+    },
+    contentWrapper: {
+        flex: 1, // FIXED: Takes remaining space after tabs/header
+        paddingBottom: 100, // Make room for BottomNav
     },
     contentContainer: {
         flexGrow: 1,
@@ -830,6 +893,7 @@ const styles = StyleSheet.create({
     },
     // --- Forms ---
     formSection: {
+        flex: 1, // FIXED: Allow form to take available height
         backgroundColor: CoffeeColors.WHITE,
         borderRadius: 10,
         padding: 15,
@@ -838,6 +902,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 1.41,
+        maxHeight: '100%', // Prevent overflow on small screens
     },
     formTitle: {
         fontSize: 18,
@@ -877,8 +942,14 @@ const styles = StyleSheet.create({
         color: CoffeeColors.DARK_BROWN,
     },
     stepFormScroll: {
-        maxHeight: 450, 
+        // REMOVED fixed maxHeight to allow proper scrolling on all screen sizes
+        // The form will now flex properly within the available space
+        flex: 1, // Take remaining space in the KeyboardAvoidingView
+    },
+    stepFormContent: {
+        // Content container for ScrollView - adds padding for last items
         paddingRight: 10,
+        paddingBottom: 20, // Extra space at bottom so last field is visible when keyboard appears
     },
     // Date Picker Button
     datePickerButton: {
