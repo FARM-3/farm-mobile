@@ -108,10 +108,48 @@ export const submitFarmer = async (data) => {
         throw new Error('Failed to save farmer locally');
     }
 
+    // Transform data to match Django backend API format
+    const apiPayload = {
+        farmer_id: data.uid || data.farmer_id,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        gender: data.gender,
+        nin: data.nin,
+        date_of_birth: data.date_of_birth,
+        contact: data.contact,
+        email: data.email,
+        farmer_type: data.farmer_type || 'individual',
+        started_coffee_farming_year: data.started_farming ? new Date(data.started_farming).getFullYear() : null,
+        district: data.district,
+        other_district: data.other_district || '',
+        sub_county: data.sub_county,
+        other_sub_county: data.other_sub_county || '',
+        parish: data.parish,
+        village: data.village,
+        gps_coordinates: data.gps,
+        nearest_landmark: data.nearest_landmark,
+        coffee_variety: data.coffee_variety,
+        number_of_trees: parseInt(data.no_of_trees) || 0,
+        ownership_of_trees: data.all_your_trees !== false,
+        planted_date: data.planted_date,
+        land_ownership: data.land_ownership,
+        spacing_between_trees: data.spacing,
+        defforestation_status: data.deforested !== false,
+        source_of_seedlings: data.seedling_source,
+        type_of_seedlings: data.seedling_type,
+        age_of_seedlings: data.age_of_seedlings || '',
+        standard_practices: Array.isArray(data.practices) && data.practices.length > 0,
+        irrigation_source: data.irrigation,
+        fertilizers: Array.isArray(data.fertilizers) ? data.fertilizers.join(', ') : data.fertilizers || '',
+        pesticide: Array.isArray(data.pesticides) ? data.pesticides.join(', ') : data.pesticides || '',
+    };
+
+    console.log('[aggregationService] API payload:', JSON.stringify(apiPayload, null, 2));
+
     // Now try to sync to API (silent fail if offline)
     try {
     console.log('[aggregationService] Submitting farmer to API...');
-    const response = await ApiService.post('aggregation/farmer/', data);
+    const response = await ApiService.post('aggregation/farmer/', apiPayload);
         console.log('[aggregationService] Farmer submitted successfully to API');
 
         // Mark as synced and update server_id

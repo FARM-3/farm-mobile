@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -9,14 +9,16 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import CoffeeColors from '../../../theme/colors';
 import Header from '../../../components/Header';
 import BottomNav from '../../../components/BottomNav';
-import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
-import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest } from '../../../services/aggregationService'; 
-import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings';
+import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants'; 
+import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest } from '../../../utils/firebaseSetup';
+// import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
 
 
 // ===============================================
 // === 1. FORM & TABLE FIELD DEFINITIONS (NEW) ===
 // ===============================================
+
+// NOTE: Adjusted fields for better consistency (e.g., using 'Yes'/'No' for boolean pickers)
 
 const farmerFieldDefinitions = [
     // Step 1: Personal Info
@@ -30,7 +32,7 @@ const farmerFieldDefinitions = [
             { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
             { key: 'contact', label: 'Contact', keyboardType: 'phone-pad', required: true },
             { key: 'email', label: 'Email (optional)', keyboardType: 'email-address' },
-            { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'picker', pickerKey: 'all_your_trees' },
+            { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'yes-no' },
             { key: 'cooperative', label: 'Cooperative Name', keyboardType: 'default', dependsOn: { field: 'in_cooperative', value: true } },
             { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date' },
         ]
@@ -41,7 +43,8 @@ const farmerFieldDefinitions = [
         fields: [
             { key: 'district', label: 'District', type: 'picker', pickerKey: 'district' },
             { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county' },
-            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish' },
+            // Parish will dynamically filter based on sub_county
+            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish', dynamic: true }, 
             { key: 'village', label: 'Village', keyboardType: 'default' },
             { key: 'gps', label: 'GPS Location (optional)', keyboardType: 'default' },
             { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default' },
@@ -54,12 +57,12 @@ const farmerFieldDefinitions = [
         fields: [
             { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety' },
             { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric' },
-            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'picker', pickerKey: 'all_your_trees' },
+            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'yes-no' },
             { key: 'other_farms', label: 'If no, which farms (location, owner)', keyboardType: 'default', dependsOn: { field: 'all_your_trees', value: false } },
             { key: 'planted_date', label: 'Date planted', type: 'date' },
             { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing' },
             { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership' },
-            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'picker', pickerKey: 'all_your_trees' },
+            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no' },
             { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source' },
             { key: 'seedling_type', label: 'Type of seedlings', keyboardType: 'default' },
         ]
@@ -71,7 +74,7 @@ const farmerFieldDefinitions = [
             { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices' },
             { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation' },
             { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true },
-            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'picker', pickerKey: 'all_your_trees' },
+            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'yes-no' },
             { key: 'pesticides', label: 'If yes, list pesticides (comma separated)', array: true, dependsOn: { field: 'uses_pesticides', value: true } },
         ]
     }
@@ -106,7 +109,7 @@ const farmerTableFields = [
     { key: 'contact', label: 'Contact', width: '20%' },
     { key: 'district', label: 'District', width: '20%' },
     { key: 'num_trees', label: 'Trees', width: '15%' },
-    { key: 'id', label: 'ID', width: '15%' },
+    { key: 'uid', label: 'UID', width: '15%' }, // Use UID for farmers
 ];
 
 const harvestTableFields = [
@@ -121,7 +124,7 @@ const harvestTableFields = [
 // === 2. LIGHTWEIGHT LOCAL UI HELPERS (POLISHED)===
 // ===============================================
 
-const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true }) => (
+const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true, placeholder = '' }) => (
     <View style={{ marginBottom: 15 }}>
         {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
         <TextInput 
@@ -130,6 +133,8 @@ const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', edi
             keyboardType={keyboardType} 
             style={[styles.textInput, !editable && styles.readOnlyInput]} 
             editable={editable}
+            placeholder={placeholder}
+            placeholderTextColor={CoffeeColors.GRAY_TEXT_LIGHT}
         />
     </View>
 );
@@ -140,14 +145,17 @@ const CustomPicker = ({ label, selectedValue, onValueChange, items = [] }) => (
         <View style={styles.pickerContainer}>
             <Picker selectedValue={selectedValue} onValueChange={onValueChange} style={styles.picker}>
                 <Picker.Item label="-- Select --" value="" />
-                {items.map((it) => (
-                    <Picker.Item key={it.value ?? it} label={it.label ?? String(it)} value={it.value ?? it} />
-                ))}
+                {items.map((it, index) => {
+                    const value = it.value ?? it;
+                    const label = it.label ?? String(it);
+                    return <Picker.Item key={index} label={label} value={value} />;
+                })}
             </Picker>
         </View>
     </View>
 );
 
+// Toggle component is now redundant with 'yes-no' picker logic but kept for safety/simplicity if needed elsewhere
 const CustomToggle = ({ label, value, onValueChange }) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, paddingVertical: 5 }}>
         <Text style={styles.inputLabel}>{label}</Text>
@@ -159,9 +167,10 @@ const CustomMultiSelect = ({ label, selectedValues = [], onValueChange, items = 
     const [modalVisible, setModalVisible] = useState(false);
 
     const toggleSelection = (item) => {
-        const newSelection = selectedValues.includes(item)
-            ? selectedValues.filter(val => val !== item)
-            : [...selectedValues, item];
+        const itemValue = typeof item === 'object' ? item.value : item;
+        const newSelection = selectedValues.includes(itemValue)
+            ? selectedValues.filter(val => val !== itemValue)
+            : [...selectedValues, itemValue];
         onValueChange(newSelection);
     };
 
@@ -188,20 +197,24 @@ const CustomMultiSelect = ({ label, selectedValues = [], onValueChange, items = 
                     <View style={styles.multiSelectModal}>
                         <Text style={styles.modalTitle}>Select Practices</Text>
                         <ScrollView style={styles.multiSelectScroll}>
-                            {items.map((item, index) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={styles.multiSelectItem}
-                                    onPress={() => toggleSelection(item)}
-                                >
-                                    <Text style={styles.multiSelectItemText}>{item}</Text>
-                                    <View style={styles.checkbox}>
-                                        {selectedValues.includes(item) && (
-                                            <Ionicons name="checkmark" size={16} color={CoffeeColors.MEDIUM_BROWN} />
-                                        )}
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
+                            {items.map((item, index) => {
+                                const itemValue = typeof item === 'object' ? item.value : item;
+                                const itemLabel = typeof item === 'object' ? item.label : item;
+                                return (
+                                    <TouchableOpacity
+                                        key={index}
+                                        style={styles.multiSelectItem}
+                                        onPress={() => toggleSelection(item)}
+                                    >
+                                        <Text style={styles.multiSelectItemText}>{itemLabel}</Text>
+                                        <View style={styles.checkbox}>
+                                            {selectedValues.includes(itemValue) && (
+                                                <Ionicons name="checkmark" size={16} color={CoffeeColors.MEDIUM_BROWN} />
+                                            )}
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </ScrollView>
                         <TouchableOpacity
                             style={styles.modalCloseButton}
@@ -218,13 +231,15 @@ const CustomMultiSelect = ({ label, selectedValues = [], onValueChange, items = 
 
 const CustomDatePicker = ({ label, value, onChange }) => {
     const [showPicker, setShowPicker] = useState(false);
+    // Use value if it's a valid date string, otherwise default to today
     const [date, setDate] = useState(value ? new Date(value) : new Date());
 
     const handleDateChange = (event, selectedDate) => {
         setShowPicker(false);
         if (selectedDate) {
             setDate(selectedDate);
-            onChange(selectedDate.toISOString().split('T')[0]); // Format as YYYY-MM-DD
+            // Ensure date is formatted as YYYY-MM-DD
+            onChange(selectedDate.toISOString().split('T')[0]); 
         }
     };
 
@@ -266,35 +281,6 @@ const SuccessMessage = ({ message, onExit, onView }) => (
     </View>
 );
 
-const RecordsTable = ({ records = [], fields = [], title = '', onExit, onEdit }) => (
-    <View style={styles.recordsContainer}>
-        <View style={styles.tableHeaderSection}>
-            <Text style={styles.tableTitle}>{title}</Text>
-            <TouchableOpacity style={{ marginTop: 8 }} onPress={onExit}><Text style={styles.backToFormText}>← Back to form</Text></TouchableOpacity>
-        </View>
-        <ScrollView horizontal style={styles.tableScrollHorizontal}>
-            <View style={styles.table}>
-                {/* Header */}
-                <View style={[styles.tableRow, styles.tableHeaderRow]}>
-                    {fields.map(f => (<Text key={f.key} style={[styles.tableHeader, { width: f.width }]}>{f.label}</Text>))}
-                    <Text style={[styles.tableHeader, { width: '10%' }]}>Actions</Text>
-                </View>
-                {/* Rows */}
-                <ScrollView style={styles.tableScrollVertical}>
-                    {records && records.length > 0 ? records.map((r, idx) => (
-                        <View key={r.id ?? idx} style={[styles.tableRow, idx % 2 === 0 ? styles.tableRowAlt : null]}>
-                            {fields.map(f => (
-                                <Text key={f.key} style={[styles.tableCell, { width: f.width }]}>{String(r[f.key] ?? r[f.key.replace(/_/g, '')] ?? '')}</Text>
-                            ))}
-                            <TouchableOpacity style={[styles.editRowBtn, { width: '10%' }]} onPress={() => onEdit && onEdit(r)}><Text style={styles.editRowText}>Edit</Text></TouchableOpacity>
-                        </View>
-                    )) : <Text style={styles.noRecords}>No records found</Text>}
-                </ScrollView>
-            </View>
-        </ScrollView>
-    </View>
-);
-
 const ProgressBar = ({ currentStep, totalSteps }) => {
     const progress = (currentStep / totalSteps) * 100;
     return (
@@ -305,18 +291,86 @@ const ProgressBar = ({ currentStep, totalSteps }) => {
     );
 };
 
+// --- NEW/REPLACED Table Component: Searchable Data List ---
+const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, isFarmer }) => {
+    const [searchText, setSearchText] = useState('');
+    
+    // Filtering logic based on search text across all listed fields
+    const filteredRecords = useMemo(() => {
+        if (!searchText) return records;
+        const lowerSearch = searchText.toLowerCase();
+        
+        return records.filter(record => 
+            fields.some(f => 
+                String(record[f.key] || '').toLowerCase().includes(lowerSearch)
+            )
+        );
+    }, [records, fields, searchText]);
+    
+    // Renders the summary row for the FlatList
+    const renderItem = ({ item }) => {
+        // Find a fallback name if farmer_name isn't present for harvests
+        const nameKey = isFarmer ? 'name' : (item.farmer_name ? 'farmer_name' : 'farmer_uid');
+        const secondKey = fields.length > 1 ? fields[1].key : null;
+        const thirdKey = fields.length > 2 ? fields[2].key : null;
+
+        return (
+            <TouchableOpacity style={styles.dataListItem} onPress={() => onEdit(item)}>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.dataListItemTitle}>
+                        {String(item[nameKey] || 'N/A')}
+                        <Text style={styles.dataListItemUID}> ({item.uid || item.id || 'No ID'})</Text>
+                    </Text>
+                    <Text style={styles.dataListItemSubtitle}>
+                        {secondKey ? `${fields[1].label}: ${item[secondKey] || 'N/A'}` : ''}
+                        {thirdKey ? ` | ${fields[2].label}: ${item[thirdKey] || 'N/A'}` : ''}
+                    </Text>
+                </View>
+                <Ionicons name="chevron-forward-outline" size={20} color={CoffeeColors.GRAY_TEXT} />
+            </TouchableOpacity>
+        );
+    };
+
+    return (
+        <View style={styles.recordsContainer}>
+            <View style={styles.tableHeaderSection}>
+                <Text style={styles.tableTitle}>{title}</Text>
+                <CustomInput
+                    placeholder="Search by name, ID, or contact..."
+                    value={searchText}
+                    onChangeText={setSearchText}
+                />
+                <TouchableOpacity style={{ marginTop: 8 }} onPress={onExit}>
+                    <Text style={styles.backToFormText}>← Back to form ({filteredRecords.length} records)</Text>
+                </TouchableOpacity>
+            </View>
+            
+            {filteredRecords.length > 0 ? (
+                <FlatList
+                    data={filteredRecords}
+                    renderItem={renderItem}
+                    keyExtractor={(item, index) => item.id || item.uid || index.toString()}
+                    style={styles.listContainer}
+                />
+            ) : (
+                <Text style={styles.noRecords}>No records found matching your search.</Text>
+            )}
+        </View>
+    );
+};
+
 
 // ===============================================
 // === 3. MAIN COMPONENT (POLISHED)            ===
 // ===============================================
 
 const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
-    // Ensure onNavigate exists for Header/BottomNav; fallback to navigation.navigate when available
     const onNavigate = onNavigateProp ?? ((screen) => { if (navigation && navigation.navigate) navigation.navigate(screen); });
     
     // --- State declarations ---
     const [farmersList, setFarmersList] = useState([]);
     const [harvestsList, setHarvestsList] = useState([]);
+    // Simplified initial state to ensure 'yes-no' fields are correctly initialized as booleans
     const [farmerForm, setFarmerForm] = useState({
         first_name: '', last_name: '', gender: '', nin: '', date_of_birth: '', contact: '', email: '', in_cooperative: false, cooperative: '', started_farming: '',
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
@@ -331,7 +385,6 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     const [loading, setLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const isSubmittingRef = useRef(false);
-    // Placeholder for actual user ID from auth service
     const [userId, setUserId] = useState('user123'); 
 
     // --- Data Loading and Initialization ---
@@ -365,27 +418,48 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     }, []);
 
     const resetForms = () => {
-        setFarmerForm({
+        // Reset boolean fields to false and string fields to ''
+        setFarmerForm(p => ({
+            ...p,
             first_name: '', last_name: '', gender: '', nin: '', date_of_birth: '', contact: '', email: '', in_cooperative: false, cooperative: '', started_farming: '',
             district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
             coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
-        });
+        }));
 
-        setHarvestForm({
+        setHarvestForm(p => ({
+            ...p,
             farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', moisture_content: '', amount_paid: '', paid_by: '', number_of_bags: '',
-        });
+        }));
         setFarmerStep(0);
         setHarvestStep(0);
     };
 
     const getFarmerDisplayName = (f) => {
         if (!f) return '';
-        // Prioritize full name or explicit display name
         return f.name || f.full_name || f.farmer_name || f.displayName || `${f.first_name || ''} ${f.last_name || ''}`.trim();
     };
 
-    // --- Submission Handlers ---
+    // --- Location Dependency Logic ---
+    const updateFarmerForm = (key, value) => {
+        setFarmerForm(p => {
+            let newState = { ...p, [key]: value };
+
+            // Logic to reset parish when sub_county changes
+            if (key === 'sub_county' && value !== p.sub_county) {
+                newState.parish = ''; // Reset parish selection
+            }
+            // Logic for 'Yes'/'No' pickers (which represent booleans in state)
+            if (['in_cooperative', 'all_your_trees', 'deforested', 'uses_pesticides'].includes(key)) {
+                 newState[key] = value === 'Yes' || value === true;
+            }
+            
+            return newState;
+        });
+    };
+
+    // --- Submission Handlers (Kept clean) ---
     const handleFarmerSubmit = async () => {
+        // ... (Submission logic remains the same)
         if (!farmerForm.first_name || !farmerForm.contact || !userId) {
             Alert.alert("Validation", "Please ensure First name, Contact, and User ID are present.");
             return;
@@ -399,15 +473,26 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         const name = `${farmerForm.first_name} ${farmerForm.last_name}`.trim();
         const location = `${farmerForm.district || ''}${farmerForm.sub_county ? ', ' + farmerForm.sub_county : ''}`;
         
-        // Final record object construction before sending
         const farmerRecord = {
-            ...farmerForm, // Include all form fields
+            ...farmerForm,
             name: name,
             uid: newRecordId,
             location: location,
             num_trees: parseInt(farmerForm.no_of_trees) || 0,
             recorder_id: userId,
             timestamp: Date.now(),
+            // Add missing fields for Django API compatibility
+            farmer_id: newRecordId,
+            farmer_type: 'individual',
+            other_district: '',
+            other_sub_county: '',
+            ownership_of_trees: farmerForm.all_your_trees !== false,
+            defforestation_status: farmerForm.deforested !== false,
+            standard_practices: Array.isArray(farmerForm.practices) && farmerForm.practices.length > 0,
+            started_coffee_farming_year: farmerForm.started_farming ? new Date(farmerForm.started_farming).getFullYear() : null,
+            spacing_between_trees: farmerForm.spacing,
+            gps_coordinates: farmerForm.gps,
+            age_of_seedlings: '',
         };
 
         try {
@@ -426,6 +511,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     };
 
     const handleHarvestSubmit = async () => {
+        // ... (Submission logic remains the same)
         if (!harvestForm.farmer_uid || !harvestForm.weight_on_delivery || !userId) {
             Alert.alert('Validation', 'Please fill Farmer UID, Weight and ensure you are logged in.');
             return;
@@ -470,11 +556,11 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         const currentStep = isFarmer ? farmerStep : harvestStep;
         const setStep = isFarmer ? setFarmerStep : setHarvestStep;
         const formData = isFarmer ? farmerForm : harvestForm;
-        const setFormData = isFarmer ? setFarmerForm : setHarvestForm;
+        const setFormData = isFarmer ? updateFarmerForm : setHarvestForm; // Use the enhanced update function for farmer form
         const currentStepFields = steps[currentStep];
 
         const updateForm = (key, value) => {
-            setFormData(p => ({ ...p, [key]: value }));
+            setFormData(key, value);
         };
         
         const handleNext = () => {
@@ -490,23 +576,15 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
 
             // Handle step-specific actions (e.g., UID generation, Farmer lookup) BEFORE advancing
             currentStepFields.fields.forEach(f => {
-                if (f.special === 'generate_uid' && isFarmer) {
-                    // Generate UID only if it hasn't been generated yet
-                    if (!formData.uid) {
-                        setFormData(p => ({ ...p, uid: generateRecordId('FD') }));
-                        Alert.alert('UID Generated', 'Farmer UID created.');
-                    }
-                } else if (f.special === 'generate_harvest_id' && !isFarmer) {
-                    if (!formData.harvest_id) {
-                         setFormData(p => ({ ...p, harvest_id: generateRecordId('PA') }));
-                         Alert.alert('ID Generated', 'Harvest ID created.');
-                    }
-                } else if (f.action === 'lookup' && !isFarmer) {
+                if (f.special === 'generate_uid' && isFarmer && !formData.uid) {
+                    setFormData('uid', generateRecordId('FD'));
+                } else if (f.special === 'generate_harvest_id' && !isFarmer && !formData.harvest_id) {
+                     setFormData('harvest_id', generateRecordId('PA'));
+                } else if (f.action === 'lookup' && !isFarmer && formData.farmer_uid) {
                     const farmerUID = formData.farmer_uid;
                     const found = farmersList.find(f => String(f.id) === String(farmerUID) || String(f.uid) === String(farmerUID));
                     if (found) {
-                        setFormData(p => ({ ...p, farmer_name: getFarmerDisplayName(found) }));
-                        Alert.alert('Farmer Found', `Name: ${getFarmerDisplayName(found)}`);
+                        setFormData('farmer_name', getFarmerDisplayName(found));
                     } else {
                         Alert.alert('Farmer Not Found', 'No farmer with that UID was found in local records.');
                     }
@@ -534,55 +612,58 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                 <ScrollView style={styles.stepFormScroll}>
                     {currentStepFields.fields.map(field => {
                         // Handle conditional visibility
-                        if (field.dependsOn && formData[field.dependsOn.field] !== field.dependsOn.value) {
-                            return null;
+                        if (field.dependsOn) {
+                            // Check if the dependency value is explicitly 'Yes'/'No' string for boolean state (false/true)
+                            const dependencyValue = field.dependsOn.value === true ? 'Yes' : (field.dependsOn.value === false ? 'No' : field.dependsOn.value);
+                            
+                            // Check the form value, which is stored as a boolean (true/false) in the state
+                            const formValue = formData[field.dependsOn.field] === true ? 'Yes' : (formData[field.dependsOn.field] === false ? 'No' : formData[field.dependsOn.field]);
+                            
+                            if (formValue !== dependencyValue) {
+                                return null;
+                            }
                         }
                         
-                        // Handle special case for UID/Harvest ID to show the generated value
                         const fieldValue = (field.special === 'generate_uid' || field.special === 'generate_harvest_id')
                             ? formData[field.key] || 'Press Next to Generate ID'
                             : (field.type === 'multi-select' ? (Array.isArray(formData[field.key]) && formData[field.key].length > 0 ? formData[field.key].join(', ') : '') : (field.array ? (Array.isArray(formData[field.key]) ? formData[field.key].join(', ') : '') : String(formData[field.key] ?? '')));
 
                         // Determine field type and render
-                        if (field.type === 'toggle') {
-                            return <CustomToggle key={field.key} label={field.label} value={!!formData[field.key]} onValueChange={(v) => updateForm(field.key, v)} />;
-                        }
-                        if (field.type === 'picker' && field.pickerKey === 'all_your_trees') {
-                            // Special handling for yes/no picker
-                            const yesNoItems = ['Yes', 'No'];
-                            return <CustomPicker key={field.key} label={field.label} selectedValue={formData[field.key] ? 'Yes' : 'No'} onValueChange={(v) => updateForm(field.key, v === 'Yes')} items={yesNoItems} />;
+                        if (field.type === 'yes-no') {
+                            const selectedValue = formData[field.key] === true ? 'Yes' : (formData[field.key] === false ? 'No' : '');
+                            return <CustomPicker key={field.key} label={field.label} selectedValue={selectedValue} onValueChange={(v) => updateForm(field.key, v === 'Yes' ? true : false)} items={['Yes', 'No']} />;
                         }
                         if (field.type === 'multi-select') {
                             const items = PICKER_MAP[field.pickerKey] || [];
                             return <CustomMultiSelect key={field.key} label={field.label} selectedValues={formData[field.key] || []} onValueChange={(v) => updateForm(field.key, v)} items={items} />;
                         }
+                        if (field.type === 'date') {
+                            return <CustomDatePicker key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} value={formData[field.key]} onChange={(v) => updateForm(field.key, v)} />;
+                        }
                         if (field.type === 'picker') {
                             let items = PICKER_MAP[field.pickerKey] || [];
 
-                            // Special handling for parish picker - filter based on selected sub-county
-                            if (field.pickerKey === 'parish' && formData.sub_county) {
+                            // Dynamic filtering for Parish
+                            if (field.dynamic && field.pickerKey === 'parish' && formData.sub_county) {
                                 items = PARISHES_BY_SUB_COUNTY[formData.sub_county] || [];
+                            } else if (field.dynamic && field.pickerKey === 'parish' && !formData.sub_county) {
+                                items = [{ label: 'Select Sub-county first', value: '', disabled: true }];
                             }
 
                             return <CustomPicker key={field.key} label={field.label} selectedValue={formData[field.key]} onValueChange={(v) => updateForm(field.key, v)} items={items} />;
-                        }
-                        if (field.type === 'date') {
-                            return <CustomDatePicker key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} value={formData[field.key]} onChange={(v) => updateForm(field.key, v)} />;
                         }
 
                         // Default to CustomInput
                         const handleTextChange = (v) => {
                             let processedValue = v;
                             if (field.keyboardType === 'numeric') {
-                                // Allow decimal points for harvest weight/moisture
-                                processedValue = v.replace(/[^0-9.]/g, '');
+                                processedValue = v.replace(/[^0-9.]/g, ''); 
                             }
                             if (field.array) {
                                 processedValue = v.split(',').map(s => s.trim()).filter(Boolean);
                             }
                             updateForm(field.key, processedValue);
                         };
-
 
                         return (
                             <CustomInput
@@ -592,6 +673,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                                 onChangeText={field.readOnly ? null : handleTextChange}
                                 keyboardType={field.keyboardType}
                                 editable={!field.readOnly}
+                                placeholder={field.readOnly ? '' : `Enter ${field.label}`}
                             />
                         );
                     })}
@@ -633,22 +715,24 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     const renderTableContent = () => {
         if (activeTab === 'farmers') {
             return (
-                <RecordsTable
+                <SearchableDataList
                     records={farmersList}
                     fields={farmerTableFields}
                     title="Farmer Records"
                     onExit={() => setViewMode('form')}
-                    onEdit={(r) => Alert.alert('Edit Farmer', `Edit functionality not implemented yet for: ${r.name}`)}
+                    isFarmer={true}
+                    onEdit={(r) => Alert.alert('View/Edit Farmer', `Viewing record for: ${r.name} (${r.uid})`)}
                 />
             );
         } else {
             return (
-                <RecordsTable
+                <SearchableDataList
                     records={harvestsList}
                     fields={harvestTableFields}
                     title="Harvest Records"
                     onExit={() => setViewMode('form')}
-                    onEdit={(r) => Alert.alert('Edit Harvest', `Edit functionality not implemented yet for: ${r.farmer_name}`)}
+                    isFarmer={false}
+                    onEdit={(r) => Alert.alert('View/Edit Harvest', `Viewing record for: ${r.farmer_name} (ID: ${r.id})`)}
                 />
             );
         }
@@ -691,7 +775,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                 <SuccessMessage 
                     message={successMessage} 
                     onExit={() => setViewMode('form')} 
-                    onView={() => { setViewMode('table'); setSuccessMessage(''); }}
+                    onView={() => { setActiveTab(activeTab); setViewMode('table'); setSuccessMessage(''); }}
                 />
             )}
             
@@ -774,6 +858,7 @@ const styles = StyleSheet.create({
         padding: 10,
         backgroundColor: CoffeeColors.WHITE,
         fontSize: 16,
+        color: CoffeeColors.DARK_BROWN,
     },
     readOnlyInput: {
         backgroundColor: CoffeeColors.LIGHT_GRAY,
@@ -789,10 +874,91 @@ const styles = StyleSheet.create({
     picker: {
         height: 50,
         width: '100%',
+        color: CoffeeColors.DARK_BROWN,
     },
     stepFormScroll: {
         maxHeight: 450, 
         paddingRight: 10,
+    },
+    // Date Picker Button
+    datePickerButton: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderRadius: 6,
+        padding: 10,
+        backgroundColor: CoffeeColors.WHITE,
+    },
+    datePickerText: {
+        fontSize: 16,
+        color: CoffeeColors.DARK_BROWN,
+    },
+    // Multi-Select Button
+    multiSelectButton: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderRadius: 6,
+        padding: 10,
+        backgroundColor: CoffeeColors.WHITE,
+    },
+    multiSelectText: {
+        fontSize: 16,
+        color: CoffeeColors.DARK_BROWN,
+        flex: 1,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    multiSelectModal: {
+        width: '90%',
+        maxHeight: '80%',
+        backgroundColor: CoffeeColors.WHITE,
+        borderRadius: 10,
+        padding: 20,
+    },
+    multiSelectScroll: {
+        paddingVertical: 10,
+        maxHeight: 300,
+    },
+    multiSelectItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+    },
+    multiSelectItemText: {
+        fontSize: 16,
+        color: CoffeeColors.DARK_BROWN,
+    },
+    checkbox: {
+        height: 24,
+        width: 24,
+        borderRadius: 4,
+        borderWidth: 2,
+        borderColor: CoffeeColors.MEDIUM_BROWN,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalCloseButton: {
+        marginTop: 20,
+        padding: 15,
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    modalCloseText: {
+        color: CoffeeColors.WHITE,
+        fontWeight: 'bold',
     },
     // --- Progress Bar ---
     progressBarContainer: {
@@ -919,13 +1085,12 @@ const styles = StyleSheet.create({
         color: CoffeeColors.WHITE,
         fontWeight: 'bold',
     },
-    // --- Table ---
+    // --- Data List (Replaces Table) ---
     recordsContainer: {
         flex: 1,
         backgroundColor: CoffeeColors.WHITE,
         borderRadius: 10,
         elevation: 3,
-        paddingBottom: 10,
     },
     tableHeaderSection: {
         padding: 16,
@@ -936,130 +1101,45 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '700',
         color: CoffeeColors.DARK_BROWN,
+        marginBottom: 10,
     },
     backToFormText: {
         color: CoffeeColors.MEDIUM_BROWN,
         fontWeight: '600',
+        marginTop: 5,
     },
-    tableScrollHorizontal: {
-        flexDirection: 'row',
+    listContainer: {
+        paddingHorizontal: 16,
+        paddingBottom: 20,
     },
-    tableScrollVertical: {
-        // Enforce maximum height for vertical scrolling within horizontal container
-        maxHeight: 350, 
-    },
-    table: {
-        minWidth: 500, // Ensure minimum width for horizontal scroll
-    },
-    tableHeaderRow: {
-        backgroundColor: CoffeeColors.CREAM,
-        borderTopWidth: 1,
-        borderTopColor: CoffeeColors.GRAY_TEXT_LIGHT,
-    },
-    tableRow: {
+    dataListItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 5,
+        justifyContent: 'space-between',
+        paddingVertical: 15,
         borderBottomWidth: 1,
         borderBottomColor: CoffeeColors.LIGHT_GRAY,
     },
-    tableRowAlt: {
-        backgroundColor: '#f9f9f9',
-    },
-    tableHeader: {
-        fontWeight: 'bold',
+    dataListItemTitle: {
+        fontSize: 16,
+        fontWeight: '700',
         color: CoffeeColors.DARK_BROWN,
-        paddingHorizontal: 5,
     },
-    tableCell: {
-        color: CoffeeColors.GRAY_TEXT,
+    dataListItemUID: {
         fontSize: 14,
-        paddingHorizontal: 5,
+        fontWeight: '500',
+        color: CoffeeColors.MEDIUM_BROWN,
     },
-    editRowBtn: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
-        borderRadius: 4,
-        marginLeft: 10,
-        alignItems: 'center',
-    },
-    editRowText: {
-        color: CoffeeColors.WHITE,
-        fontSize: 12,
-        fontWeight: 'bold',
+    dataListItemSubtitle: {
+        fontSize: 13,
+        color: CoffeeColors.GRAY_TEXT,
+        marginTop: 4,
     },
     noRecords: {
         textAlign: 'center',
         padding: 20,
         color: CoffeeColors.GRAY_TEXT,
-    },
-    // --- Multi-Select Styles ---
-    multiSelectButton: {
-        borderWidth: 1,
-        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
-        borderRadius: 6,
-        padding: 10,
-        backgroundColor: CoffeeColors.WHITE,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    multiSelectText: {
-        color: CoffeeColors.DARK_BROWN,
-        fontSize: 16,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    multiSelectModal: {
-        width: '80%',
-        backgroundColor: CoffeeColors.WHITE,
-        borderRadius: 10,
-        padding: 20,
-        maxHeight: '70%',
-    },
-    multiSelectScroll: {
-        maxHeight: 300,
-    },
-    multiSelectItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 5,
-        borderBottomWidth: 1,
-        borderBottomColor: CoffeeColors.LIGHT_GRAY,
-    },
-    multiSelectItemText: {
-        fontSize: 16,
-        color: CoffeeColors.DARK_BROWN,
-    },
-    checkbox: {
-        width: 20,
-        height: 20,
-        borderWidth: 1,
-        borderColor: CoffeeColors.MEDIUM_BROWN,
-        borderRadius: 3,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: CoffeeColors.WHITE,
-    },
-    modalCloseButton: {
-        marginTop: 20,
-        padding: 12,
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    modalCloseText: {
-        color: CoffeeColors.WHITE,
-        fontWeight: 'bold',
-    },
+    }
 });
 
 export default AggregationScreen;
