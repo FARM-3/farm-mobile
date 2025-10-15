@@ -15,14 +15,14 @@ function probe(method, path) {
 
 (async () => {
   try {
-    console.log('GET /aggregation/FarmerHarvest/');
-    const g = await probe('GET', '/aggregation/FarmerHarvest/');
+  console.log('GET /aggregation/farmer-harvest/');
+  const g = await probe('GET', '/aggregation/farmer-harvest/');
     console.log('Status:', g.status);
     console.log('Content-Type:', g.headers['content-type']);
     console.log('Body (truncated):', g.body.slice(0,2000));
 
-    console.log('\nOPTIONS /aggregation/FarmerHarvest/');
-    const o = await probe('OPTIONS', '/aggregation/FarmerHarvest/');
+  console.log('\nOPTIONS /aggregation/farmer-harvest/');
+  const o = await probe('OPTIONS', '/aggregation/farmer-harvest/');
     console.log('Status:', o.status);
     console.log('Headers:', JSON.stringify(o.headers, null, 2));
     console.log('Body (truncated):', o.body.slice(0,2000));

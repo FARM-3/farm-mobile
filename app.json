@@ -26,7 +26,15 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.fmismobile"
+      "package": "com.anonymous.fmismobile",
+      "intentFilters": [
+        {
+          "action": "MAIN",
+          "category": "LAUNCHER"
+        }
+      ],
+      "allowBackup": true,
+      "largeHeap": true
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
@@ -34,6 +42,11 @@
     "plugins": [
       "expo-sqlite",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8c087bb9-b502-4477-8d8f-b218d5ffaa49"
+      }
+    }
   }
 }

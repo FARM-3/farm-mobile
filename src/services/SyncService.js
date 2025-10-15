@@ -148,8 +148,8 @@ class SyncService {
 
     // Map table names to API endpoints
     const endpointMap = {
-      harvests: 'harvests',
-      farmers: 'aggregation/Farmer',
+      harvests: 'aggregation/farmer-harvest',
+      farmers: 'aggregation/farmer',
       processing: 'processing',
     };
 
@@ -206,7 +206,7 @@ class SyncService {
   }
 
   /**
-   * Prepare data for API by removing local-only fields
+   * Prepare data for API by removing local-only fields and transforming to Django format
    * @param {Object} record - Database record
    * @param {string} tableName - Table name
    * @returns {Object} - Cleaned data for API
@@ -215,8 +215,60 @@ class SyncService {
     // Remove local-only fields
     const { id, synced, created_at, updated_at, server_id, ...apiData } = record;
 
-    // Add any table-specific transformations here
-    // For example, date formatting, field name mapping, etc.
+    // Table-specific transformations to match Django API format
+    if (tableName === 'farmers') {
+      return {
+        farmer_id: record.server_id || record.id || `FD${Date.now()}`,
+        first_name: record.name?.split(' ')[0] || '',
+        last_name: record.name?.split(' ').slice(1).join(' ') || '',
+        gender: 'Other',
+        nin: '',
+        date_of_birth: null,
+        contact: record.phone || '',
+        email: '',
+        farmer_type: 'individual',
+        started_coffee_farming_year: null,
+        district: record.location?.split(',')[0] || '',
+        other_district: '',
+        sub_county: '',
+        other_sub_county: '',
+        parish: '',
+        village: '',
+        gps_coordinates: '',
+        nearest_landmark: '',
+        coffee_variety: 'Other',
+        number_of_trees: record.plot_size || 0,
+        ownership_of_trees: true,
+        planted_date: null,
+        land_ownership: 'owned',
+        spacing_between_trees: '3 metres by 3 metres',
+        defforestation_status: false,
+        source_of_seedlings: 'nursery',
+        type_of_seedlings: 'Other',
+        age_of_seedlings: '',
+        standard_practices: false,
+        irrigation_source: 'none',
+        fertilizers: '',
+        pesticide: '',
+      };
+    }
+
+    if (tableName === 'harvests') {
+      return {
+        id: record.server_id || record.id,
+        name: record.farmer_name || '',
+        weight_on_delivery: Math.round(Number(record.weight) || 0),
+        weight_after_floating: 0,
+        date_of_delivery: record.harvest_date || '',
+        grade: record.quality || '',
+        cherry_color: 'Red',
+        stage: 'fresh_cherry',
+        amount_paid: '0',
+        paid_by: 'System',
+        recorder_id: null,
+        timestamp: Date.now(),
+      };
+    }
 
     return apiData;
   }
