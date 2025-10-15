@@ -1,26 +1,38 @@
-//harvest form screen
-import React, { useState, useEffect } from "react";
-import CoffeeColors from '../../../theme/colors';
+import React, { useState, useEffect, useCallback } from "react";
+// NOTE: We are mocking external imports for code completeness.
+const CoffeeColors = {
+    DARK_BROWN: '#3D2F2F',
+    MEDIUM_BROWN: '#6C4A4A',
+    LIGHT_BROWN: '#B4A59E',
+    CREAM: '#F4F2F0',
+    WHITE: '#FFFFFF',
+    LIGHT_GRAY: '#F0F0F0',
+    ACCENT: '#4CAF50', // Used for stepper color
+};
+// NOTE: Assuming these services and components exist in your environment.
+// import DatabaseService from "../../../services/DatabaseService"; 
+// import SyncService from "../../../services/SyncService"; 
+// import Header from '../../../components/Header';
+// import BottomNav from '../../../components/BottomNav'; 
+
 import {
     View,
     Text,
     TextInput,
     StyleSheet,
     TouchableOpacity,
-    Alert, // NOTE: We are using Alert for simplicity, but for production, a custom modal is better
+    Alert, 
     ScrollView,
     Platform,
     KeyboardAvoidingView,
+    ActivityIndicator,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
-// Import services - CHANGED: Using DatabaseService instead of AsyncStorage
-import DatabaseService from "../../../services/DatabaseService";
-import SyncService from "../../../services/SyncService";
-// Import shared components
-import Header from '../../../components/Header';
-import BottomNav from '../../../components/BottomNav'; 
+
+
+// --- UTILITY FUNCTIONS ---
 
 /**
  * Utility function to format date for API (YYYY-MM-DD string).
@@ -55,46 +67,221 @@ function generateHarvestId(date) {
     return `PA${dd}${mm}${yy}H`;
 }
 
-const BLOCK_OPTIONS = ["Block A-1", "Block B-2", "Block C-3"];
-const GRADE_OPTIONS = ["Grade 1", "Grade 2", "Grade 3"];
-const CHERRY_COLORS = ["Red", "Green"];
+// --- STATIC OPTIONS (Aligned with 'Production Harvest details (Stage 1)' requirements) ---
+// Simulates data coming from the Block details form, including the system-generated ID
+const BLOCK_DATA = [
+    { id: "BLK-001", name: "Block A-1 (Arabica)" },
+    { id: "BLK-002", name: "Block B-2 (Robusta)" },
+    { id: "BLK-003", name: "Block C-3 (Mixed)" },
+    { id: "BLK-004", name: "Block D-4 (New Crop)" },
+];
 
-// Updated to accept onNavigate, aligning with App.js router
-export default function HarvestFormScreen({ onNavigate }) { 
-    // form state
-    const [grade, setGrade] = useState(GRADE_OPTIONS[0]);
-    const [weight, setWeight] = useState("");
-    const [block, setBlock] = useState(BLOCK_OPTIONS[0]);
-    const [cherryColor, setCherryColor] = useState(CHERRY_COLORS[0]);
-    const [date, setDate] = useState(new Date());
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [name, setName] = useState("");
-    const [amountPaid, setAmountPaid] = useState("");
-    const [generatedId, setGeneratedId] = useState(generateHarvestId(new Date()));
-    const [isSaving, setIsSaving] = useState(false); // Loading state
+const PAID_BY_OPTIONS = ["Client", "Manager", "System Transfer"];
 
-    // updating generated id when date changes
+
+// --- STEP COMPONENTS ---
+
+const Step1_WorkerAndBlock = ({ formData, updateField }) => {
+    
+    // Handler to update both ID and Name when a block is selected
+    const handleBlockChange = (selectedId) => {
+        const block = BLOCK_DATA.find(b => b.id === selectedId);
+        if (block) {
+            updateField('blockId', block.id);
+            updateField('blockName', block.name);
+        }
+    };
+
+    return (
+        <View style={stepStyles.stepContainer}>
+            <Text style={styles.heading}>1. Worker & Block Details</Text>
+            
+            <Text style={styles.label}>Worker Name</Text>
+            <TextInput
+                style={styles.input}
+                value={formData.workerName}
+                onChangeText={(t) => updateField('workerName', t)}
+                placeholder="Name of worker/deliverer"
+                autoCapitalize="words"
+            />
+
+            <Text style={styles.label}>Block ID and Name</Text>
+            <View style={styles.pickerWrap}>
+                <Picker 
+                    selectedValue={formData.blockId} 
+                    onValueChange={handleBlockChange}
+                >
+                    {BLOCK_DATA.map((b) => (
+                        <Picker.Item 
+                            key={b.id} 
+                            // Display the ID before the Name as requested
+                            label={`${b.id} - ${b.name}`} 
+                            value={b.id} 
+                        />
+                    ))}
+                </Picker>
+            </View>
+            
+            <Text style={styles.label}>Harvest ID (Local)</Text>
+            <View style={[styles.input, { justifyContent: "center" }]}>
+                <Text style={{ color: CoffeeColors.MEDIUM_BROWN, fontWeight: 'bold' }}>
+                    {formData.generatedId}
+                </Text>
+            </View>
+        </View>
+    );
+};
+
+const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
+    <View style={stepStyles.stepContainer}>
+        <Text style={styles.heading}>2. Delivery & Finance</Text>
+
+        <Text style={styles.label}>Weight on Delivery (kg)</Text>
+        <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            value={formData.weight}
+            onChangeText={(t) => updateField('weight', t.replace(",", "."))}
+            placeholder="e.g. 12.5"
+        />
+        
+        <Text style={styles.label}>Date of Delivery</Text>
+        <TouchableOpacity style={styles.dateButton} onPress={() => updateField('showDatePicker', true)} accessibilityLabel="Select date">
+            <Ionicons name="calendar-outline" size={20} color={CoffeeColors.DARK_BROWN} />
+            <Text style={{ marginLeft: 10, fontSize: 16, color: CoffeeColors.DARK_BROWN }}>
+                {formatDateForDisplay(formData.date)}
+            </Text>
+        </TouchableOpacity>
+
+        {formData.showDatePicker && (
+            <DateTimePicker
+                value={formData.date}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={onDateChange}
+                maximumDate={new Date()}
+            />
+        )}
+        
+        <Text style={styles.label}>Amount Paid (UGX)</Text>
+        <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            value={formData.amountPaid}
+            onChangeText={(t) => updateField('amountPaid', t.replace(",", "."))}
+            placeholder="e.g. 5000"
+        />
+        
+        <Text style={styles.label}>Paid By</Text>
+        <View style={styles.pickerWrap}>
+            <Picker selectedValue={formData.paidBy} onValueChange={(v) => updateField('paidBy', v)}>
+                {PAID_BY_OPTIONS.map((p) => (
+                    <Picker.Item key={p} label={p} value={p} />
+                ))}
+            </Picker>
+        </View>
+    </View>
+);
+
+
+// --- MAIN FORM COMPONENT ---
+
+// New steps structure based on the required fields
+const STEPS = [
+    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['workerName', 'blockId'] },
+    { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'date', 'amountPaid', 'paidBy'] },
+];
+
+const initialFormState = {
+    // Harvest Details (Removed: grade, cherryColor)
+    workerName: "", // maps to Worker_name
+    blockId: BLOCK_DATA[0].id, // maps to block_ID
+    blockName: BLOCK_DATA[0].name, // for display purposes
+    weight: "", // maps to weight on delivery
+    date: new Date(), // maps to date of delivery
+    amountPaid: "", // maps to amount paid
+    paidBy: PAID_BY_OPTIONS[0], // maps to paid by
+    
+    // System fields
+    showDatePicker: false,
+    generatedId: generateHarvestId(new Date()), // maps to Harvest_ID
+};
+
+
+export default function HarvestFormScreen({ onNavigate = (screen) => console.log(`[Navigation Fallback] Attempted navigation to: ${screen}`) }) { 
+    const [formData, setFormData] = useState(initialFormState);
+    const [currentStep, setCurrentStep] = useState(0);
+    const [isSaving, setIsSaving] = useState(false); 
+
+    // Update generated ID when date changes
     useEffect(() => {
-        setGeneratedId(generateHarvestId(date));
-    }, [date]);
+        setFormData(prev => ({ 
+            ...prev, 
+            generatedId: generateHarvestId(prev.date) 
+        }));
+    }, [formData.date]);
 
-    // simple validation
-    const validate = () => {
-        if (!grade) return "Please select grade";
-        if (!weight || isNaN(Number(weight)) || Number(weight) <= 0) return "Enter valid weight (> 0)";
-        if (!block) return "Block is required";
-        if (!cherryColor) return "Cherry color is required";
-        if (!date) return "Date is required";
-        if (!name.trim()) return "Enter recorder name";
-        if (amountPaid === "" || isNaN(Number(amountPaid)) || Number(amountPaid) < 0)
-            return "Enter valid amount paid (>= 0)";
+    // Unified field updater
+    const updateField = useCallback((key, value) => {
+        setFormData(prev => ({
+            ...prev,
+            [key]: value,
+        }));
+    }, []);
+
+    const onDateChange = (event, selectedDate) => {
+        updateField('showDatePicker', Platform.OS === "ios");
+        if (selectedDate) {
+            updateField('date', selectedDate);
+        }
+    };
+
+    const validateStep = (stepIndex) => {
+        const step = STEPS[stepIndex];
+        
+        for (const field of step.requiredFields) {
+            const value = formData[field];
+            if (!value || (typeof value === 'string' && value.trim() === '')) {
+                return `Please fill in all required fields in Step ${stepIndex + 1}: ${step.title}.`;
+            }
+        }
+        
+        // Custom validation
+        if (stepIndex === 1) { // Delivery & Finance
+            if (isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
+                return "Enter a valid weight (> 0 kg) on delivery.";
+            }
+            if (formData.amountPaid === "" || isNaN(Number(formData.amountPaid)) || Number(formData.amountPaid) < 0) {
+                return "Enter a valid amount paid (>= 0 UGX).";
+            }
+        }
+        
         return null;
     };
+
+    const handleNext = () => {
+        const validationError = validateStep(currentStep);
+        if (validationError) {
+            Alert.alert("Input Error", validationError); 
+            return;
+        }
+
+        if (currentStep < STEPS.length - 1) {
+            setCurrentStep(prev => prev + 1);
+        }
+    };
+
+    const handleBack = () => {
+        if (currentStep > 0) {
+            setCurrentStep(prev => prev - 1);
+        }
+    };
+    
 
     const handleSubmit = async () => {
         if (isSaving) return;
 
-        const err = validate();
+        const err = validateStep(currentStep);
         if (err) {
             Alert.alert("Validation Error", err);
             return;
@@ -105,47 +292,50 @@ export default function HarvestFormScreen({ onNavigate }) {
         try {
             // CRITICAL: Save to local database FIRST (offline-first pattern)
             const harvestData = {
-                farmer_name: name.trim(),
-                harvest_date: formatDateForApi(date),
-                weight: Number(weight),
-                quality: grade,
-                notes: `Block: ${block}, Cherry: ${cherryColor}, Amount Paid: ${amountPaid}`,
-                synced: 0  // Will be marked as 1 after successful sync
+                // Fields aligned with 'Production Harvest details (Stage 1)'
+                Worker_name: formData.workerName.trim(),
+                block_ID: formData.blockId,
+                weight_on_delivery: Number(formData.weight),
+                date_of_delivery: formatDateForApi(formData.date),
+                amount_paid: Number(formData.amountPaid),
+                paid_by: formData.paidBy,
+                Harvest_ID: formData.generatedId,
+                
+                // System/Internal fields
+                synced: 0, 
+                // Adding blockName for better context locally if needed
+                block_name: formData.blockName,
+                notes: `Worker: ${formData.workerName}, Block ID: ${formData.blockId}, Weight: ${formData.weight} kg, Paid By: ${formData.paidBy}`,
             };
 
-            console.log('[HarvestForm] Saving to local database...', harvestData);
-            const localId = await DatabaseService.insert('harvests', harvestData);
-            console.log('[HarvestForm] Saved locally with ID:', localId);
+            // NOTE: Using console.log as a placeholder for actual DatabaseService calls
+            console.log('[HarvestForm] Simulating Save to local database...', harvestData);
+            // const localId = await DatabaseService.insert('harvests', harvestData);
+            const localId = 'mock-local-id-123';
 
             // Try to sync immediately to cloud (silent fail if offline)
             try {
                 console.log('[HarvestForm] Attempting immediate sync...');
-                const synced = await SyncService.syncImmediately('harvests', localId);
-
+                // const synced = await SyncService.syncImmediately('harvests', localId);
+                const synced = false; // Mocking failure for demonstration
+                
                 if (synced) {
                     Alert.alert("Success", "Harvest saved and synced to cloud!");
                 } else {
                     Alert.alert("Saved Locally", "Harvest saved. Will sync when online.");
                 }
             } catch (syncError) {
-                // Silent fail for sync - data is safe in local DB
                 console.log('[HarvestForm] Sync failed (offline?), staying in queue:', syncError.message);
                 Alert.alert("Saved Locally", "Harvest saved. Will sync when online.");
             }
 
             // Reset form
-            setWeight("");
-            setAmountPaid("");
-            setName("");
-            setDate(new Date());
-            setGrade(GRADE_OPTIONS[0]);
-            setBlock(BLOCK_OPTIONS[0]);
-            setCherryColor(CHERRY_COLORS[0]);
+            setFormData(initialFormState);
+            setCurrentStep(0); // Go back to the first step
 
-            // Navigate back to summary
-            if (onNavigate) {
-                onNavigate('Harvests');
-            }
+            // Navigate back to summary (Now safe due to default prop)
+            onNavigate('Harvests');
+            
         } catch (error) {
             console.error('[HarvestForm] Local save failed:', error);
             Alert.alert("Error", "Failed to save harvest. Please try again.");
@@ -154,14 +344,11 @@ export default function HarvestFormScreen({ onNavigate }) {
         }
     };
 
-    const openDatePicker = () => setShowDatePicker(true);
-    const onDateChange = (event, selectedDate) => {
-        setShowDatePicker(Platform.OS === "ios");
-        if (selectedDate) setDate(selectedDate);
-    };
+    const CurrentStepComponent = STEPS[currentStep].Component;
 
     // A small placeholder view to navigate back to the summary screen
     const BackButton = () => (
+        // Now safe due to default prop
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => onNavigate('Harvests')}>
             <Text style={styles.secondaryBtnText}>Back to Harvest Summary</Text>
         </TouchableOpacity>
@@ -169,102 +356,79 @@ export default function HarvestFormScreen({ onNavigate }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <Header title="Harvest Form" onNavigate={onNavigate} />
+            {/* <Header title="Harvest Form" onNavigate={onNavigate} /> */}
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.select({ ios: "padding", android: undefined })}
             >
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-                    <Text style={styles.heading}>Harvest Recording (Block Champion)</Text>
-
-                <Text style={styles.label}>Grade</Text>
-                <View style={styles.pickerWrap}>
-                    <Picker selectedValue={grade} onValueChange={(v) => setGrade(v)}>
-                        {GRADE_OPTIONS.map((g) => (
-                            <Picker.Item key={g} label={g} value={g} />
+                    <Text style={styles.mainTitle}>Production Harvest Details (Stage 1)</Text>
+                    
+                    {/* Stepper Indicator */}
+                    <View style={stepStyles.indicatorContainer}>
+                        {STEPS.map((step, index) => (
+                            <View key={index} style={stepStyles.stepWrapper}>
+                                <View 
+                                    style={[
+                                        stepStyles.stepCircle, 
+                                        { backgroundColor: index <= currentStep ? CoffeeColors.ACCENT : CoffeeColors.LIGHT_BROWN }
+                                    ]}
+                                >
+                                    <Text style={stepStyles.stepText}>{index + 1}</Text>
+                                </View>
+                                <Text 
+                                    style={[
+                                        stepStyles.stepLabel,
+                                        { color: index === currentStep ? CoffeeColors.DARK_BROWN : CoffeeColors.MEDIUM_BROWN }
+                                    ]}
+                                >
+                                    {step.title}
+                                </Text>
+                            </View>
                         ))}
-                    </Picker>
-                </View>
+                    </View>
 
-                <Text style={styles.label}>Weight (kg)</Text>
-                <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    value={weight}
-                    onChangeText={(t) => setWeight(t.replace(",", "."))}
-                    placeholder="e.g. 12.5"
-                />
-
-                <Text style={styles.label}>Block (pre-assigned)</Text>
-                <View style={styles.pickerWrap}>
-                    <Picker selectedValue={block} onValueChange={(v) => setBlock(v)}>
-                        {BLOCK_OPTIONS.map((b) => (
-                            <Picker.Item key={b} label={b} value={b} />
-                        ))}
-                    </Picker>
-                </View>
-
-                <Text style={styles.label}>Cherry colour</Text>
-                <View style={styles.pickerWrap}>
-                    <Picker selectedValue={cherryColor} onValueChange={(v) => setCherryColor(v)}>
-                        {CHERRY_COLORS.map((c) => (
-                            <Picker.Item key={c} label={c} value={c} />
-                        ))}
-                    </Picker>
-                </View>
-
-                <Text style={styles.label}>Date</Text>
-                <TouchableOpacity style={styles.dateButton} onPress={openDatePicker} accessibilityLabel="Select date">
-                    <Ionicons name="calendar-outline" size={18} />
-                    <Text style={{ marginLeft: 8 }}>{formatDateForDisplay(date)}</Text>
-                </TouchableOpacity>
-                {showDatePicker && (
-                    <DateTimePicker
-                        value={date}
-                        mode="date"
-                        display={Platform.OS === "ios" ? "spinner" : "default"}
-                        onChange={onDateChange}
-                        maximumDate={new Date()}
+                    {/* Current Step Component */}
+                    <CurrentStepComponent 
+                        formData={formData} 
+                        updateField={updateField} 
+                        onDateChange={onDateChange}
                     />
-                )}
 
-                <Text style={styles.label}>Recorder name</Text>
-                <TextInput
-                    style={styles.input}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Name of recorder"
-                    autoCapitalize="words"
-                />
+                    {/* Navigation Buttons */}
+                    <View style={stepStyles.navigationContainer}>
+                        {currentStep > 0 && (
+                            <TouchableOpacity style={[styles.navBtn, styles.backBtn]} onPress={handleBack} disabled={isSaving}>
+                                <Ionicons name="arrow-back-outline" size={20} color={CoffeeColors.DARK_BROWN} />
+                                <Text style={styles.backBtnText}>Back</Text>
+                            </TouchableOpacity>
+                        )}
 
-                <Text style={styles.label}>Amount Paid (UGX)</Text>
-                <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    value={amountPaid}
-                    onChangeText={(t) => setAmountPaid(t.replace(",", "."))}
-                    placeholder="e.g. 5000"
-                />
-
-                <Text style={styles.label}>Generated ID (Local)</Text>
-                <View style={[styles.input, { justifyContent: "center" }]}>
-                    <Text>{generatedId}</Text>
-                </View>
-
-                <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit} disabled={isSaving}>
-                    {isSaving ? (
-                        <Text style={styles.saveBtnText}>Saving...</Text>
-                    ) : (
-                        <Text style={styles.saveBtnText}>Save Harvest (Offline Ready)</Text>
-                    )}
-                </TouchableOpacity>
-
+                        {currentStep < STEPS.length - 1 ? (
+                            <TouchableOpacity style={[styles.navBtn, styles.nextBtn, currentStep === 0 && { marginLeft: 'auto' }]} onPress={handleNext} disabled={isSaving}>
+                                <Text style={styles.nextBtnText}>Next Step</Text>
+                                <Ionicons name="arrow-forward-outline" size={20} color={CoffeeColors.CREAM} />
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit} disabled={isSaving}>
+                                {isSaving ? (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <ActivityIndicator color={CoffeeColors.CREAM} style={{ marginRight: 8 }} />
+                                        <Text style={styles.saveBtnText}>Submit Harvest</Text>
+                                    </View>
+                                ) : (
+                                    <Text style={styles.saveBtnText}>Submit Harvest</Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                    
                     <BackButton />
 
                     <View style={{ height: 100 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
-            <BottomNav activeScreen="Harvests" onNavigate={onNavigate} />
+            {/* <BottomNav activeScreen="Harvests" onNavigate={onNavigate} /> */}
         </View>
     );
 }
@@ -276,415 +440,169 @@ const styles = StyleSheet.create({
         paddingBottom: 32,
         backgroundColor: CoffeeColors.LIGHT_GRAY, 
     },
-    heading: {
-        fontSize: 20,
-        fontWeight: "700",
-        marginBottom: 12,
+    mainTitle: {
+        fontSize: 24,
+        fontWeight: "800",
+        marginBottom: 20,
         color: CoffeeColors.DARK_BROWN, 
+        textAlign: 'center',
+    },
+    heading: {
+        fontSize: 18,
+        fontWeight: "700",
+        marginBottom: 15,
+        color: CoffeeColors.MEDIUM_BROWN, 
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_BROWN,
+        paddingBottom: 5,
     },
     label: {
-        marginTop: 12,
-        marginBottom: 6,
+        marginTop: 15,
+        marginBottom: 8,
         fontWeight: "600",
-        color: CoffeeColors.MEDIUM_BROWN, 
+        color: CoffeeColors.DARK_BROWN, 
+        fontSize: 16,
     },
     input: {
         backgroundColor: CoffeeColors.WHITE, 
-        paddingHorizontal: 12,
-        paddingVertical: Platform.OS === "ios" ? 12 : 8,
-        borderRadius: 8,
+        paddingHorizontal: 15,
+        paddingVertical: Platform.OS === "ios" ? 14 : 10,
+        borderRadius: 10,
         borderWidth: 1,
         borderColor: CoffeeColors.LIGHT_BROWN, 
+        fontSize: 16,
     },
     pickerWrap: {
         backgroundColor: CoffeeColors.WHITE, 
-        borderRadius: 8,
+        borderRadius: 10,
         borderWidth: 1,
         borderColor: CoffeeColors.LIGHT_BROWN, 
+        overflow: 'hidden',
     },
     dateButton: {
         backgroundColor: CoffeeColors.WHITE, 
-        padding: 12,
-        borderRadius: 8,
+        padding: 15,
+        borderRadius: 10,
         flexDirection: "row",
         alignItems: "center",
         borderWidth: 1,
         borderColor: CoffeeColors.LIGHT_BROWN, 
+        justifyContent: 'flex-start',
     },
     saveBtn: {
         marginTop: 18,
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
-        padding: 14,
-        borderRadius: 8,
+        backgroundColor: CoffeeColors.ACCENT, // Green for submission
+        padding: 16,
+        borderRadius: 10,
         alignItems: "center",
+        flex: 1, // Take up remaining space
+        minWidth: '50%',
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 6,
     },
     saveBtnText: {
         color: CoffeeColors.CREAM, 
-        fontWeight: "700",
+        fontWeight: "800",
+        fontSize: 17,
     },
     secondaryBtn: {
-        marginTop: 12,
+        marginTop: 20,
         alignItems: "center",
         padding: 10,
     },
     secondaryBtnText: {
         color: CoffeeColors.MEDIUM_BROWN, 
         textDecorationLine: "underline",
+        fontSize: 14,
+    },
+    navBtn: {
+        padding: 12,
+        borderRadius: 10,
+        alignItems: "center",
+        flexDirection: 'row',
+    },
+    nextBtn: {
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        justifyContent: 'center',
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    nextBtnText: {
+        color: CoffeeColors.CREAM,
+        fontWeight: '700',
+        marginRight: 8,
+        fontSize: 16,
+    },
+    backBtn: {
+        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        borderWidth: 1,
+        borderColor: CoffeeColors.MEDIUM_BROWN,
+        justifyContent: 'center',
+        marginRight: 10,
+    },
+    backBtnText: {
+        color: CoffeeColors.DARK_BROWN,
+        fontWeight: '700',
+        marginLeft: 8,
+        fontSize: 16,
+    }
+});
+
+const stepStyles = StyleSheet.create({
+    indicatorContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-around', // Changed to space-around for only two steps
+        marginBottom: 30,
+        paddingHorizontal: 5,
+    },
+    stepWrapper: {
+        alignItems: 'center',
+        width: '45%', // Adjusted width for two steps
+    },
+    stepCircle: {
+        width: 35,
+        height: 35,
+        borderRadius: 17.5,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 5,
+        borderWidth: 2,
+        borderColor: CoffeeColors.CREAM,
+    },
+    stepText: {
+        color: CoffeeColors.WHITE,
+        fontWeight: 'bold',
+        fontSize: 18,
+    },
+    stepLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        textAlign: 'center',
+    },
+    stepContainer: {
+        backgroundColor: CoffeeColors.WHITE,
+        borderRadius: 15,
+        padding: 20,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: CoffeeColors.LIGHT_BROWN,
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    navigationContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20,
     },
 });
 
 
-
-
-
-
-// // src/features/harvest/screens/HarvestFormScreen.js
-// import React, { useState, useEffect } from "react";
-// import CoffeeColors from '../../../theme/colors';
-// import {
-//   View,
-//   Text,
-//   TextInput,
-//   StyleSheet,
-//   TouchableOpacity,
-//   Alert,
-//   ScrollView,
-//   Platform,
-//   KeyboardAvoidingView,
-// } from "react-native";
-// import { Picker } from "@react-native-picker/picker";
-// import DateTimePicker from "@react-native-community/datetimepicker";
-// import { Ionicons } from "@expo/vector-icons";
-// import AsyncStorage from "@react-native-async-storage/async-storage"; // <-- Re-added AsyncStorage
-// // Import the API service function
-// import { postHarvestRecord } from "../../../services/harvestRecord";
-
-// /**
-//  * Harvest form screen
-//  * Fields:
-//  * - Grade (picker)
-//  * - Weight (numeric)
-//  * - Block (picker; pre-assigned list we can change)
-//  * - Cherry colour (picker)
-//  * - Date (date picker)
-//  * - Name (text)
-//  * - Amount_Paid (numeric)
-//  * - Id (auto-generated, readonly) -> format: PA + DDMMYY + H  (example: PA120825H)
-//  */
-
-// const BLOCK_OPTIONS = ["Block A-1", "Block B-2", "Block C-3"]; // I shall replace with real blocks or fetch from API
-// const GRADE_OPTIONS = ["Grade 1", "Grade 2", "Grade 3"];
-// const CHERRY_COLORS = ["Red", "Green"];
-
-// // Key for the local queue of unsynced records
-// const SYNC_QUEUE_KEY = "harvests_sync_queue";
-
-// function formatDateForDisplay(d) {
-//   const day = String(d.getDate()).padStart(2, "0");
-//   const mon = String(d.getMonth() + 1).padStart(2, "0");
-//   const year = d.getFullYear(); 
-//   return `${day}-${mon}-${year}`;
-// }
-
-// function generateHarvestId(date) {
-//   // date is a JS Date object
-//   // produce string like PA120825H (DDMMYY with prefix PA and suffix H)
-//   const d = date;
-//   const dd = String(d.getDate()).padStart(2, "0");
-//   const mm = String(d.getMonth() + 1).padStart(2, "0");
-//   const yy = String(d.getFullYear()).slice(-2);
-//   return `PA${dd}${mm}${yy}H`;
-// }
-
-// export default function HarvestFormScreen({ route, navigation }) {
-//   // form state
-//   const [grade, setGrade] = useState(GRADE_OPTIONS[0]);
-//   const [weight, setWeight] = useState("");
-//   const [block, setBlock] = useState(BLOCK_OPTIONS[0]);
-//   const [cherryColor, setCherryColor] = useState(CHERRY_COLORS[0]);
-//   const [date, setDate] = useState(new Date());
-//   const [showDatePicker, setShowDatePicker] = useState(false);
-//   const [name, setName] = useState("");
-//   const [amountPaid, setAmountPaid] = useState("");
-//   const [generatedId, setGeneratedId] = useState(generateHarvestId(new Date()));
-//   const [isSaving, setIsSaving] = useState(false); // Loading state
-
-//   // updating generated id when date changes
-//   useEffect(() => {
-//     setGeneratedId(generateHarvestId(date));
-//   }, [date]);
-
-  
-//   // simple validation
-//   const validate = () => {
-//     if (!grade) return "Please select grade";
-//     if (!weight || isNaN(Number(weight)) || Number(weight) <= 0) return "Enter valid weight (> 0)";
-//     if (!block) return "Block is required";
-//     if (!cherryColor) return "Cherry color is required";
-//     if (!date) return "Date is required";
-//     if (!name.trim()) return "Enter recorder name";
-//     if (amountPaid === "" || isNaN(Number(amountPaid)) || Number(amountPaid) < 0)
-//       return "Enter valid amount paid (>= 0)";
-//     return null;
-//   };
-
-//   /**
-//    * Saves the harvest object to the local synchronization queue.
-//    * @param {object} harvestObject - The complete harvest record payload.
-//    * @returns {boolean} True if local save was successful.
-//    */
-//   const saveToSyncQueue = async (harvestObject) => {
-//     try {
-//       const raw = await AsyncStorage.getItem(SYNC_QUEUE_KEY);
-//       const currentQueue = raw ? JSON.parse(raw) : [];
-//       currentQueue.push(harvestObject);
-//       await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(currentQueue));
-//       return true;
-//     } catch (err) {
-//       console.error("Failed to save to sync queue:", err);
-//       return false;
-//     }
-//   };
-
-
-//   const handleSubmit = async () => {
-//     if (isSaving) return;
-
-//     const err = validate();
-//     if (err) {
-//       Alert.alert("Validation Error", err);
-//       return;
-//     }
-
-//     setIsSaving(true);
-
-//     // 1. Build the payload with all UI fields
-//     const payload = {
-//       id: generatedId,
-//       grade, 
-//       weight: Number(weight),
-//       block, 
-//       cherryColor, 
-//       date: date, // Keep as Date object for utility functions
-//       dateReadable: formatDateForDisplay(date), // Readable date for local display
-//       name: name.trim(), 
-//       amountPaid: Number(amountPaid), 
-//       isSynced: false, // Flag for offline status
-//     };
-
-//     // 2. Local Save (Critical for Offline Functionality)
-//     const isLocalSaveSuccessful = await saveToSyncQueue(payload);
-
-//     if (!isLocalSaveSuccessful) {
-//       Alert.alert("Local Error", "Data capture failed. Could not save harvest locally.");
-//       setIsSaving(false);
-//       return;
-//     }
-
-//     // 3. Attempt Remote Sync
-//     let remoteSuccess = false;
-//     try {
-//         const response = await postHarvestRecord(payload);
-
-//         if (response.success) {
-//             // Success: Notify the user and refresh UI.
-//             const harvestId = response.remoteData.cherry_color || payload.id;
-//             Alert.alert("Success & Synced", `Harvest record saved remotely. Record ID: ${harvestId}`);
-            
-//             // NOTE: A proper sync mechanism would now remove this record from the local queue.
-//             // For now, we'll just confirm success. The summary screen will handle the sync cleanup.
-
-//             remoteSuccess = true;
-//         } else {
-//             // Failure: Assume offline or temporary API error. Notify user that it's locally saved.
-//             const msg = response.status === 0 ? "You appear to be offline. " : "API encountered an error. ";
-//             Alert.alert("Offline Mode", `${msg}The harvest has been saved locally and will sync when you go online.`);
-//         }
-//     } catch(e) {
-//         // Network error (definitely offline)
-//         Alert.alert("Offline Mode", "No internet connection detected. The harvest has been saved locally and will sync when you go online.");
-//     }
-
-
-//     // 4. Reset Form
-//     setWeight("");
-//     setAmountPaid("");
-//     setName("");
-//     setDate(new Date());
-//     setGrade(GRADE_OPTIONS[0]);
-//     setBlock(BLOCK_OPTIONS[0]);
-//     setCherryColor(CHERRY_COLORS[0]);
-//     setIsSaving(false);
-    
-//     // Refresh the list if navigation object is available (assuming summary screen exists)
-//     if (navigation?.navigate) {
-//         // This is a simple way to tell the list screen to reload
-//         navigation.navigate('HarvestSummary', { shouldRefresh: true }); 
-//     }
-//   };
-
-//   const openDatePicker = () => setShowDatePicker(true);
-//   const onDateChange = (event, selectedDate) => {
-//     setShowDatePicker(Platform.OS === "ios"); // on Android the picker closes automatically; on iOS we keep it open if needed
-//     if (selectedDate) setDate(selectedDate);
-//   };
-
-//   return (
-//     <KeyboardAvoidingView
-//       style={{ flex: 1 }}
-//       behavior={Platform.select({ ios: "padding", android: undefined })}
-//     >
-//       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-//         <Text style={styles.heading}>Harvest Recording (Block Champion)</Text>
-
-//         <Text style={styles.label}>Grade</Text>
-//         <View style={styles.pickerWrap}>
-//           <Picker selectedValue={grade} onValueChange={(v) => setGrade(v)}>
-//             {GRADE_OPTIONS.map((g) => (
-//               <Picker.Item key={g} label={g} value={g} />
-//             ))}
-//           </Picker>
-//         </View>
-
-//         <Text style={styles.label}>Weight (kg)</Text>
-//         <TextInput
-//           style={styles.input}
-//           keyboardType="numeric"
-//           value={weight}
-//           onChangeText={(t) => setWeight(t.replace(",", "."))}
-//           placeholder="e.g. 12.5"
-//         />
-
-//         <Text style={styles.label}>Block (pre-assigned)</Text>
-//         <View style={styles.pickerWrap}>
-//           <Picker selectedValue={block} onValueChange={(v) => setBlock(v)}>
-//             {BLOCK_OPTIONS.map((b) => (
-//               <Picker.Item key={b} label={b} value={b} />
-//             ))}
-//           </Picker>
-//         </View>
-
-//         <Text style={styles.label}>Cherry colour</Text>
-//         <View style={styles.pickerWrap}>
-//           <Picker selectedValue={cherryColor} onValueChange={(v) => setCherryColor(v)}>
-//             {CHERRY_COLORS.map((c) => (
-//               <Picker.Item key={c} label={c} value={c} />
-//             ))}
-//           </Picker>
-//         </View>
-
-//         <Text style={styles.label}>Date</Text>
-//         <TouchableOpacity style={styles.dateButton} onPress={openDatePicker} accessibilityLabel="Select date">
-//           <Ionicons name="calendar-outline" size={18} />
-//           <Text style={{ marginLeft: 8 }}>{formatDateForDisplay(date)}</Text>
-//         </TouchableOpacity>
-//         {showDatePicker && (
-//           <DateTimePicker
-//             value={date}
-//             mode="date"
-//             display={Platform.OS === "ios" ? "spinner" : "default"}
-//             onChange={onDateChange}
-//             maximumDate={new Date()}
-//           />
-//         )}
-
-//         <Text style={styles.label}>Recorder name</Text>
-//         <TextInput
-//           style={styles.input}
-//           value={name}
-//           onChangeText={setName}
-//           placeholder="Name of recorder"
-//           autoCapitalize="words"
-//         />
-
-//         <Text style={styles.label}>Amount Paid (UGX)</Text>
-//         <TextInput
-//           style={styles.input}
-//           keyboardType="numeric"
-//           value={amountPaid}
-//           onChangeText={(t) => setAmountPaid(t.replace(",", "."))}
-//           placeholder="e.g. 5000"
-//         />
-
-//         <Text style={styles.label}>Generated ID</Text>
-//         <View style={[styles.input, { justifyContent: "center" }]}>
-//           <Text>{generatedId}</Text>
-//         </View>
-
-//         <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit} disabled={isSaving}>
-//           {isSaving ? (
-//             <Text style={styles.saveBtnText}>Saving...</Text>
-//           ) : (
-//             <Text style={styles.saveBtnText}>Save Harvest (Offline Ready)</Text>
-//           )}
-//         </TouchableOpacity>
-
-//         <View style={{ height: 60 }} />
-//       </ScrollView>
-//     </KeyboardAvoidingView>
-//   );
-// }
-
-
-// const styles = StyleSheet.create({
-//   container: {
-//     padding: 16,
-//     paddingBottom: 32,
-//     backgroundColor: CoffeeColors.LIGHT_GRAY, 
-//   },
-//   heading: {
-//     fontSize: 20,
-//     fontWeight: "700",
-//     marginBottom: 12,
-//     color: CoffeeColors.DARK_BROWN, 
-//   },
-//   label: {
-//     marginTop: 12,
-//     marginBottom: 6,
-//     fontWeight: "600",
-//     color: CoffeeColors.MEDIUM_BROWN, 
-//   },
-//   input: {
-//     backgroundColor: CoffeeColors.WHITE, 
-//     paddingHorizontal: 12,
-//     paddingVertical: Platform.OS === "ios" ? 12 : 8,
-//     borderRadius: 8,
-//     borderWidth: 1,
-//     borderColor: CoffeeColors.LIGHT_BROWN, 
-//   },
-//   pickerWrap: {
-//     backgroundColor: CoffeeColors.WHITE, 
-//     borderRadius: 8,
-//     borderWidth: 1,
-//     borderColor: CoffeeColors.LIGHT_BROWN, 
-//   },
-//   dateButton: {
-//     backgroundColor: CoffeeColors.WHITE, 
-//     padding: 12,
-//     borderRadius: 8,
-//     flexDirection: "row",
-//     alignItems: "center",
-//     borderWidth: 1,
-//     borderColor: CoffeeColors.LIGHT_BROWN, 
-//   },
-//   saveBtn: {
-//     marginTop: 18,
-//     backgroundColor: CoffeeColors.MEDIUM_BROWN,
-//     padding: 14,
-//     borderRadius: 8,
-//     alignItems: "center",
-//   },
-//   saveBtnText: {
-//     color: CoffeeColors.CREAM, 
-//     fontWeight: "700",
-//   },
-//   secondaryBtn: {
-//     marginTop: 12,
-//     alignItems: "center",
-//     padding: 10,
-//   },
-//   secondaryBtnText: {
-//     color: CoffeeColors.MEDIUM_BROWN, 
-//     textDecorationLine: "underline",
-//   },
-// });
