@@ -1,7 +1,7 @@
 // Shared constant lists used across the app (pickers, option lists)
 // Keep these centralized so multiple screens/components can reuse them.
 
-export const DISTRICTS = ['Kra', 'Mbale', 'Jinja', 'Mbarara', 'Kampala', 'Wakiso'];
+export const DISTRICTS = ['Wakiso', 'Mbale', 'Luwero', 'Mukono', 'Kampala', 'Masaka'];
 
 export const SUB_COUNTIES = [
   'Bussi Sub-County',
@@ -63,12 +63,12 @@ export const PARISHES_BY_SUB_COUNTY = {
   'Kyengera Town Council': ['Buddo', 'Kasenge', 'Katereke', 'Kikajjo', 'Kitemu-Kisozi', 'Kyengera Town Board', 'Maya', 'Nabbingo', 'Nanziga', 'Nsangi']
 };
 export const GENDERS = ['Male', 'Female', 'Other'];
-export const COFFEE_VARIETIES = ['Bourbon', 'Typica', 'Caturra', 'SL28', 'Other'];
+export const COFFEE_VARIETIES = ['Arabica', 'Robusta', 'Liberica'];
 export const LAND_OWNERSHIP = ['leased', 'communal', 'owned'];
 export const SEEDLING_SOURCES = ['nursery', 'own_cooperative', 'bought'];
 export const IRRIGATION_OPTIONS = ['none', 'river', 'sprinkler', 'drip'];
 export const FERTILIZERS = ['Organic', 'Inorganic', 'Mixed'];
-export const COFFEE_TYPES = ['Arabica', 'Robusta', 'Other'];
+export const COFFEE_TYPES = ['Arabica', 'Robusta', 'Liberica'];
 export const YES_NO_OPTIONS = ['Yes', 'No'];
 export const SPACING_OPTIONS = ['3 metres by 3 metres', '2.4 metres by 2.4 metres', '2 metres by 1 metres'];
 export const STANDARD_PRACTICES = ['Inter-cropping', 'Pruning', 'Mulching', 'Stumping', 'Agro-forestry', 'Fertilizing', 'Pest control'];

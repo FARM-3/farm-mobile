@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -10,7 +10,7 @@ import CoffeeColors from '../../../theme/colors';
 import Header from '../../../components/Header';
 import BottomNav from '../../../components/BottomNav';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants'; 
-import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest } from '../../../utils/firebaseSetup';
+import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
 
 
@@ -65,6 +65,7 @@ const farmerFieldDefinitions = [
             { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no' },
             { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source' },
             { key: 'seedling_type', label: 'Type of seedlings', keyboardType: 'default' },
+            { key: 'age_of_seedlings', label: 'Age of seedlings *', keyboardType: 'default', required: true },
         ]
     },
     // Step 4: Practices & Chemicals
@@ -108,7 +109,7 @@ const farmerTableFields = [
     { key: 'name', label: 'Name', width: '30%' },
     { key: 'contact', label: 'Contact', width: '20%' },
     { key: 'district', label: 'District', width: '20%' },
-    { key: 'num_trees', label: 'Trees', width: '15%' },
+    { key: 'number_of_trees', label: 'Trees', width: '15%' },  // FIXED: Changed from num_trees to number_of_trees
     { key: 'uid', label: 'UID', width: '15%' }, // Use UID for farmers
 ];
 
@@ -239,7 +240,7 @@ const CustomDatePicker = ({ label, value, onChange }) => {
         if (selectedDate) {
             setDate(selectedDate);
             // Ensure date is formatted as YYYY-MM-DD
-            onChange(selectedDate.toISOString().split('T')[0]); 
+            onChange(selectedDate.toISOString().split('T')[0]);
         }
     };
 
@@ -263,6 +264,93 @@ const CustomDatePicker = ({ label, value, onChange }) => {
                     onChange={handleDateChange}
                     maximumDate={new Date()}
                 />
+            )}
+        </View>
+    );
+};
+
+/**
+ * AutocompleteInput - Provides autocomplete suggestions for farmer UID
+ * Shows dropdown with matching farmers as user types
+ */
+const AutocompleteInput = ({ label, value, onChangeText, onSelect, suggestions = [], keyboardType = 'default', placeholder = '' }) => {
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+
+    // Filter suggestions based on input value
+    useEffect(() => {
+        if (value && value.length > 0) {
+            const searchText = value.toLowerCase();
+            const filtered = suggestions.filter(item => {
+                const farmerId = (item.farmer_id || item.uid || item.id || '').toLowerCase();
+                const farmerName = `${item.first_name || ''} ${item.last_name || ''}`.toLowerCase();
+                const contact = (item.contact || '').toLowerCase();
+
+                return farmerId.includes(searchText) || farmerName.includes(searchText) || contact.includes(searchText);
+            }).slice(0, 5); // Limit to 5 suggestions
+
+            setFilteredSuggestions(filtered);
+            setShowSuggestions(filtered.length > 0);
+        } else {
+            setFilteredSuggestions([]);
+            setShowSuggestions(false);
+        }
+    }, [value, suggestions]);
+
+    const handleSelect = (item) => {
+        const selectedId = item.farmer_id || item.uid || item.id;
+        onSelect(item, selectedId);
+        setShowSuggestions(false);
+    };
+
+    return (
+        <View style={{ marginBottom: 15, zIndex: 1000 }}>
+            {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
+            <TextInput
+                value={value}
+                onChangeText={onChangeText}
+                keyboardType={keyboardType}
+                style={styles.textInput}
+                placeholder={placeholder}
+                placeholderTextColor={CoffeeColors.GRAY_TEXT_LIGHT}
+                onFocus={() => {
+                    if (value && filteredSuggestions.length > 0) {
+                        setShowSuggestions(true);
+                    }
+                }}
+            />
+            {showSuggestions && filteredSuggestions.length > 0 && (
+                <View style={styles.autocompleteDropdown}>
+                    <ScrollView style={styles.autocompleteScroll} nestedScrollEnabled={true}>
+                        {filteredSuggestions.map((item, index) => {
+                            const farmerId = item.farmer_id || item.uid || item.id;
+                            const farmerName = `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'Unnamed';
+                            const contact = item.contact || 'No contact';
+
+                            return (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={styles.autocompleteSuggestion}
+                                    onPress={() => handleSelect(item)}
+                                >
+                                    <View>
+                                        <Text style={styles.autocompleteName}>{farmerName}</Text>
+                                        <Text style={styles.autocompleteDetails}>
+                                            ID: {farmerId} | {contact}
+                                        </Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={20} color={CoffeeColors.GRAY_TEXT} />
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                    <TouchableOpacity
+                        style={styles.autocompleteClose}
+                        onPress={() => setShowSuggestions(false)}
+                    >
+                        <Text style={styles.autocompleteCloseText}>Close</Text>
+                    </TouchableOpacity>
+                </View>
             )}
         </View>
     );
@@ -292,25 +380,110 @@ const ProgressBar = ({ currentStep, totalSteps }) => {
 };
 
 // --- NEW/REPLACED Table Component: Searchable Data List ---
-const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, isFarmer }) => {
+const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, isFarmer, farmersList = [] }) => {
     const [searchText, setSearchText] = useState('');
-    
+
     // Filtering logic based on search text across all listed fields
+    // FIXED: Ensure records is always an array to prevent .filter() errors
+    // FEATURE: Sort by newest first and show last 10 records
     const filteredRecords = useMemo(() => {
-        if (!searchText) return records;
-        const lowerSearch = searchText.toLowerCase();
-        
-        return records.filter(record => 
-            fields.some(f => 
-                String(record[f.key] || '').toLowerCase().includes(lowerSearch)
-            )
-        );
-    }, [records, fields, searchText]);
+        const safeRecords = Array.isArray(records) ? records : [];
+
+        // Sort by timestamp/id (newest first) - assumes records have timestamp or id field
+        const sortedRecords = [...safeRecords].sort((a, b) => {
+            // Try to sort by timestamp first
+            if (a.timestamp && b.timestamp) {
+                return b.timestamp - a.timestamp;
+            }
+            // Fallback: sort by ID (assuming higher ID = newer)
+            if (a.id && b.id) {
+                return String(b.id).localeCompare(String(a.id));
+            }
+            return 0;
+        });
+
+        // If no search text, return first 10 records (newest)
+        if (!searchText || searchText.trim() === '') {
+            return sortedRecords.slice(0, 10);
+        }
+
+        // If searching, filter and return up to 10 matching records
+        const lowerSearch = searchText.toLowerCase().trim();
+        const filtered = sortedRecords.filter(record => {
+            // For farmers: search in first_name, last_name, contact, district, farmer_id, uid
+            if (isFarmer) {
+                const searchableText = [
+                    record.first_name,
+                    record.last_name,
+                    `${record.first_name} ${record.last_name}`,
+                    record.contact,
+                    record.district,
+                    record.farmer_id,
+                    record.uid,
+                    record.id
+                ].filter(Boolean).join(' ').toLowerCase();
+
+                return searchableText.includes(lowerSearch);
+            } else {
+                // For harvests: search in farmer UID and lookup farmer name
+                const farmerUID = record.name || record.farmer_uid;
+                const farmer = Array.isArray(farmersList) ? farmersList.find(f =>
+                    String(f.farmer_id) === String(farmerUID) ||
+                    String(f.uid) === String(farmerUID) ||
+                    String(f.id) === String(farmerUID)
+                ) : null;
+
+                const farmerName = farmer ? `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() : '';
+                const searchableText = [
+                    farmerName,
+                    farmerUID,
+                    record.id,
+                    record.date_of_delivery,
+                    record.paid_by
+                ].filter(Boolean).join(' ').toLowerCase();
+
+                return searchableText.includes(lowerSearch);
+            }
+        });
+
+        return filtered.slice(0, 10);
+    }, [records, fields, searchText, isFarmer, farmersList]);
     
     // Renders the summary row for the FlatList
     const renderItem = ({ item }) => {
-        // Find a fallback name if farmer_name isn't present for harvests
-        const nameKey = isFarmer ? 'name' : (item.farmer_name ? 'farmer_name' : 'farmer_uid');
+        // For farmers: compute name from first_name + last_name if 'name' field doesn't exist
+        // For harvests: lookup farmer name from farmersList using the UID/name field
+        let displayName = 'N/A';
+        let displayId = 'No ID';
+
+        if (isFarmer) {
+            // Farmer record - construct name from first_name and last_name
+            displayName = item.name || `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'N/A';
+            displayId = item.uid || item.farmer_id || item.id || 'No ID';
+        } else {
+            // Harvest record - lookup farmer name from the farmers list
+            // Django returns farmer UID in the 'name' field, so we need to find the actual farmer
+            const farmerUID = item.name || item.farmer_name || item.farmer_uid;
+            if (farmerUID && Array.isArray(farmersList)) {
+                // Try to find the farmer in the farmers list
+                const farmer = farmersList.find(f =>
+                    String(f.farmer_id) === String(farmerUID) ||
+                    String(f.uid) === String(farmerUID) ||
+                    String(f.id) === String(farmerUID)
+                );
+
+                if (farmer) {
+                    displayName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || farmer.name || farmerUID;
+                } else {
+                    // Farmer not found in list, just show the UID
+                    displayName = farmerUID;
+                }
+            } else {
+                displayName = farmerUID || 'N/A';
+            }
+            displayId = item.id || item.harvest_id || 'No ID';
+        }
+
         const secondKey = fields.length > 1 ? fields[1].key : null;
         const thirdKey = fields.length > 2 ? fields[2].key : null;
 
@@ -318,15 +491,36 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
             <TouchableOpacity style={styles.dataListItem} onPress={() => onEdit(item)}>
                 <View style={{ flex: 1 }}>
                     <Text style={styles.dataListItemTitle}>
-                        {String(item[nameKey] || 'N/A')}
-                        <Text style={styles.dataListItemUID}> ({item.uid || item.id || 'No ID'})</Text>
+                        {String(displayName)}
+                        <Text style={styles.dataListItemUID}> ({displayId})</Text>
                     </Text>
                     <Text style={styles.dataListItemSubtitle}>
                         {secondKey ? `${fields[1].label}: ${item[secondKey] || 'N/A'}` : ''}
                         {thirdKey ? ` | ${fields[2].label}: ${item[thirdKey] || 'N/A'}` : ''}
                     </Text>
                 </View>
-                <Ionicons name="chevron-forward-outline" size={20} color={CoffeeColors.GRAY_TEXT} />
+
+                {/* Edit and Delete Icon Buttons */}
+                <View style={styles.recordActions}>
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={(e) => {
+                            e.stopPropagation(); // Prevent triggering the main onPress
+                            onEdit(item, true); // Pass true to indicate edit mode vs view mode
+                        }}
+                    >
+                        <Ionicons name="pencil" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={(e) => {
+                            e.stopPropagation(); // Prevent triggering the main onPress
+                            onDelete(item);
+                        }}
+                    >
+                        <Ionicons name="trash" size={20} color={CoffeeColors.ERROR_RED || '#d32f2f'} />
+                    </TouchableOpacity>
+                </View>
             </TouchableOpacity>
         );
     };
@@ -335,14 +529,36 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
         <View style={styles.recordsContainer}>
             <View style={styles.tableHeaderSection}>
                 <Text style={styles.tableTitle}>{title}</Text>
-                <CustomInput
-                    placeholder="Search by name, ID, or contact..."
-                    value={searchText}
-                    onChangeText={setSearchText}
-                />
-                <TouchableOpacity style={{ marginTop: 8 }} onPress={onExit}>
-                    <Text style={styles.backToFormText}>← Back to form ({filteredRecords.length} records)</Text>
-                </TouchableOpacity>
+
+                {/* Search field with icon button */}
+                <View style={styles.searchContainer}>
+                    <View style={{ flex: 1 }}>
+                        <CustomInput
+                            placeholder="Search by name, ID, or contact..."
+                            value={searchText}
+                            onChangeText={setSearchText}
+                        />
+                    </View>
+                    <TouchableOpacity
+                        style={styles.searchButton}
+                        onPress={() => {/* Search is automatic via useMemo */}}
+                    >
+                        <Ionicons name="search" size={22} color={CoffeeColors.WHITE} />
+                    </TouchableOpacity>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
+                    <TouchableOpacity
+                        style={[styles.actionButton, { backgroundColor: CoffeeColors.MEDIUM_BROWN, flex: 1, marginRight: 8 }]}
+                        onPress={onExit}
+                    >
+                        <Ionicons name="add-circle" size={20} color={CoffeeColors.WHITE} style={{ marginRight: 8 }} />
+                        <Text style={styles.actionButtonText}>Add {isFarmer ? 'Farmer' : 'Harvest'}</Text>
+                    </TouchableOpacity>
+                    <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                        <Text style={styles.recordCount}>{filteredRecords.length} record{filteredRecords.length !== 1 ? 's' : ''}</Text>
+                    </View>
+                </View>
             </View>
             
             {filteredRecords.length > 0 ? (
@@ -361,12 +577,242 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
 
 
 // ===============================================
-// === 3. MAIN COMPONENT (POLISHED)            ===
+// === 3. FARMER DETAIL VIEW COMPONENT        ===
+// ===============================================
+
+/**
+ * FarmerDetailView - Mobile-friendly detail screen for viewing farmer information
+ * Displays all farmer data organized in logical sections with proper labels
+ */
+const FarmerDetailView = ({ farmer, onBack }) => {
+    if (!farmer) return null;
+
+    // Helper to format field values properly
+    const formatValue = (value) => {
+        if (value === null || value === undefined || value === '') return 'Not provided';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'Not provided';
+        return String(value);
+    };
+
+    // Field sections for organized display
+    const sections = [
+        {
+            title: 'Personal Information',
+            fields: [
+                { label: 'Full Name', value: `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() },
+                { label: 'Farmer ID', value: farmer.farmer_id || farmer.uid || farmer.id },
+                { label: 'Gender', value: farmer.gender },
+                { label: 'Date of Birth', value: farmer.date_of_birth },
+                { label: 'NIN', value: farmer.nin },
+                { label: 'Contact', value: farmer.contact },
+                { label: 'Email', value: farmer.email },
+            ]
+        },
+        {
+            title: 'Location Details',
+            fields: [
+                { label: 'District', value: farmer.district },
+                { label: 'Sub-county', value: farmer.sub_county },
+                { label: 'Parish', value: farmer.parish },
+                { label: 'Village', value: farmer.village },
+                { label: 'GPS Coordinates', value: farmer.gps_coordinates || farmer.gps },
+                { label: 'Nearest Landmark', value: farmer.nearest_landmark },
+            ]
+        },
+        {
+            title: 'Farm Information',
+            fields: [
+                { label: 'Coffee Variety', value: farmer.coffee_variety },
+                { label: 'Number of Trees', value: farmer.number_of_trees },
+                { label: 'Owns All Trees', value: farmer.ownership_of_trees },
+                { label: 'Date Planted', value: farmer.planted_date },
+                { label: 'Spacing Between Trees', value: farmer.spacing_between_trees || farmer.spacing },
+                { label: 'Land Ownership', value: farmer.land_ownership },
+                { label: 'Started Farming Year', value: farmer.started_coffee_farming_year },
+            ]
+        },
+        {
+            title: 'Seedling Information',
+            fields: [
+                { label: 'Source of Seedlings', value: farmer.source_of_seedlings || farmer.seedling_source },
+                { label: 'Type of Seedlings', value: farmer.type_of_seedlings || farmer.seedling_type },
+                { label: 'Age of Seedlings', value: farmer.age_of_seedlings },
+            ]
+        },
+        {
+            title: 'Farming Practices',
+            fields: [
+                { label: 'Standard Practices', value: farmer.standard_practices },
+                { label: 'Irrigation Source', value: farmer.irrigation_source || farmer.irrigation },
+                { label: 'Fertilizers Used', value: farmer.fertilizers },
+                { label: 'Pesticides Used', value: farmer.pesticide || farmer.pesticides },
+                { label: 'Deforestation Status', value: farmer.defforestation_status || farmer.deforested },
+            ]
+        }
+    ];
+
+    return (
+        <View style={styles.detailViewContainer}>
+            {/* Header with back button */}
+            <View style={styles.detailHeader}>
+                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={CoffeeColors.DARK_BROWN} />
+                </TouchableOpacity>
+                <Text style={styles.detailHeaderTitle}>Farmer Details</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            {/* Scrollable content */}
+            <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
+                {/* Farmer Name Card */}
+                <View style={styles.detailNameCard}>
+                    <Text style={styles.detailFarmerName}>
+                        {`${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || 'Unnamed Farmer'}
+                    </Text>
+                    <Text style={styles.detailFarmerId}>
+                        ID: {farmer.farmer_id || farmer.uid || farmer.id || 'N/A'}
+                    </Text>
+                </View>
+
+                {/* Information Sections */}
+                {sections.map((section, sectionIndex) => (
+                    <View key={sectionIndex} style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>{section.title}</Text>
+                        {section.fields.map((field, fieldIndex) => (
+                            <View key={fieldIndex} style={styles.detailFieldRow}>
+                                <Text style={styles.detailFieldLabel}>{field.label}:</Text>
+                                <Text style={styles.detailFieldValue}>{formatValue(field.value)}</Text>
+                            </View>
+                        ))}
+                    </View>
+                ))}
+            </ScrollView>
+        </View>
+    );
+};
+
+// ===============================================
+// === 3B. HARVEST DETAIL VIEW COMPONENT      ===
+// ===============================================
+
+/**
+ * HarvestDetailView - Mobile-friendly detail screen for viewing harvest information
+ * Displays all harvest data organized in logical sections with proper labels
+ */
+const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
+    if (!harvest) return null;
+
+    // Helper to format field values properly
+    const formatValue = (value) => {
+        if (value === null || value === undefined || value === '') return 'Not provided';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'Not provided';
+        return String(value);
+    };
+
+    // Lookup farmer details from farmersList using the name field (which contains farmer UID)
+    const farmerUID = harvest.name || harvest.farmer_name || harvest.farmer_uid;
+    let farmerDetails = null;
+    if (farmerUID && Array.isArray(farmersList)) {
+        farmerDetails = farmersList.find(f =>
+            String(f.farmer_id) === String(farmerUID) ||
+            String(f.uid) === String(farmerUID) ||
+            String(f.id) === String(farmerUID)
+        );
+    }
+
+    const farmerDisplayName = farmerDetails
+        ? `${farmerDetails.first_name || ''} ${farmerDetails.last_name || ''}`.trim()
+        : farmerUID || 'Unknown Farmer';
+
+    // Field sections for organized display
+    const sections = [
+        {
+            title: 'Farmer Information',
+            fields: [
+                { label: 'Farmer Name', value: farmerDisplayName },
+                { label: 'Farmer ID', value: farmerUID },
+                { label: 'Contact', value: farmerDetails?.contact || 'Not available' },
+                { label: 'District', value: farmerDetails?.district || 'Not available' },
+            ]
+        },
+        {
+            title: 'Harvest Details',
+            fields: [
+                { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
+                { label: 'Date of Delivery', value: harvest.date_of_delivery },
+                { label: 'Weight on Delivery', value: harvest.weight_on_delivery ? `${harvest.weight_on_delivery} kg` : 'Not provided' },
+                { label: 'Weight After Floating', value: harvest.weight_after_floating ? `${harvest.weight_after_floating} kg` : 'Not provided' },
+                { label: 'Number of Bags', value: harvest.number_of_bags },
+            ]
+        },
+        {
+            title: 'Coffee Quality',
+            fields: [
+                { label: 'Coffee Type/Grade', value: harvest.grade || harvest.coffee_type },
+                { label: 'Cherry Color', value: harvest.cherry_color || harvest.cherry_colour },
+                { label: 'Stage', value: harvest.stage },
+                { label: 'Moisture Content', value: harvest.moisture_content ? `${harvest.moisture_content}%` : 'Not provided' },
+            ]
+        },
+        {
+            title: 'Payment Information',
+            fields: [
+                { label: 'Amount Paid', value: harvest.amount_paid ? `UGX ${Number(harvest.amount_paid).toLocaleString()}` : 'Not provided' },
+                { label: 'Paid By', value: harvest.paid_by || harvest.who_paid },
+            ]
+        }
+    ];
+
+    return (
+        <View style={styles.detailViewContainer}>
+            {/* Header with back button */}
+            <View style={styles.detailHeader}>
+                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={CoffeeColors.DARK_BROWN} />
+                </TouchableOpacity>
+                <Text style={styles.detailHeaderTitle}>Harvest Details</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            {/* Scrollable content */}
+            <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
+                {/* Harvest ID Card */}
+                <View style={styles.detailNameCard}>
+                    <Ionicons name="leaf" size={32} color={CoffeeColors.MEDIUM_BROWN} style={{ marginBottom: 8 }} />
+                    <Text style={styles.detailFarmerName}>
+                        {farmerDisplayName}
+                    </Text>
+                    <Text style={styles.detailFarmerId}>
+                        Harvest ID: {harvest.id || harvest.harvest_id || 'N/A'}
+                    </Text>
+                </View>
+
+                {/* Information Sections */}
+                {sections.map((section, sectionIndex) => (
+                    <View key={sectionIndex} style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>{section.title}</Text>
+                        {section.fields.map((field, fieldIndex) => (
+                            <View key={fieldIndex} style={styles.detailFieldRow}>
+                                <Text style={styles.detailFieldLabel}>{field.label}:</Text>
+                                <Text style={styles.detailFieldValue}>{formatValue(field.value)}</Text>
+                            </View>
+                        ))}
+                    </View>
+                ))}
+            </ScrollView>
+        </View>
+    );
+};
+
+// ===============================================
+// === 4. MAIN COMPONENT (POLISHED)            ===
 // ===============================================
 
 const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     const onNavigate = onNavigateProp ?? ((screen) => { if (navigation && navigation.navigate) navigation.navigate(screen); });
-    
+
     // --- State declarations ---
     const [farmersList, setFarmersList] = useState([]);
     const [harvestsList, setHarvestsList] = useState([]);
@@ -374,33 +820,43 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     const [farmerForm, setFarmerForm] = useState({
         first_name: '', last_name: '', gender: '', nin: '', date_of_birth: '', contact: '', email: '', in_cooperative: false, cooperative: '', started_farming: '',
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
-        coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
+        coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
     const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', moisture_content: '', amount_paid: '', paid_by: '', number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
-    const [viewMode, setViewMode] = useState('form');
+    const [viewMode, setViewMode] = useState('table'); // CHANGED: Show records first instead of form
     const [activeTab, setActiveTab] = useState('farmers');
     const [loading, setLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const isSubmittingRef = useRef(false);
-    const [userId, setUserId] = useState('user123'); 
+    const [userId, setUserId] = useState('user123');
+
+    // NEW: State for detail view
+    const [selectedFarmer, setSelectedFarmer] = useState(null);
+    const [selectedHarvest, setSelectedHarvest] = useState(null); 
 
     // --- Data Loading and Initialization ---
     const loadRecords = async () => {
+        console.log('[loadRecords] ========== FETCHING RECORDS ==========');
         setLoading(true);
         try {
             const f = await fetchFarmers();
-            setFarmersList(f || []);
+            console.log('[loadRecords] Fetched farmers count:', Array.isArray(f) ? f.length : 0);
+            console.log('[loadRecords] First 3 farmers:', Array.isArray(f) ? f.slice(0, 3) : 'Not an array');
+            setFarmersList(Array.isArray(f) ? f : []);
         } catch (e) {
-            console.warn('Failed to load farmers', e);
+            console.error('[loadRecords] Failed to load farmers:', e);
+            setFarmersList([]);
         }
         try {
             const h = await fetchHarvests();
-            setHarvestsList(h || []);
+            console.log('[loadRecords] Fetched harvests count:', Array.isArray(h) ? h.length : 0);
+            setHarvestsList(Array.isArray(h) ? h : []);
         } catch (e) {
-            console.warn('Failed to load harvests', e);
+            console.error('[loadRecords] Failed to load harvests:', e);
+            setHarvestsList([]);
         }
         setLoading(false);
     };
@@ -423,7 +879,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
             ...p,
             first_name: '', last_name: '', gender: '', nin: '', date_of_birth: '', contact: '', email: '', in_cooperative: false, cooperative: '', started_farming: '',
             district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
-            coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
+            coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: '', age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
         }));
 
         setHarvestForm(p => ({
@@ -439,8 +895,10 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         return f.name || f.full_name || f.farmer_name || f.displayName || `${f.first_name || ''} ${f.last_name || ''}`.trim();
     };
 
-    // --- Location Dependency Logic ---
+    // --- Form Update Logic ---
+    // FIXED: Update farmer form with special logic for booleans and dependencies
     const updateFarmerForm = (key, value) => {
+        console.log(`[Farmer Form] Updating field: ${key}, value:`, value);
         setFarmerForm(p => {
             let newState = { ...p, [key]: value };
 
@@ -452,15 +910,32 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
             if (['in_cooperative', 'all_your_trees', 'deforested', 'uses_pesticides'].includes(key)) {
                  newState[key] = value === 'Yes' || value === true;
             }
-            
+
+            console.log('[Farmer Form] New state after update:', newState);
+            return newState;
+        });
+    };
+
+    // FIXED: Create proper update function for harvest form
+    const updateHarvestForm = (key, value) => {
+        console.log(`[Harvest Form] Updating field: ${key}, value:`, value);
+        setHarvestForm(p => {
+            const newState = { ...p, [key]: value };
+            console.log('[Harvest Form] New state after update:', newState);
             return newState;
         });
     };
 
     // --- Submission Handlers (Kept clean) ---
     const handleFarmerSubmit = async () => {
-        // ... (Submission logic remains the same)
+        const isEditing = farmerForm._isEditing;
+        const actionName = isEditing ? 'UPDATE' : 'SUBMISSION';
+        console.log(`[handleFarmerSubmit] ========== STARTING ${actionName} ==========`);
+        console.log('[handleFarmerSubmit] Current form state:', farmerForm);
+
+        // Validation
         if (!farmerForm.first_name || !farmerForm.contact || !userId) {
+            console.error('[handleFarmerSubmit] Validation failed - missing required fields');
             Alert.alert("Validation", "Please ensure First name, Contact, and User ID are present.");
             return;
         }
@@ -469,41 +944,70 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         isSubmittingRef.current = true;
         setLoading(true);
 
-        const newRecordId = farmerForm.uid || generateRecordId('FD');
+        const recordId = isEditing ? farmerForm._originalId : (farmerForm.uid || generateRecordId('FD'));
         const name = `${farmerForm.first_name} ${farmerForm.last_name}`.trim();
         const location = `${farmerForm.district || ''}${farmerForm.sub_county ? ', ' + farmerForm.sub_county : ''}`;
-        
+
+        console.log(`[handleFarmerSubmit] ${isEditing ? 'Updating' : 'Creating'} farmer with ID:`, recordId);
+        console.log('[handleFarmerSubmit] Farmer name:', name);
+
+        // Prepare farmer record with ALL required fields for Django backend
         const farmerRecord = {
             ...farmerForm,
+            // Display fields (used by UI)
             name: name,
-            uid: newRecordId,
+            uid: recordId,
             location: location,
-            num_trees: parseInt(farmerForm.no_of_trees) || 0,
+            number_of_trees: parseInt(farmerForm.no_of_trees) || 0,
             recorder_id: userId,
             timestamp: Date.now(),
-            // Add missing fields for Django API compatibility
-            farmer_id: newRecordId,
+
+            // Backend API fields (match Django model exactly)
+            farmer_id: recordId,
             farmer_type: 'individual',
             other_district: '',
             other_sub_county: '',
-            ownership_of_trees: farmerForm.all_your_trees !== false,
-            defforestation_status: farmerForm.deforested !== false,
-            standard_practices: Array.isArray(farmerForm.practices) && farmerForm.practices.length > 0,
+
+            // Boolean fields - MUST be true/false (backend expects boolean)
+            ownership_of_trees: Boolean(farmerForm.all_your_trees),
+            defforestation_status: Boolean(farmerForm.deforested),
+            standard_practices: Boolean(Array.isArray(farmerForm.practices) && farmerForm.practices.length > 0),
+
+            // Year as integer
             started_coffee_farming_year: farmerForm.started_farming ? new Date(farmerForm.started_farming).getFullYear() : null,
-            spacing_between_trees: farmerForm.spacing,
-            gps_coordinates: farmerForm.gps,
-            age_of_seedlings: '',
+
+            // String fields
+            spacing_between_trees: farmerForm.spacing || '',
+            gps_coordinates: farmerForm.gps || '',
+            age_of_seedlings: farmerForm.age_of_seedlings || '',
         };
 
+        console.log('[handleFarmerSubmit] Final farmer record:', JSON.stringify(farmerRecord, null, 2));
+
         try {
-            await submitFarmer(farmerRecord);
-            setSuccessMessage(`Farmer '${name}' recorded successfully! UID: ${newRecordId}`);
+            if (isEditing) {
+                console.log('[handleFarmerSubmit] Calling updateFarmer...');
+                await updateFarmer(recordId, farmerRecord);
+                console.log('[handleFarmerSubmit] ✅ Update successful!');
+                setSuccessMessage(`Farmer '${name}' updated successfully!`);
+            } else {
+                console.log('[handleFarmerSubmit] Calling submitFarmer...');
+                await submitFarmer(farmerRecord);
+                console.log('[handleFarmerSubmit] ✅ Submission successful!');
+                setSuccessMessage(`Farmer '${name}' recorded successfully! UID: ${recordId}`);
+            }
+
             setViewMode('success');
             resetForms();
-            await loadRecords(); 
+            await loadRecords();
         } catch (e) {
-            console.error("Error adding farmer:", e);
-            Alert.alert("Submission Failed", e.message || "Failed to save farmer details.");
+            console.error(`[handleFarmerSubmit] ❌ ${actionName} error:`, e);
+            console.error("[handleFarmerSubmit] Error details:", {
+                message: e.message,
+                response: e.response?.data,
+                status: e.response?.status
+            });
+            Alert.alert(`${isEditing ? 'Update' : 'Submission'} Failed`, e.message || `Failed to ${isEditing ? 'update' : 'save'} farmer details.`);
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -511,37 +1015,68 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     };
 
     const handleHarvestSubmit = async () => {
-        // ... (Submission logic remains the same)
+        const isEditing = harvestForm._isEditing;
+        const actionName = isEditing ? 'UPDATE' : 'SUBMISSION';
+        console.log(`[handleHarvestSubmit] ========== STARTING HARVEST ${actionName} ==========`);
+        console.log('[handleHarvestSubmit] Current form state:', harvestForm);
+
         if (!harvestForm.farmer_uid || !harvestForm.weight_on_delivery || !userId) {
+            console.error('[handleHarvestSubmit] Validation failed - missing required fields');
             Alert.alert('Validation', 'Please fill Farmer UID, Weight and ensure you are logged in.');
             return;
         }
-        
+
         if (isSubmittingRef.current) return;
         isSubmittingRef.current = true;
         setLoading(true);
 
-        const newRecordId = harvestForm.harvest_id || generateRecordId('PA');
+        const recordId = isEditing ? harvestForm._originalId : (harvestForm.harvest_id || generateRecordId('PA'));
+        console.log(`[handleHarvestSubmit] ${isEditing ? 'Updating' : 'Creating'} harvest with ID:`, recordId);
 
         const harvestRecord = {
             ...harvestForm,
-            id: newRecordId,
+            id: recordId,
             weight_on_delivery: Number(harvestForm.weight_on_delivery) || 0,
             amount_paid: Number(harvestForm.amount_paid) || 0,
             number_of_bags: Number(harvestForm.number_of_bags) || 0,
+            moisture_content: Number(harvestForm.moisture_content) || 0,
+            weight_after_floating: Number(harvestForm.weight_after_floating) || 0,
             recorder_id: userId,
             timestamp: Date.now(),
         };
 
+        console.log('[handleHarvestSubmit] Final harvest record:', JSON.stringify(harvestRecord, null, 2));
+
         try {
-            await submitHarvest(harvestRecord);
-            setSuccessMessage(`Harvest for '${harvestForm.farmer_name || harvestForm.farmer_uid}' recorded successfully! ID: ${newRecordId}`);
+            if (isEditing) {
+                console.log('[handleHarvestSubmit] Calling updateHarvest...');
+                await updateHarvest(recordId, harvestRecord);
+                console.log('[handleHarvestSubmit] ✅ Update successful!');
+                setSuccessMessage(`Harvest for '${harvestForm.farmer_name || harvestForm.farmer_uid}' updated successfully!`);
+            } else {
+                console.log('[handleHarvestSubmit] Calling submitHarvest...');
+                await submitHarvest(harvestRecord);
+                console.log('[handleHarvestSubmit] ✅ Submission successful!');
+                setSuccessMessage(`Harvest for '${harvestForm.farmer_name || harvestForm.farmer_uid}' recorded successfully! ID: ${recordId}`);
+            }
+
             setViewMode('success');
             resetForms();
             await loadRecords();
         } catch (e) {
-            console.error('Error adding harvest:', e);
-            Alert.alert('Submission Failed', e.message || 'Failed to save harvest details.');
+            console.error(`[handleHarvestSubmit] ❌ ${actionName} error:`, e);
+            console.error('[handleHarvestSubmit] Error details:', {
+                message: e.message,
+                response: e.response?.data,
+                status: e.response?.status
+            });
+
+            // Show detailed error message
+            const errorMsg = e.response?.data
+                ? JSON.stringify(e.response.data, null, 2)
+                : e.message || `Failed to ${isEditing ? 'update' : 'save'} harvest details.`;
+
+            Alert.alert(`${isEditing ? 'Update' : 'Submission'} Failed`, errorMsg);
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -556,7 +1091,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         const currentStep = isFarmer ? farmerStep : harvestStep;
         const setStep = isFarmer ? setFarmerStep : setHarvestStep;
         const formData = isFarmer ? farmerForm : harvestForm;
-        const setFormData = isFarmer ? updateFarmerForm : setHarvestForm; // Use the enhanced update function for farmer form
+        const setFormData = isFarmer ? updateFarmerForm : updateHarvestForm; // FIXED: Use proper update functions for both forms
         const currentStepFields = steps[currentStep];
 
         const updateForm = (key, value) => {
@@ -582,7 +1117,12 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                      setFormData('harvest_id', generateRecordId('PA'));
                 } else if (f.action === 'lookup' && !isFarmer && formData.farmer_uid) {
                     const farmerUID = formData.farmer_uid;
-                    const found = farmersList.find(f => String(f.id) === String(farmerUID) || String(f.uid) === String(farmerUID));
+                    // Check for farmer_id (Django API), uid (legacy), or id (fallback)
+                    const found = farmersList.find(f =>
+                        String(f.farmer_id) === String(farmerUID) ||
+                        String(f.uid) === String(farmerUID) ||
+                        String(f.id) === String(farmerUID)
+                    );
                     if (found) {
                         setFormData('farmer_name', getFarmerDisplayName(found));
                     } else {
@@ -603,13 +1143,23 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
             if (currentStep > 0) setStep(s => s - 1);
         };
 
+        const isEditing = isFarmer ? farmerForm._isEditing : harvestForm._isEditing;
+
         return (
             <View style={styles.formSection}>
-                <Text style={styles.formTitle}>{currentStepFields.title}</Text>
+                <Text style={styles.formTitle}>
+                    {isEditing ? '✏️ Edit ' : ''}
+                    {currentStepFields.title}
+                </Text>
                 <ProgressBar currentStep={currentStep + 1} totalSteps={steps.length} />
 
-                {/* Form Fields */}
-                <ScrollView style={styles.stepFormScroll}>
+                {/* Form Fields - ScrollView now takes available space */}
+                <ScrollView
+                    style={styles.stepFormScroll}
+                    contentContainerStyle={styles.stepFormContent}
+                    showsVerticalScrollIndicator={true}
+                    keyboardShouldPersistTaps="handled"
+                >
                     {currentStepFields.fields.map(field => {
                         // Handle conditional visibility
                         if (field.dependsOn) {
@@ -653,11 +1203,39 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                             return <CustomPicker key={field.key} label={field.label} selectedValue={formData[field.key]} onValueChange={(v) => updateForm(field.key, v)} items={items} />;
                         }
 
+                        // Special handling for farmer_uid autocomplete in harvest form
+                        if (field.key === 'farmer_uid' && field.action === 'lookup' && !isFarmer) {
+                            return (
+                                <View key={field.key}>
+                                    <AutocompleteInput
+                                        label={`${field.label}${field.required ? ' *' : ''}`}
+                                        value={fieldValue}
+                                        onChangeText={(v) => updateForm(field.key, v)}
+                                        onSelect={(farmer, selectedId) => {
+                                            // When user selects from dropdown, update both UID and name
+                                            updateForm('farmer_uid', selectedId);
+                                            updateForm('farmer_name', getFarmerDisplayName(farmer));
+                                        }}
+                                        suggestions={farmersList}
+                                        keyboardType={field.keyboardType}
+                                        placeholder="Start typing farmer name, ID, or contact..."
+                                    />
+                                    {/* Display selected farmer name below the UID field */}
+                                    {formData.farmer_name && (
+                                        <View style={styles.farmerNameDisplay}>
+                                            <Ionicons name="person" size={16} color={CoffeeColors.MEDIUM_BROWN} style={{ marginRight: 8 }} />
+                                            <Text style={styles.farmerNameText}>{formData.farmer_name}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                            );
+                        }
+
                         // Default to CustomInput
                         const handleTextChange = (v) => {
                             let processedValue = v;
                             if (field.keyboardType === 'numeric') {
-                                processedValue = v.replace(/[^0-9.]/g, ''); 
+                                processedValue = v.replace(/[^0-9.]/g, '');
                             }
                             if (field.array) {
                                 processedValue = v.split(',').map(s => s.trim()).filter(Boolean);
@@ -696,7 +1274,12 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                         disabled={loading}
                     >
                         {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : (
-                            <Text style={styles.submitButtonText}>{currentStep < steps.length - 1 ? 'Next' : `Submit ${isFarmer ? 'Farmer' : 'Harvest'}`}</Text>
+                            <Text style={styles.submitButtonText}>
+                                {currentStep < steps.length - 1
+                                    ? 'Next'
+                                    : `${isEditing ? 'Update' : 'Submit'} ${isFarmer ? 'Farmer' : 'Harvest'}`
+                                }
+                            </Text>
                         )}
                     </TouchableOpacity>
                 </View>
@@ -712,6 +1295,162 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
         return activeTab === 'farmers' ? renderGroupedStepForm('farmers') : renderGroupedStepForm('harvests');
     };
     
+    // Handler for deleting a record with confirmation
+    const handleDelete = (record, type) => {
+        const displayName = type === 'farmer'
+            ? `${record.first_name || ''} ${record.last_name || ''}`.trim()
+            : `Harvest ${record.id || record.harvest_id || 'Unknown'}`;
+
+        Alert.alert(
+            'Delete Record',
+            `Are you sure you want to delete ${displayName}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        console.log(`[handleDelete] Deleting ${type}:`, record);
+                        setLoading(true);
+
+                        try {
+                            if (type === 'farmer') {
+                                // Delete farmer using farmer_id or uid or id
+                                const farmerId = record.farmer_id || record.uid || record.id;
+                                console.log('[handleDelete] Deleting farmer with ID:', farmerId);
+                                await deleteFarmer(farmerId);
+
+                                // Remove from local state immediately for better UX
+                                setFarmersList(prev => prev.filter(f =>
+                                    f.farmer_id !== farmerId && f.uid !== farmerId && f.id !== farmerId
+                                ));
+
+                                Alert.alert('Success', `Farmer "${displayName}" has been deleted successfully.`);
+                            } else {
+                                // Delete harvest using id or harvest_id
+                                const harvestId = record.id || record.harvest_id;
+                                console.log('[handleDelete] Deleting harvest with ID:', harvestId);
+                                await deleteHarvest(harvestId);
+
+                                // Remove from local state immediately for better UX
+                                setHarvestsList(prev => prev.filter(h =>
+                                    h.id !== harvestId && h.harvest_id !== harvestId
+                                ));
+
+                                Alert.alert('Success', `Harvest record has been deleted successfully.`);
+                            }
+
+                            // Reload records from server to ensure sync
+                            await loadRecords();
+                        } catch (error) {
+                            console.error('[handleDelete] Delete failed:', error);
+                            const errorMsg = error.response?.data?.detail
+                                || error.response?.data?.message
+                                || error.message
+                                || 'Failed to delete record';
+                            Alert.alert('Delete Failed', errorMsg);
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    // Handler for editing a record - populates form with existing data
+    const handleEdit = (record, type) => {
+        console.log(`[handleEdit] Editing ${type}:`, record);
+
+        if (type === 'farmer') {
+            // Populate farmer form with existing data
+            // Need to map backend field names to form field names
+            setFarmerForm({
+                // Personal Info
+                first_name: record.first_name || '',
+                last_name: record.last_name || '',
+                gender: record.gender || '',
+                nin: record.nin || '',
+                date_of_birth: record.date_of_birth || '',
+                contact: record.contact || '',
+                email: record.email || '',
+                in_cooperative: record.in_cooperative || false,
+                cooperative: record.cooperative || '',
+                started_farming: record.started_coffee_farming_year ? `${record.started_coffee_farming_year}-01-01` : '',
+
+                // Location
+                district: record.district || '',
+                sub_county: record.sub_county || '',
+                parish: record.parish || '',
+                village: record.village || '',
+                gps: record.gps_coordinates || record.gps || '',
+                nearest_landmark: record.nearest_landmark || '',
+                uid: record.farmer_id || record.uid || '',
+
+                // Farm Details
+                coffee_variety: record.coffee_variety || '',
+                no_of_trees: String(record.number_of_trees || ''),
+                all_your_trees: record.ownership_of_trees !== false,
+                other_farms: record.other_farms || '',
+                planted_date: record.planted_date || '',
+                spacing: record.spacing_between_trees || record.spacing || '',
+                land_ownership: record.land_ownership || '',
+                deforested: record.defforestation_status || false,
+                seedling_source: record.source_of_seedlings || record.seedling_source || '',
+                seedling_type: record.type_of_seedlings || record.seedling_type || '',
+                age_of_seedlings: record.age_of_seedlings || '',
+
+                // Practices
+                practices: Array.isArray(record.practices) ? record.practices : [],
+                irrigation: record.irrigation_source || record.irrigation || '',
+                fertilizers: typeof record.fertilizers === 'string'
+                    ? record.fertilizers.split(',').map(f => f.trim()).filter(Boolean)
+                    : (Array.isArray(record.fertilizers) ? record.fertilizers : []),
+                uses_pesticides: record.pesticide ? true : false,
+                pesticides: typeof record.pesticide === 'string'
+                    ? record.pesticide.split(',').map(p => p.trim()).filter(Boolean)
+                    : (Array.isArray(record.pesticides) ? record.pesticides : []),
+
+                // Store the original ID for update
+                _isEditing: true,
+                _originalId: record.farmer_id || record.uid || record.id,
+            });
+
+            // Reset step to beginning
+            setFarmerStep(0);
+            setViewMode('form');
+            setActiveTab('farmers');
+        } else {
+            // Populate harvest form with existing data
+            setHarvestForm({
+                farmer_uid: record.name || record.farmer_uid || '',
+                farmer_name: record.farmer_name || '',
+                weight_on_delivery: String(record.weight_on_delivery || ''),
+                number_of_bags: String(record.number_of_bags || ''),
+                date_of_delivery: record.date_of_delivery || '',
+                coffee_type: record.grade || record.coffee_type || '',
+                moisture_content: String(record.moisture_content || ''),
+                amount_paid: String(record.amount_paid || ''),
+                paid_by: record.paid_by || record.who_paid || '',
+                harvest_id: record.id || record.harvest_id || '',
+
+                // Store additional fields for update
+                weight_after_floating: String(record.weight_after_floating || ''),
+                cherry_color: record.cherry_color || record.cherry_colour || '',
+                stage: record.stage || '',
+
+                // Store the original ID for update
+                _isEditing: true,
+                _originalId: record.id || record.harvest_id,
+            });
+
+            // Reset step to beginning
+            setHarvestStep(0);
+            setViewMode('form');
+            setActiveTab('harvests');
+        }
+    };
+
     const renderTableContent = () => {
         if (activeTab === 'farmers') {
             return (
@@ -721,7 +1460,17 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                     title="Farmer Records"
                     onExit={() => setViewMode('form')}
                     isFarmer={true}
-                    onEdit={(r) => Alert.alert('View/Edit Farmer', `Viewing record for: ${r.name} (${r.uid})`)}
+                    onEdit={(r, isEdit) => {
+                        if (isEdit) {
+                            // Edit mode - populate form
+                            handleEdit(r, 'farmer');
+                        } else {
+                            // View mode - show detail view
+                            setSelectedFarmer(r);
+                            setViewMode('detail');
+                        }
+                    }}
+                    onDelete={(r) => handleDelete(r, 'farmer')}
                 />
             );
         } else {
@@ -732,7 +1481,18 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                     title="Harvest Records"
                     onExit={() => setViewMode('form')}
                     isFarmer={false}
-                    onEdit={(r) => Alert.alert('View/Edit Harvest', `Viewing record for: ${r.farmer_name} (ID: ${r.id})`)}
+                    farmersList={farmersList}
+                    onEdit={(r, isEdit) => {
+                        if (isEdit) {
+                            // Edit mode - populate form
+                            handleEdit(r, 'harvest');
+                        } else {
+                            // View mode - show detail view
+                            setSelectedHarvest(r);
+                            setViewMode('detail');
+                        }
+                    }}
+                    onDelete={(r) => handleDelete(r, 'harvest')}
                 />
             );
         }
@@ -741,44 +1501,87 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     // --- Screen Layout ---
     return (
         <View style={styles.screen}>
-            <Header title="Aggregation & Data Entry" onNavigate={onNavigate} />
-            <View style={styles.container}>
+            <Header title="Aggregation" onNavigate={onNavigate} />
+
+            {/* FIXED: KeyboardAvoidingView wraps entire scrollable content - optimized for Android */}
+            <KeyboardAvoidingView
+                style={styles.container}
+                behavior="height"
+                enabled={Platform.OS === 'android'}
+            >
+                <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
+                    keyboardShouldPersistTaps="always"
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                >
                 
-                {/* Tab Navigation */}
-                {viewMode === 'form' && (
-                    <View style={styles.tabContainer}>
-                        <TouchableOpacity 
-                            style={[styles.tabButton, activeTab === 'farmers' && styles.activeTab]} 
-                            onPress={() => { setActiveTab('farmers'); resetForms(); setViewMode('form'); }}>
-                            <Text style={[styles.tabText, activeTab === 'farmers' && styles.activeTabText]}>Register Farmer</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                            style={[styles.tabButton, activeTab === 'harvests' && styles.activeTab]} 
-                            onPress={() => { setActiveTab('harvests'); resetForms(); setViewMode('form'); }}>
-                            <Text style={[styles.tabText, activeTab === 'harvests' && styles.activeTabText]}>Record Harvest</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
+                {/* Tab Navigation - Always visible */}
+                <View style={styles.tabContainer}>
+                    <TouchableOpacity
+                        style={[styles.tabButton, activeTab === 'farmers' && styles.activeTab]}
+                        onPress={() => {
+                            setActiveTab('farmers');
+                            resetForms();
+                            setSelectedFarmer(null);
+                            setViewMode('table'); // Go to records view
+                        }}>
+                        <Text style={[styles.tabText, activeTab === 'farmers' && styles.activeTabText]}>Register Farmer</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.tabButton, activeTab === 'harvests' && styles.activeTab]}
+                        onPress={() => {
+                            setActiveTab('harvests');
+                            resetForms();
+                            setViewMode('table'); // Go to records view
+                        }}>
+                        <Text style={[styles.tabText, activeTab === 'harvests' && styles.activeTabText]}>Record Harvest</Text>
+                    </TouchableOpacity>
+                </View>
 
                 {/* Main Content Area */}
-                <ScrollView contentContainerStyle={styles.contentContainer}>
-                    {loading && viewMode !== 'table' && <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />}
-                    
+                <View style={styles.contentWrapper}>
+                    {loading && viewMode !== 'table' && viewMode !== 'detail' && <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />}
+
                     {viewMode === 'form' && renderFormContent()}
-                    
+
                     {viewMode === 'table' && renderTableContent()}
+
+                    {viewMode === 'detail' && activeTab === 'farmers' && selectedFarmer && (
+                        <FarmerDetailView
+                            farmer={selectedFarmer}
+                            onBack={() => {
+                                setSelectedFarmer(null);
+                                setViewMode('table');
+                            }}
+                        />
+                    )}
+
+                    {viewMode === 'detail' && activeTab === 'harvests' && selectedHarvest && (
+                        <HarvestDetailView
+                            harvest={selectedHarvest}
+                            farmersList={farmersList}
+                            onBack={() => {
+                                setSelectedHarvest(null);
+                                setViewMode('table');
+                            }}
+                        />
+                    )}
+                </View>
+
                 </ScrollView>
-            </View>
+            </KeyboardAvoidingView>
 
             {/* Modals and Overlays */}
             {viewMode === 'success' && (
-                <SuccessMessage 
-                    message={successMessage} 
-                    onExit={() => setViewMode('form')} 
+                <SuccessMessage
+                    message={successMessage}
+                    onExit={() => setViewMode('form')}
                     onView={() => { setActiveTab(activeTab); setViewMode('table'); setSuccessMessage(''); }}
                 />
             )}
-            
+
             <BottomNav onNavigate={onNavigate} active="Aggregation" />
         </View>
     );
@@ -798,6 +1601,10 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: 15,
         paddingTop: 10,
+    },
+    contentWrapper: {
+        flex: 1, // FIXED: Takes remaining space after tabs/header
+        paddingBottom: 100, // Make room for BottomNav
     },
     contentContainer: {
         flexGrow: 1,
@@ -830,6 +1637,7 @@ const styles = StyleSheet.create({
     },
     // --- Forms ---
     formSection: {
+        flex: 1, // FIXED: Allow form to take available height
         backgroundColor: CoffeeColors.WHITE,
         borderRadius: 10,
         padding: 15,
@@ -838,6 +1646,7 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 1.41,
+        maxHeight: '100%', // Prevent overflow on small screens
     },
     formTitle: {
         fontSize: 18,
@@ -877,8 +1686,14 @@ const styles = StyleSheet.create({
         color: CoffeeColors.DARK_BROWN,
     },
     stepFormScroll: {
-        maxHeight: 450, 
+        // REMOVED fixed maxHeight to allow proper scrolling on all screen sizes
+        // The form will now flex properly within the available space
+        flex: 1, // Take remaining space in the KeyboardAvoidingView
+    },
+    stepFormContent: {
+        // Content container for ScrollView - adds padding for last items
         paddingRight: 10,
+        paddingBottom: 20, // Extra space at bottom so last field is visible when keyboard appears
     },
     // Date Picker Button
     datePickerButton: {
@@ -1139,7 +1954,236 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         padding: 20,
         color: CoffeeColors.GRAY_TEXT,
-    }
+    },
+    // --- Search Container ---
+    searchContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    searchButton: {
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        width: 48,
+        height: 48,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: -15, // Align with input field (accounts for label spacing)
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+    },
+    // --- Action Button ---
+    actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderRadius: 8,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 1.41,
+    },
+    actionButtonText: {
+        color: CoffeeColors.WHITE,
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    recordCount: {
+        fontSize: 14,
+        color: CoffeeColors.GRAY_TEXT,
+        fontWeight: '600',
+    },
+    // --- Farmer Detail View ---
+    detailViewContainer: {
+        flex: 1,
+        backgroundColor: CoffeeColors.WHITE,
+        borderRadius: 10,
+        overflow: 'hidden',
+        elevation: 3,
+    },
+    detailHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.GRAY_TEXT_LIGHT,
+    },
+    backButton: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: CoffeeColors.CREAM,
+        borderRadius: 20,
+    },
+    detailHeaderTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: CoffeeColors.WHITE,
+        flex: 1,
+        textAlign: 'center',
+    },
+    detailScrollView: {
+        flex: 1,
+    },
+    detailContent: {
+        padding: 16,
+    },
+    detailNameCard: {
+        backgroundColor: CoffeeColors.CREAM,
+        padding: 20,
+        borderRadius: 12,
+        marginBottom: 20,
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    detailFarmerName: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: CoffeeColors.DARK_BROWN,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    detailFarmerId: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: CoffeeColors.MEDIUM_BROWN,
+    },
+    detailSection: {
+        marginBottom: 24,
+        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        borderRadius: 10,
+        padding: 16,
+    },
+    detailSectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: CoffeeColors.DARK_BROWN,
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottomWidth: 2,
+        borderBottomColor: CoffeeColors.MEDIUM_BROWN,
+    },
+    detailFieldRow: {
+        flexDirection: 'row',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.GRAY_TEXT_LIGHT,
+    },
+    detailFieldLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: CoffeeColors.GRAY_TEXT,
+        flex: 1,
+    },
+    detailFieldValue: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: CoffeeColors.DARK_BROWN,
+        flex: 2,
+        textAlign: 'right',
+    },
+    // --- Autocomplete Dropdown ---
+    autocompleteDropdown: {
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        right: 0,
+        backgroundColor: CoffeeColors.WHITE,
+        borderWidth: 1,
+        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderRadius: 6,
+        marginTop: 2,
+        maxHeight: 250,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        zIndex: 1000,
+    },
+    autocompleteScroll: {
+        maxHeight: 200,
+    },
+    autocompleteSuggestion: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+    },
+    autocompleteName: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: CoffeeColors.DARK_BROWN,
+        marginBottom: 4,
+    },
+    autocompleteDetails: {
+        fontSize: 13,
+        color: CoffeeColors.GRAY_TEXT,
+    },
+    autocompleteClose: {
+        padding: 10,
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: CoffeeColors.LIGHT_GRAY,
+        backgroundColor: CoffeeColors.CREAM,
+    },
+    autocompleteCloseText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: CoffeeColors.MEDIUM_BROWN,
+    },
+    // --- Farmer Name Display (below autocomplete) ---
+    farmerNameDisplay: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: -10,
+        marginBottom: 15,
+        padding: 10,
+        backgroundColor: CoffeeColors.CREAM,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: CoffeeColors.MEDIUM_BROWN,
+    },
+    farmerNameText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: CoffeeColors.DARK_BROWN,
+        flex: 1,
+    },
+    // --- Record Actions (Edit/Delete Buttons) ---
+    recordActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginLeft: 12,
+    },
+    iconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
+    },
 });
 
 export default AggregationScreen;

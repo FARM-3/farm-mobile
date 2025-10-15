@@ -108,49 +108,90 @@ export const submitFarmer = async (data) => {
         throw new Error('Failed to save farmer locally');
     }
 
+    // DEBUG: Log incoming data to see what we're working with
+    console.log('[aggregationService] Incoming data.age_of_seedlings:', data.age_of_seedlings);
+    console.log('[aggregationService] Incoming data.fertilizers:', data.fertilizers);
+    console.log('[aggregationService] Incoming data.pesticides:', data.pesticides);
+
     // Transform data to match Django backend API format
+    // IMPORTANT: All field names MUST match the backend exactly!
     const apiPayload = {
-        farmer_id: data.uid || data.farmer_id,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        gender: data.gender,
-        nin: data.nin,
-        date_of_birth: data.date_of_birth,
-        contact: data.contact,
-        email: data.email,
+        // Personal Info - strings
+        farmer_id: data.uid || data.farmer_id || '',
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        gender: data.gender || '',
+        // FIXED: NIN validation - Must be 14 uppercase chars or empty/null
+        nin: data.nin && data.nin.length >= 14
+            ? data.nin.toUpperCase().slice(0, 14) // Ensure uppercase and 14 chars
+            : null, // Send null if invalid (Django allows blank=True, null=True)
+        date_of_birth: data.date_of_birth || null,  // Can be null or YYYY-MM-DD format
+        contact: data.contact || '',
+        email: data.email || '',
+
+        // Farmer Type - string
         farmer_type: data.farmer_type || 'individual',
+
+        // Started farming - integer (year only, like 2020)
         started_coffee_farming_year: data.started_farming ? new Date(data.started_farming).getFullYear() : null,
-        district: data.district,
+
+        // Location - strings
+        district: data.district || '',
         other_district: data.other_district || '',
-        sub_county: data.sub_county,
+        sub_county: data.sub_county || '',
         other_sub_county: data.other_sub_county || '',
-        parish: data.parish,
-        village: data.village,
-        gps_coordinates: data.gps,
-        nearest_landmark: data.nearest_landmark,
-        coffee_variety: data.coffee_variety,
-        number_of_trees: parseInt(data.no_of_trees) || 0,
-        ownership_of_trees: data.all_your_trees !== false,
-        planted_date: data.planted_date,
-        land_ownership: data.land_ownership,
-        spacing_between_trees: data.spacing,
-        defforestation_status: data.deforested !== false,
-        source_of_seedlings: data.seedling_source,
-        type_of_seedlings: data.seedling_type,
-        age_of_seedlings: data.age_of_seedlings || '',
-        standard_practices: Array.isArray(data.practices) && data.practices.length > 0,
-        irrigation_source: data.irrigation,
-        fertilizers: Array.isArray(data.fertilizers) ? data.fertilizers.join(', ') : data.fertilizers || '',
-        pesticide: Array.isArray(data.pesticides) ? data.pesticides.join(', ') : data.pesticides || '',
+        parish: data.parish || '',
+        village: data.village || '',
+        gps_coordinates: data.gps || '',
+        nearest_landmark: data.nearest_landmark || '',
+
+        // Coffee details - variety is string, number_of_trees is integer
+        coffee_variety: data.coffee_variety || '',
+        number_of_trees: parseInt(data.no_of_trees) || parseInt(data.number_of_trees) || 0,
+
+        // Boolean fields - MUST be true/false (not strings)
+        ownership_of_trees: Boolean(data.all_your_trees),
+
+        // Dates - YYYY-MM-DD format or null
+        planted_date: data.planted_date || null,
+
+        // Land details - strings
+        land_ownership: data.land_ownership || '',
+        spacing_between_trees: data.spacing || '',
+
+        // Boolean field - MUST be true/false
+        defforestation_status: Boolean(data.deforested),
+
+        // Seedling info - strings (FIXED: age_of_seedlings is required)
+        source_of_seedlings: data.seedling_source || '',
+        type_of_seedlings: data.seedling_type || '',
+        age_of_seedlings: data.age_of_seedlings && data.age_of_seedlings.trim()
+            ? data.age_of_seedlings.trim()
+            : 'Not specified', // FIXED: Cannot be blank per Django model
+
+        // Boolean field - MUST be true/false
+        standard_practices: Boolean(Array.isArray(data.practices) && data.practices.length > 0),
+
+        // Irrigation - string
+        irrigation_source: data.irrigation || '',
+
+        // FIXED: Fertilizers and Pesticides - STRINGS (Django changed back to CharField)
+        fertilizers: Array.isArray(data.fertilizers)
+            ? data.fertilizers.join(', ') // Convert array to comma-separated string
+            : (data.fertilizers || ''), // Use as-is if string, or empty string
+        pesticide: Array.isArray(data.pesticides)
+            ? data.pesticides.join(', ') // Convert array to comma-separated string
+            : (data.pesticides || ''), // Use as-is if string, or empty string
     };
 
+    console.log('[aggregationService] ========== FARMER SUBMISSION ==========');
     console.log('[aggregationService] API payload:', JSON.stringify(apiPayload, null, 2));
 
     // Now try to sync to API (silent fail if offline)
     try {
     console.log('[aggregationService] Submitting farmer to API...');
     const response = await ApiService.post('aggregation/farmer/', apiPayload);
-        console.log('[aggregationService] Farmer submitted successfully to API');
+        console.log('[aggregationService] ✅ Farmer submitted successfully to API');
 
         // Mark as synced and update server_id
         if (localId && DatabaseService.isInitialized) {
@@ -160,21 +201,52 @@ export const submitFarmer = async (data) => {
 
         return response.data;
     } catch (error) {
-        // API failed but data is safe in local DB - will sync later
-        console.error('[aggregationService] API submission failed (offline?):');
+        // Enhanced error logging for debugging
+        console.error('[aggregationService] ❌ API submission failed:');
+        console.error('[aggregationService] Error type:', error.name);
+
         if (error.response) {
-            console.error('Status:', error.response.status);
-            console.error('Response data:', error.response.data);
+            // Server responded with error status
+            console.error('[aggregationService] Status:', error.response.status);
+            console.error('[aggregationService] Status text:', error.response.statusText);
+            console.error('[aggregationService] Response data:', JSON.stringify(error.response.data, null, 2));
+            console.error('[aggregationService] Response headers:', error.response.headers);
+
+            // For 400 errors, show detailed validation errors
+            if (error.response.status === 400) {
+                console.error('[aggregationService] ⚠️  VALIDATION ERRORS:');
+                const validationErrors = error.response.data;
+                Object.keys(validationErrors).forEach(field => {
+                    console.error(`  - ${field}: ${JSON.stringify(validationErrors[field])}`);
+                });
+
+                // Throw detailed error for UI
+                const errorMessage = Object.entries(validationErrors)
+                    .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+                    .join('\n');
+                throw new Error(`Validation failed:\n${errorMessage}`);
+            }
+        } else if (error.request) {
+            // Request made but no response (network issue)
+            console.error('[aggregationService] No response received from server');
+            console.error('[aggregationService] Network error or server unreachable');
         } else {
-            console.error('Error message:', error.message);
+            // Error in setting up the request
+            console.error('[aggregationService] Error message:', error.message);
         }
 
-        // Return local record info so UI can continue
-        return {
-            id: localId,
-            ...data,
-            _localOnly: true,  // Flag to indicate this is not yet synced
-        };
+        // For offline scenarios, return local record
+        if (!error.response) {
+            console.log('[aggregationService] Saving as local-only record (offline mode)');
+            return {
+                id: localId,
+                ...data,
+                _localOnly: true,
+            };
+        }
+
+        // Re-throw for UI to handle
+        throw error;
     }
 };
 
@@ -326,15 +398,43 @@ export const syncFarmers = async () => {
 
         for (const farmer of unsyncedFarmers) {
             try {
-                const data = {
-                    name: farmer.name,
-                    contact: farmer.phone,
-                    location: farmer.location,
-                    num_trees: farmer.plot_size,
-                    recorder_id: await initializeAuth(),
+                // Transform data to match Django backend API format
+                const apiPayload = {
+                    farmer_id: farmer.id || `FD${Date.now()}`,
+                    first_name: farmer.name?.split(' ')[0] || '',
+                    last_name: farmer.name?.split(' ').slice(1).join(' ') || '',
+                    gender: 'Other', // Default value
+                    nin: '',
+                    date_of_birth: null,
+                    contact: farmer.phone || '',
+                    email: '',
+                    farmer_type: 'individual',
+                    started_coffee_farming_year: null,
+                    district: farmer.location?.split(',')[0] || '',
+                    other_district: '',
+                    sub_county: '',
+                    other_sub_county: '',
+                    parish: '',
+                    village: '',
+                    gps_coordinates: '',
+                    nearest_landmark: '',
+                    coffee_variety: 'Other',
+                    number_of_trees: farmer.plot_size || 0,
+                    ownership_of_trees: true,
+                    planted_date: null,
+                    land_ownership: 'owned',
+                    spacing_between_trees: '3 metres by 3 metres',
+                    defforestation_status: false,
+                    source_of_seedlings: 'nursery',
+                    type_of_seedlings: 'Other',
+                    age_of_seedlings: '',
+                    standard_practices: false,
+                    irrigation_source: 'none',
+                    fertilizers: '',
+                    pesticide: '',
                 };
 
-                const response = await ApiService.post('aggregation/farmer/', data);
+                const response = await ApiService.post('aggregation/farmer/', apiPayload);
 
                 // Mark as synced and update server_id
                 await DatabaseService.markAsSynced('farmers', farmer.id, response.data.id);
@@ -370,16 +470,23 @@ export const syncHarvests = async () => {
 
         for (const harvest of unsyncedHarvests) {
             try {
-                const data = {
-                    farmer: harvest.farmer_id,
-                    farmer_name: harvest.farmer_name,
-                    weight_on_delivery: harvest.weight,
-                    date_of_delivery: harvest.harvest_date,
-                    grade: harvest.quality,
+                // Transform data to match Django backend API format
+                const apiPayload = {
+                    id: harvest.server_id || harvest.id,
+                    name: harvest.farmer_name || '',
+                    weight_on_delivery: Math.round(Number(harvest.weight) || 0),
+                    weight_after_floating: 0, // Default value
+                    date_of_delivery: harvest.harvest_date || '',
+                    grade: harvest.quality || '',
+                    cherry_color: 'Red', // Default value
+                    stage: 'fresh_cherry', // Default value
+                    amount_paid: '0', // Default value
+                    paid_by: 'System', // Default value
                     recorder_id: await initializeAuth(),
+                    timestamp: Date.now(),
                 };
 
-                const response = await ApiService.post('aggregation/farmer-harvest/', data);
+                const response = await ApiService.post('aggregation/farmer-harvest/', apiPayload);
 
                 // Mark as synced and update server_id
                 await DatabaseService.markAsSynced('harvests', harvest.id, response.data.id);
