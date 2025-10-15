@@ -452,10 +452,10 @@ const BlockRegistrationStepper = ({ navigation }) => {
 
   const saveBlockOffline = async (block) => {
     try {
-      const pending = await AsyncStorage.getItem('pendingBlocks');
+      const pending = await AsyncStorage.getItem('blocks_sync_queue');
       const pendingBlocks = pending ? JSON.parse(pending) : [];
       pendingBlocks.push(block);
-      await AsyncStorage.setItem('pendingBlocks', JSON.stringify(pendingBlocks));
+      await AsyncStorage.setItem('blocks_sync_queue', JSON.stringify(pendingBlocks));
     } catch (err) {
       console.error('Offline save error:', err);
     }
@@ -465,22 +465,30 @@ const BlockRegistrationStepper = ({ navigation }) => {
     const state = await NetInfo.fetch();
     if (!state.isConnected) return;
     try {
-      const pending = await AsyncStorage.getItem('pendingBlocks');
+      const pending = await AsyncStorage.getItem('blocks_sync_queue');
       const pendingBlocks = pending ? JSON.parse(pending) : [];
       if (pendingBlocks.length === 0) return;
 
+      let syncedCount = 0;
       for (const block of pendingBlocks) {
-        // You might want to remove a block from the list if the post is successful
-        // For simplicity, I'm just iterating and trying to post
-        await fetch('https://api-3181.onrender.com/api/blocks/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(block)
-        });
+        try {
+          const response = await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(block)
+          });
+          if (response.ok) {
+            syncedCount++;
+          }
+        } catch (error) {
+          console.error('Failed to sync block:', error);
+        }
       }
-      // Assuming all sync succeeded, clear the list. Real-world would be more robust.
-      await AsyncStorage.removeItem('pendingBlocks');
-      Alert.alert('Sync Complete', `${pendingBlocks.length} block(s) synced successfully!`);
+      // Clear the queue after attempting sync
+      await AsyncStorage.removeItem('blocks_sync_queue');
+      if (syncedCount > 0) {
+        Alert.alert('Sync Complete', `${syncedCount} block(s) synced successfully!`);
+      }
     } catch (err) {
       console.error('Sync error:', err);
     }
@@ -587,8 +595,8 @@ const BlockRegistrationStepper = ({ navigation }) => {
     setShowSuccessModal(false);
     setFormData(initialFormState);
     setCurrentStep(0);
-    // Navigate to the BlockSummary screen
-    navigation.navigate('BlockSummary'); 
+    // Navigate to the BlockSummary screen with refresh parameter
+    navigation.navigate('BlockSummary', { shouldRefresh: true });
   };
   
   const handleViewSummary = () => {

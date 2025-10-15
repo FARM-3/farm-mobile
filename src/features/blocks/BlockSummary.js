@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import { Picker } from "@react-native-picker/picker";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../../theme/colors';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
+
+const BLOCK_SYNC_QUEUE_KEY = "blocks_sync_queue";
 
 const BlockSummary = ({ route = {}, navigation }) => {
   const [allRecords, setAllRecords] = useState([]);
@@ -23,12 +26,88 @@ const BlockSummary = ({ route = {}, navigation }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBlock, setFilterBlock] = useState("All Blocks");
 
+  // --- OFFLINE SYNC UTILITIES ---
+
+  /**
+   * Retrieves all unsynced block records from local storage queue.
+   */
+  const getUnsyncedBlocks = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(BLOCK_SYNC_QUEUE_KEY);
+      const records = raw ? JSON.parse(raw) : [];
+      return { success: true, records };
+    } catch (error) {
+      console.error("Error retrieving unsynced blocks:", error);
+      return { success: false, records: [] };
+    }
+  };
+
+  /**
+   * Removes a block from the local queue after a successful sync.
+   * @param {string} blockId - The unique block ID of the record to remove.
+   */
+  const removeBlockFromQueue = async (blockId) => {
+    try {
+      const { records: currentQueue } = await getUnsyncedBlocks();
+
+      // Filter out the block matching the blockId
+      const newQueue = currentQueue.filter(record => record.block_id !== blockId);
+
+      await AsyncStorage.setItem(BLOCK_SYNC_QUEUE_KEY, JSON.stringify(newQueue));
+      return { success: true, remaining: newQueue.length };
+
+    } catch (error) {
+      console.error("Error removing block from queue:", error);
+      return { success: false, remaining: -1 };
+    }
+  };
+
+  /**
+   * Tries to sync all locally saved blocks to the remote API.
+   */
+  const syncPendingBlocks = async () => {
+    const { success, records } = await getUnsyncedBlocks();
+    if (!success || records.length === 0) {
+      return { syncedCount: 0, totalCount: 0 };
+    }
+
+    let syncedCount = 0;
+    const totalCount = records.length;
+
+    console.log(`Attempting to sync ${totalCount} local blocks...`);
+
+    for (const record of records) {
+      try {
+        const response = await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(record)
+        });
+
+        if (response.ok) {
+          await removeBlockFromQueue(record.block_id);
+          syncedCount++;
+        } else {
+          console.warn(`Sync failed for block ${record.block_id}: Status ${response.status}`);
+        }
+      } catch (error) {
+        console.warn(`Sync failed for block ${record.block_id}:`, error.message);
+      }
+    }
+
+    console.log(`Block synchronization complete. Synced ${syncedCount} of ${totalCount} blocks.`);
+    return { syncedCount, totalCount };
+  };
+
   /**
    * Primary function to fetch, sync, and combine all data sources.
    */
   const loadAndSyncData = useCallback(async () => {
     setIsLoading(true);
     let remoteRecords = [];
+    let localRecords = [];
 
     // 1. Checking Internet Connectivity
     const netState = await NetInfo.fetch();
@@ -37,21 +116,64 @@ const BlockSummary = ({ route = {}, navigation }) => {
     if (isConnected) {
       setSyncStatus("Online: Initiating data synchronization.");
 
-      // 2. Fetching Remote Data
-      const remoteResponse = await fetch('https://api-3181.onrender.com/api/blocks/');
-      if (remoteResponse.ok) {
-        const data = await remoteResponse.json();
-        // Assuming the API returns an array of block objects
-        remoteRecords = data.results || data;
-      } else {
-        setSyncStatus("Online: Failed to fetch remote data.");
+      // 2. Attempting Sync - sync any pending local blocks first
+      await syncPendingBlocks();
+
+      // 3. Fetching Remote Data
+      try {
+        const remoteResponse = await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
+          headers: {
+            'Content-Type': 'application/json',
+            // Add authorization if needed
+          }
+        });
+        if (remoteResponse.ok) {
+          const data = await remoteResponse.json();
+          // API returns paginated response with results array
+          remoteRecords = data.results || [];
+          setSyncStatus(`Online: Loaded ${remoteRecords.length} blocks from server.`);
+        } else {
+          const errorText = await remoteResponse.text();
+          console.error('API Error:', errorText);
+          setSyncStatus("Online: Failed to fetch remote data.");
+        }
+      } catch (error) {
+        console.error('Network error:', error);
+        setSyncStatus("Online: Network error fetching data.");
       }
     } else {
       setSyncStatus("Offline Mode: Data saved locally. Sync will occur when online.");
     }
 
-    // 5. Set final records
-    let finalRecords = remoteRecords;
+    // 4. Fetching Local Data (always fetch, regardless of connectivity)
+    const localResponse = await getUnsyncedBlocks();
+    if (localResponse.success && Array.isArray(localResponse.records)) {
+      // Map local data and format for display consistency
+      localRecords = localResponse.records.map(r => ({
+        ...r,
+        isSynced: false,
+        // Ensure consistent field names for display
+        block_id: r.block_id || r.id,
+        no_of_trees: r.no_of_trees || r.numTrees,
+        date_planted: r.date_planted || r.datePlanted,
+        type_of_coffee: r.type_of_coffee || r.typeCoffee,
+        source_of_seedling: r.source_of_seedling || r.sourceSeedling,
+        type_of_seedling: r.type_of_seedling || r.typeOfSeedling,
+        age_of_seedling: r.age_of_seedling || r.ageTrees,
+        fertilizers: r.fertilizers || r.fertilizerType,
+        fertilizer_names: r.fertilizer_names || r.fertilizerList,
+        use_pesticides: r.use_pesticides || r.usePesticides,
+        pesticides_list: r.pesticides_list || r.pesticidesList,
+        standard_practices: r.standard_practices || r.standardPractices,
+      }));
+    }
+
+    // 5. Combine Data: Local (Pending) + Remote (Synced)
+    // Filter out remote records that might still be in the local queue
+    const localIds = new Set(localRecords.map(r => r.block_id));
+    const uniqueRemoteRecords = remoteRecords.filter(r => !localIds.has(r.block_id));
+
+    let finalRecords = [...localRecords, ...uniqueRemoteRecords];
 
     // Sorting by date (newest first)
     finalRecords.sort((a, b) => new Date(b.created_at || b.date_planted) - new Date(a.created_at || a.date_planted));
@@ -93,13 +215,22 @@ const BlockSummary = ({ route = {}, navigation }) => {
     }
   }, [route?.params?.shouldRefresh, loadAndSyncData]);
 
+  // Refresh data whenever the screen comes into focus (e.g., after form submission)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      console.log('[BlockSummary] Screen focused, refreshing data...');
+      loadAndSyncData();
+    });
+    return unsubscribe;
+  }, [navigation, loadAndSyncData]);
+
   const handleAddNewBlock = () => {
     navigation.navigate('BlockRegistration');
   };
 
   // --- Export Functionality
   const convertToCSV = (rows) => {
-    const header = ['Block ID', 'Trees', 'Date Planted', 'Coffee Type', 'Seedling Source', 'Fertilizer', 'Pesticides', 'Standard Practices'];
+    const header = ['Block ID', 'Trees', 'Date Planted', 'Coffee Type', 'Seedling Source', 'Fertilizer', 'Pesticides', 'Standard Practices', 'Sync Status'];
     const csvRows = [header.join(',')];
 
     rows.forEach((row) => {
@@ -109,9 +240,10 @@ const BlockSummary = ({ route = {}, navigation }) => {
         row.date_planted,
         row.type_of_coffee,
         row.source_of_seedling,
-        row.fertilizer_list,
+        row.fertilizer_names || row.fertilizer_list,
         row.use_pesticides === 'yes' ? 'Yes' : 'No',
         row.standard_practices,
+        row.isSynced ? 'Synced' : 'Pending',
       ];
       csvRows.push(values.map(v => `"${v}"`).join(','));
     });
@@ -144,14 +276,24 @@ const BlockSummary = ({ route = {}, navigation }) => {
   };
 
   const renderRow = ({ item }) => (
-    <View style={[styles.row, styles.dataRow]}>
+    <View style={[styles.row, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
       <Text style={[styles.cell, { width: 100 }]}>{item.block_id || 'N/A'}</Text>
       <Text style={[styles.cell, { width: 80 }]}>{item.no_of_trees}</Text>
       <Text style={[styles.cell, { width: 120 }]}>{item.date_planted}</Text>
       <Text style={[styles.cell, { width: 120 }]}>{item.type_of_coffee}</Text>
       <Text style={[styles.cell, { width: 150 }]}>{item.source_of_seedling}</Text>
-      <Text style={[styles.cell, { width: 150 }]}>{item.fertilizer_list}</Text>
+      <Text style={[styles.cell, { width: 150 }]}>{item.fertilizer_names || item.fertilizer_list}</Text>
       <Text style={[styles.cell, { width: 100 }]}>{item.use_pesticides === 'yes' ? 'Yes' : 'No'}</Text>
+      <View style={[styles.cell, { width: 100, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]}>
+        <Ionicons
+          name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
+          size={16}
+          color={item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT}
+        />
+        <Text style={{ color: item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT, marginLeft: 4, fontSize: 12 }}>
+          {item.isSynced ? 'Synced' : 'Pending'}
+        </Text>
+      </View>
     </View>
   );
 
@@ -222,6 +364,7 @@ const BlockSummary = ({ route = {}, navigation }) => {
           <Text style={[styles.headerCell, { width: 150 }]}>Seedling Source</Text>
           <Text style={[styles.headerCell, { width: 150 }]}>Fertilizer</Text>
           <Text style={[styles.headerCell, { width: 100 }]}>Pesticides</Text>
+          <Text style={[styles.headerCell, { width: 100 }]}>Status</Text>
         </View>
 
         {/* Data Rows */}
