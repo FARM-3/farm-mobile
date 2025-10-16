@@ -7,6 +7,16 @@ module.exports = {
   resolver: {
     ...config.resolver,
     sourceExts: [...config.resolver.sourceExts, 'cjs'],
+    // Block expo-sqlite from being resolved on web platform
+    blockList: [
+      ...(config.resolver.blockList || []),
+      /expo-sqlite\/build\/ExpoSQLite\.web\.js$/,
+    ],
+    // Add alias to prevent SQLite import on web
+    alias: {
+      ...config.resolver.alias,
+      'expo-sqlite': false,
+    },
   },
   transformer: {
     ...config.transformer,
@@ -19,6 +29,6 @@ module.exports = {
       },
     },
   },
-  maxWorkers: 2, // Limit parallel workers to reduce memory usage
+  maxWorkers: 1, // Further reduce workers to prevent memory issues
   resetCache: true,
 };

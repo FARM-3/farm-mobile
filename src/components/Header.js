@@ -1,28 +1,44 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform, StatusBar, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import CoffeeColors from '../theme/colors';
 import AuthService from '../services/AuthService';
 import SyncService from '../services/SyncService';
+import { syncAllRecords, getUnsyncedRecords } from '../services/harvestRecord';
 
 /**
  * Unified Header Component
  * Used across all screens for consistent design
  */
-const Header = ({ title = 'Rugyeyo Farm', onNavigate, showSync = true, showLogout = true }) => {
+const Header = ({ title = 'Rugyeyo Farm', navigation: propNavigation, onNavigate, showSync = true, showLogout = true }) => {
+  // Use either passed navigation prop or hook
+  const hookNavigation = useNavigation();
+  const route = useRoute();
+  const navigation = propNavigation || hookNavigation;
   const [syncStatus, setSyncStatus] = React.useState({ pending: 0 });
   const [isSyncing, setIsSyncing] = React.useState(false);
 
-  // Load sync status on mount
+  // Check if we're on a harvest-related screen
+  const isHarvestScreen = route?.name === 'Harvests' || route?.name === 'HarvestDetails' || route?.name === 'HarvestForm';
+
+  // Load sync status on mount and when route changes
   React.useEffect(() => {
     loadSyncStatus();
-  }, []);
+  }, [route?.name]);
 
   const loadSyncStatus = async () => {
     try {
-      const status = await SyncService.getSyncStatus();
-      setSyncStatus({ pending: status.pendingRecords });
-      setIsSyncing(status.isSyncing);
+      if (isHarvestScreen) {
+        // For harvest screens, check harvest-specific sync queue
+        const { records } = await getUnsyncedRecords();
+        setSyncStatus({ pending: records.length });
+      } else {
+        // For other screens, use general SyncService
+        const status = await SyncService.getSyncStatus();
+        setSyncStatus({ pending: status.pendingRecords });
+        setIsSyncing(status.isSyncing);
+      }
     } catch (error) {
       console.error('[Header] Error loading sync status:', error);
     }
@@ -31,12 +47,36 @@ const Header = ({ title = 'Rugyeyo Farm', onNavigate, showSync = true, showLogou
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const result = await SyncService.syncAll();
+      let result;
 
-      if (result.success) {
-        Alert.alert('Sync Complete', result.message);
+      if (isHarvestScreen) {
+        // Sync harvest records (silent sync, no success message)
+        result = await syncAllRecords();
+
+        // Only show alerts for failures or partial syncs
+        if (result.totalCount === 0) {
+          Alert.alert('Nothing to Sync', 'All harvest records are already synced.');
+        } else if (result.syncedCount > 0 && result.syncedCount < result.totalCount) {
+          Alert.alert(
+            'Partial Sync',
+            `Synced ${result.syncedCount} of ${result.totalCount} records. Some records failed to sync.`
+          );
+        } else if (result.syncedCount === 0 && result.totalCount > 0) {
+          Alert.alert(
+            'Sync Failed',
+            'Could not sync records. Please check your internet connection and try again.'
+          );
+        }
+        // No message on complete success
       } else {
-        Alert.alert('Sync Incomplete', result.message);
+        // Use general sync service for other screens
+        result = await SyncService.syncAll();
+
+        if (result.success) {
+          Alert.alert('Sync Complete', result.message);
+        } else {
+          Alert.alert('Sync Incomplete', result.message);
+        }
       }
 
       await loadSyncStatus();
@@ -59,8 +99,11 @@ const Header = ({ title = 'Rugyeyo Farm', onNavigate, showSync = true, showLogou
           onPress: async () => {
             try {
               await AuthService.logout();
+              // Use onNavigate if provided (legacy support), otherwise use navigation
               if (onNavigate) {
                 onNavigate('Login');
+              } else if (navigation) {
+                navigation.navigate('Login');
               }
             } catch (error) {
               console.error('[Header] Logout error:', error);
@@ -74,7 +117,14 @@ const Header = ({ title = 'Rugyeyo Farm', onNavigate, showSync = true, showLogou
 
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={styles.headerLeft}>
+        <Image
+          source={require('../assets/rugyeyo_logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.headerTitle}>{title}</Text>
+      </View>
 
       <View style={styles.headerRight}>
         {showSync && (
@@ -113,7 +163,7 @@ const Header = ({ title = 'Rugyeyo Farm', onNavigate, showSync = true, showLogou
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 50,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 15 : 50,
     paddingHorizontal: 20,
     paddingBottom: 15,
     backgroundColor: CoffeeColors.DARK_BROWN,
@@ -128,10 +178,21 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 8,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  logo: {
+    width: 48,
+    height: 48,
+    marginRight: 12,
+  },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: CoffeeColors.CREAM,
+    flexShrink: 1,
   },
   headerRight: {
     flexDirection: 'row',

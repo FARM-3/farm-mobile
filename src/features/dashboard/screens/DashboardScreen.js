@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import CoffeeColors from '../../../theme/colors';
 import Header from '../../../components/Header';
 import BottomNav from '../../../components/BottomNav';
 
-const DashboardScreen = ({ onNavigate }) => {
+const DashboardScreen = ({ navigation }) => {
   // Card component
   const Card = ({ iconName, title, description, time, recorder, color, onPress }) => (
     <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={onPress}>
@@ -19,12 +19,21 @@ const DashboardScreen = ({ onNavigate }) => {
     </TouchableOpacity>
   );
 
+  // Placeholder navigation handler for screens not yet added to navigator
+  const handleComingSoon = (featureName) => {
+    Alert.alert(
+      `${featureName} Coming Soon`,
+      `The ${featureName} feature is currently under development.`,
+      [{ text: 'OK' }]
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
-      <Header title="Rugyeyo Farm" onNavigate={onNavigate} />
+      <Header title="Rugyeyo Farm" navigation={navigation} />
 
-      <ScrollView contentContainerStyle={[styles.scrollViewContent, { flex: 1, paddingBottom: 110 }]}>
+      <ScrollView contentContainerStyle={[styles.scrollViewContent, { paddingBottom: 110 }]}>
         <Card
           iconName="people-outline"
           title="Aggregation"
@@ -32,7 +41,7 @@ const DashboardScreen = ({ onNavigate }) => {
           time="10:30 AM"
           recorder="Sarah"
           color={CoffeeColors.GOLD}
-          onPress={() => onNavigate('Aggregation')}
+          onPress={() => navigation.navigate('Aggregation')}
         />
         <Card
           iconName="leaf-outline"
@@ -41,7 +50,16 @@ const DashboardScreen = ({ onNavigate }) => {
           time="09:00 AM"
           recorder="David"
           color={CoffeeColors.LIGHT_BROWN}
-          onPress={() => onNavigate('Harvests')}
+          onPress={() => navigation.navigate('Harvests')}
+        />
+        <Card
+          iconName="grid-outline"
+          title="Blocks"
+          description="Manage coffee farm blocks and field data."
+          time="11:00 AM"
+          recorder="James"
+          color={CoffeeColors.MEDIUM_BROWN}
+          onPress={() => navigation.navigate('BlockSummary')}
         />
         <Card
           iconName="cube-outline"
@@ -49,8 +67,8 @@ const DashboardScreen = ({ onNavigate }) => {
           description="Track processing stages: washing, drying, hulling."
           time="02:00 PM"
           recorder="Emily"
-          color={CoffeeColors.MEDIUM_BROWN}
-          onPress={() => onNavigate('Processing')}
+          color={CoffeeColors.DARK_BROWN}
+          onPress={() => navigation.navigate('Processing')}
         />
         <Card
           iconName="archive-outline"
@@ -58,8 +76,8 @@ const DashboardScreen = ({ onNavigate }) => {
           description="Manage parchment and green bean stock locations."
           time="04:00 PM"
           recorder="John"
-          color={CoffeeColors.DARK_BROWN}
-          onPress={() => onNavigate('Inventory')}
+          color={CoffeeColors.GOLD}
+          onPress={() => handleComingSoon('Inventory')}
         />
         <Card
           iconName="sparkles-outline"
@@ -68,14 +86,14 @@ const DashboardScreen = ({ onNavigate }) => {
           time="08:00 AM"
           recorder="Aisha"
           color={CoffeeColors.ACCENT}
-          onPress={() => onNavigate('Quality')}
+          onPress={() => handleComingSoon('Quality Control')}
         />
         {/* Empty card placeholder to maintain grid layout */}
         <View style={styles.card} />
       </ScrollView>
 
       {/* Bottom Navigation Bar */}
-      <BottomNav activeScreen="Dashboard" onNavigate={onNavigate} />
+      <BottomNav activeScreen="Dashboard" />
     </View>
   );
 };

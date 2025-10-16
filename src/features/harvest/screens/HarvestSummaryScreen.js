@@ -1,15 +1,16 @@
 // src/features/harvest/screens/HarvestSummaryScreen.js
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-    View, 
-    Text, 
-    FlatList, 
-    TouchableOpacity, 
-    StyleSheet, 
-    Alert, 
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+    View,
+    Text,
+    FlatList,
+    TouchableOpacity,
+    StyleSheet,
+    Alert,
     ActivityIndicator,
-    TextInput
+    TextInput,
+    ScrollView
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import { Picker } from "@react-native-picker/picker";
@@ -37,11 +38,15 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     const [filteredData, setFilteredData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
-    
+
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
     const [filterBlock, setFilterBlock] = useState(BLOCK_OPTIONS[0]);
     const [filterStatus, setFilterStatus] = useState(SYNC_STATUS_OPTIONS[0]);
+
+    // Ref for synchronized scrolling
+    const headerScrollRef = useRef(null);
+    const rowScrollRefs = useRef([]);
 
     /**
      * Primary function to fetch, sync, and combine all data sources.
@@ -214,26 +219,89 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         }
     };
 
-    const renderRow = ({ item }) => (
-        <View style={[styles.row, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
-            {/* Display using the cleaned camelCase fields */}
-            <Text style={styles.cell}>{item.weight}</Text>
-            <Text style={styles.cell}>{item.block}</Text>
-            <Text style={styles.cell}>{item.date}</Text>
-            <Text style={styles.cell}>{item.name || 'N/A'}</Text>
-            <Text style={styles.cell}>{item.amountPaid ? `${item.amountPaid} UGX` : 'N/A'}</Text>
-            <Text style={styles.cell}>{item.paidBy || 'N/A'}</Text>
-            <View style={styles.statusCell}>
-                <Ionicons
-                    name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
-                    size={16}
-                    color={item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT}
-                />
-                <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT, marginLeft: 4 }]}>
-                    {item.isSynced ? 'Synced' : 'Pending'}
-                </Text>
+    const handleEdit = (item) => {
+        // Navigate to edit form (you'll need to create this or modify HarvestFormScreen)
+        navigation.navigate('HarvestForm', { editData: item });
+    };
+
+    const handleDelete = (item) => {
+        Alert.alert(
+            'Delete Harvest Record',
+            `Are you sure you want to delete the harvest record for ${item.name}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        // TODO: Implement delete functionality with API call
+                        Alert.alert('Delete', 'Delete functionality will be implemented with API integration');
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleScroll = (event, index) => {
+        const scrollX = event.nativeEvent.contentOffset.x;
+
+        // Sync header
+        if (headerScrollRef.current) {
+            headerScrollRef.current.scrollTo({ x: scrollX, animated: false });
+        }
+
+        // Sync all other rows
+        rowScrollRefs.current.forEach((ref, i) => {
+            if (ref && i !== index) {
+                ref.scrollTo({ x: scrollX, animated: false });
+            }
+        });
+    };
+
+    const renderRow = ({ item, index }) => (
+        <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.rowScrollView}
+            ref={(ref) => rowScrollRefs.current[index] = ref}
+            onScroll={(event) => handleScroll(event, index)}
+            scrollEventThrottle={16}
+        >
+            <View style={[styles.row, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
+                {/* Display using the cleaned camelCase fields */}
+                <Text style={styles.cell}>{item.weight}</Text>
+                <Text style={styles.cell}>{item.block}</Text>
+                <Text style={styles.cell}>{item.date}</Text>
+                <Text style={styles.cell}>{item.name || 'N/A'}</Text>
+                <Text style={styles.cell}>{item.amountPaid ? `${item.amountPaid} UGX` : 'N/A'}</Text>
+                <Text style={styles.cell}>{item.paidBy || 'N/A'}</Text>
+                <View style={styles.statusCell}>
+                    <Ionicons
+                        name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
+                        size={16}
+                        color={item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT}
+                    />
+                    <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT, marginLeft: 4 }]}>
+                        {item.isSynced ? 'Synced' : 'Pending'}
+                    </Text>
+                </View>
+                {/* Action Buttons */}
+                <View style={styles.actionsCell}>
+                    <TouchableOpacity
+                        style={styles.editButton}
+                        onPress={() => handleEdit(item)}
+                    >
+                        <Ionicons name="create-outline" size={18} color={CoffeeColors.WHITE} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={() => handleDelete(item)}
+                    >
+                        <Ionicons name="trash-outline" size={18} color={CoffeeColors.WHITE} />
+                    </TouchableOpacity>
+                </View>
             </View>
-        </View>
+        </ScrollView>
     );
 
     if (isLoading) {
@@ -247,7 +315,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <Header title="Harvest Summary" onNavigate={(screen) => navigation.navigate(screen)} />
+            <Header title="Production Harvests" navigation={navigation} />
             <View style={styles.container}>
 
                 {/* Add New Harvest Button */}
@@ -300,15 +368,24 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
             </TouchableOpacity>
 
             {/* Header */}
-            <View style={[styles.row, styles.headerRow]}>
-                <Text style={styles.headerCell}>Weight</Text>
-                <Text style={styles.headerCell}>Block</Text>
-                <Text style={styles.headerCell}>Date</Text>
-                <Text style={styles.headerCell}>Worker</Text>
-                <Text style={styles.headerCell}>Amount Paid</Text>
-                <Text style={styles.headerCell}>Paid By</Text>
-                <Text style={styles.headerCell}>Status</Text>
-            </View>
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={true}
+                ref={headerScrollRef}
+                onScroll={(event) => handleScroll(event, -1)}
+                scrollEventThrottle={16}
+            >
+                <View style={[styles.row, styles.headerRow]}>
+                    <Text style={styles.headerCell}>Weight</Text>
+                    <Text style={styles.headerCell}>Block</Text>
+                    <Text style={styles.headerCell}>Date</Text>
+                    <Text style={styles.headerCell}>Worker</Text>
+                    <Text style={styles.headerCell}>Amount Paid</Text>
+                    <Text style={styles.headerCell}>Paid By</Text>
+                    <Text style={styles.headerCell}>Status</Text>
+                    <Text style={styles.headerCell}>Actions</Text>
+                </View>
+            </ScrollView>
 
             {/* Data Rows */}
             <FlatList
@@ -319,7 +396,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                 contentContainerStyle={{ paddingBottom: 100 }}
             />
             </View>
-            <BottomNav activeScreen="Harvests" onNavigate={(screen) => navigation.navigate(screen)} />
+            <BottomNav activeScreen="Harvests" />
         </View>
     );
 }
@@ -415,26 +492,30 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         marginLeft: 8,
     },
+    rowScrollView: {
+        marginBottom: 5,
+    },
     row: {
         flexDirection: 'row',
         backgroundColor: CoffeeColors.WHITE,
-        marginBottom: 5,
         borderRadius: 6,
         paddingVertical: 10,
         paddingHorizontal: 5,
-        justifyContent: 'space-between',
+        minWidth: 900, // Ensures horizontal scrolling
     },
     headerRow: {
         backgroundColor: CoffeeColors.DARK_BROWN,
         marginBottom: 8,
         borderRadius: 6,
+        paddingVertical: 8,
     },
     headerCell: {
-        flex: 1,
+        width: 100,
         fontWeight: '700',
         color: CoffeeColors.CREAM,
         textAlign: 'center',
         fontSize: 12,
+        paddingHorizontal: 5,
     },
     syncedRow: {
         borderLeftWidth: 5,
@@ -445,15 +526,38 @@ const styles = StyleSheet.create({
         borderLeftColor: CoffeeColors.ACCENT, // Using accent color for pending
     },
     cell: {
-        flex: 1,
+        width: 100,
         color: CoffeeColors.GRAY_TEXT,
         textAlign: 'center',
         fontSize: 12,
         alignSelf: 'center',
+        paddingHorizontal: 5,
     },
     statusCell: {
-        flex: 1,
+        width: 100,
         flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 5,
+    },
+    actionsCell: {
+        width: 100,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 5,
+    },
+    editButton: {
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        borderRadius: 5,
+        padding: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    deleteButton: {
+        backgroundColor: CoffeeColors.ACCENT,
+        borderRadius: 5,
+        padding: 8,
         justifyContent: 'center',
         alignItems: 'center',
     },

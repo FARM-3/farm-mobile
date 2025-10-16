@@ -35,19 +35,21 @@ const mapToApiPayload = (payload) => {
         apiPayload.date_of_delivery = payload.date.split('T')[0];
     }
 
-    // 2. Weight (UI: weight (Number) -> API: weight_on_delivery (string))
-    apiPayload.weight_on_delivery = String(Number(payload.weight));
+    // 2. Weight (UI: weight (Number) -> API: weight_on_delivery (decimal string with 2 decimal places))
+    apiPayload.weight_on_delivery = Number(payload.weight).toFixed(2);
 
-    // 3. Block (UI: blockId (string) -> API: block_id (string))
+    // 3. Block (UI: blockId (string like "block01") -> API: block_id (string))
+    // Keep as string - API expects block ID strings like "block01", "block02", etc.
     apiPayload.block_id = payload.blockId;
 
     // 4. Worker Name (UI: workerName (string) -> API: worker_name (string))
     apiPayload.worker_name = payload.workerName;
 
-    // 5. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (string))
-    apiPayload.amount_paid = String(Number(payload.amountPaid));
+    // 5. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (decimal string with 2 decimal places))
+    apiPayload.amount_paid = Number(payload.amountPaid).toFixed(2);
 
-    // 6. Paid By (UI: paidBy (string) -> API: paid_by (string))
+    // 6. Paid By (UI: paidBy (string like "RF001") -> API: paid_by (string))
+    // Keep as string - API expects staff ID strings like "RF001", "RF002", etc.
     apiPayload.paid_by = payload.paidBy;
 
     return apiPayload;
@@ -63,6 +65,10 @@ export const postHarvestRecord = async (uiPayload) => {
     // Endpoint: harvests/harvests/
     const endpoint = 'harvests/harvests/';
 
+    // Debug logging for payload
+    console.log('[postHarvestRecord] Original UI payload:', uiPayload);
+    console.log('[postHarvestRecord] Mapped API payload:', apiPayload);
+
     try {
         const response = await ApiService.post(endpoint, apiPayload);
         return { success: true, status: response.status, remoteData: response.data };
@@ -70,6 +76,15 @@ export const postHarvestRecord = async (uiPayload) => {
         // Return 0 for status if network error (offline) to handle offline state robustly
         const status = error.response ? error.response.status : 0;
         const remoteData = error.response ? error.response.data : (error.message || 'Network Error');
+
+        // Debug logging for error
+        console.error('[postHarvestRecord] Error details:', {
+            status,
+            remoteData,
+            endpoint,
+            apiPayload
+        });
+
         return { success: false, status: status, remoteData: remoteData };
     }
 };
@@ -159,11 +174,20 @@ export const syncAllRecords = async () => {
 
     let syncedCount = 0;
     const totalCount = records.length;
-    
+
     console.log(`Attempting to sync ${totalCount} local records...`);
+    console.log('[syncAllRecords] Records in queue:', records);
 
     // Use a deep copy to iterate over, in case the queue is modified during iteration
     for (const record of records) {
+        console.log(`[syncAllRecords] Processing record ${record.id}:`, record);
+
+        // Validate paid_by field before attempting sync - API now expects any string
+        if (!record.paidBy || typeof record.paidBy !== 'string' || record.paidBy.trim() === '') {
+            console.warn(`[syncAllRecords] Skipping record ${record.id}: Invalid paid_by field "${record.paidBy}". Must be a non-empty string`);
+            continue;
+        }
+
         // We pass the local record object which mapToApiPayload will correctly transform.
         const response = await postHarvestRecord(record);
 
@@ -172,7 +196,7 @@ export const syncAllRecords = async () => {
             await removeRecordFromQueue(record.id);
             syncedCount++;
         } else {
-            // Failed (either offline or API issue). We log it and leave it in the queue 
+            // Failed (either offline or API issue). We log it and leave it in the queue
             // for the next sync attempt.
             console.warn(`Sync failed for record ${record.id}: Status ${response.status}`, response.remoteData);
         }

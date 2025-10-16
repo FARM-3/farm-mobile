@@ -5,12 +5,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
 import CoffeeColors from '../../../theme/colors';
 import Header from '../../../components/Header';
 import BottomNav from '../../../components/BottomNav';
 
-export default function ProcessingScreen({ onNavigate }) {
+export default function ProcessingScreen({ navigation }) {
   const processes = [
     {
       id: 1,
@@ -46,10 +47,18 @@ export default function ProcessingScreen({ onNavigate }) {
     },
   ];
 
+  const handleComingSoon = (processName) => {
+    Alert.alert(
+      `${processName} Coming Soon`,
+      `The ${processName} feature is currently under development.`,
+      [{ text: 'OK' }]
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Unified Header */}
-      <Header title="Processing" onNavigate={onNavigate} />
+      <Header title="Processing" navigation={navigation} />
 
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Processing Cards Grid */}
@@ -58,7 +67,7 @@ export default function ProcessingScreen({ onNavigate }) {
             <TouchableOpacity
               key={process.id}
               style={styles.card}
-              onPress={() => onNavigate(process.screen)}
+              onPress={() => handleComingSoon(process.name)}
               activeOpacity={0.7}
             >
               <Text style={styles.cardIcon}>{process.icon}</Text>
@@ -71,7 +80,7 @@ export default function ProcessingScreen({ onNavigate }) {
       </ScrollView>
 
       {/* Unified Bottom Navigation */}
-      <BottomNav activeScreen="Processing" onNavigate={onNavigate} />
+      <BottomNav activeScreen="Processing" />
     </View>
   );
 }

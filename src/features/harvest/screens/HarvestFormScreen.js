@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import CoffeeColors from '../../../theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUnsyncedRecords } from '../../../services/harvestRecord';
+import { getUnsyncedRecords, postHarvestRecord, removeRecordFromQueue } from '../../../services/harvestRecord';
 import Header from '../../../components/Header';
 import BottomNav from '../../../components/BottomNav';
 
@@ -59,13 +59,25 @@ function generateHarvestId(date) {
     return `PA${dd}${mm}${yy}H`;
 }
 
-// --- STATIC OPTIONS (Aligned with 'Production Harvest details (Stage 1)' requirements) ---
-// Simulates data coming from the Block details form, including the system-generated ID
+// --- STATIC OPTIONS (Aligned with API schema) ---
+// Block IDs must match the enum values from the API schema
 const BLOCK_DATA = [
-    { id: "BLK-001", name: "Block A-1 (Arabica)" },
-    { id: "BLK-002", name: "Block B-2 (Robusta)" },
-    { id: "BLK-003", name: "Block C-3 (Mixed)" },
-    { id: "BLK-004", name: "Block D-4 (New Crop)" },
+    { id: "block01", name: "Block 01" },
+    { id: "block02", name: "Block 02" },
+    { id: "block03", name: "Block 03" },
+    { id: "block04", name: "Block 04" },
+    { id: "block05", name: "Block 05" },
+    { id: "block06", name: "Block 06" },
+];
+
+// Staff IDs - these are auto-generated strings like "RF001", "RF002"
+// You need to fetch these from /api/staff/ endpoint or add them manually
+const STAFF_DATA = [
+    { id: "RF001", name: "Grace" },
+    { id: "RF002", name: "Kevin" },
+    { id: "RF003", name: "Edna" },
+    { id: "RF004", name: "John" },
+    { id: "RF005", name: "Mary" },
 ];
 
 
@@ -73,19 +85,17 @@ const BLOCK_DATA = [
 // --- STEP COMPONENTS ---
 
 const Step1_WorkerAndBlock = ({ formData, updateField }) => {
-    
+
     // Handler to update block ID when a block is selected
     const handleBlockChange = (selectedId) => {
-        const block = BLOCK_DATA.find(b => b.id === selectedId);
-        if (block) {
-            updateField('blockId', block.id);
-        }
+        // selectedId is already an integer from the picker
+        updateField('blockId', selectedId);
     };
 
     return (
         <View style={stepStyles.stepContainer}>
             <Text style={styles.heading}>1. Worker & Block Details</Text>
-            
+
             <Text style={styles.label}>Worker Name</Text>
             <TextInput
                 style={styles.input}
@@ -95,23 +105,22 @@ const Step1_WorkerAndBlock = ({ formData, updateField }) => {
                 autoCapitalize="words"
             />
 
-            <Text style={styles.label}>Block ID</Text>
+            <Text style={styles.label}>Block</Text>
             <View style={styles.pickerWrap}>
-                <Picker 
-                    selectedValue={formData.blockId} 
+                <Picker
+                    selectedValue={formData.blockId}
                     onValueChange={handleBlockChange}
                 >
                     {BLOCK_DATA.map((b) => (
                         <Picker.Item
                             key={b.id}
-                            // Display the Block ID
-                            label={`${b.id}`}
+                            label={b.name}
                             value={b.id}
                         />
                     ))}
                 </Picker>
             </View>
-            
+
             <Text style={styles.label}>Harvest ID (Local)</Text>
             <View style={[styles.input, { justifyContent: "center" }]}>
                 <Text style={{ color: CoffeeColors.MEDIUM_BROWN, fontWeight: 'bold' }}>
@@ -134,7 +143,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
             onChangeText={(t) => updateField('weight', t.replace(",", "."))}
             placeholder="e.g. 12.5"
         />
-        
+
         <Text style={styles.label}>Date of Delivery</Text>
         <TouchableOpacity style={styles.dateButton} onPress={() => updateField('showDatePicker', true)} accessibilityLabel="Select date">
             <Ionicons name="calendar-outline" size={20} color={CoffeeColors.DARK_BROWN} />
@@ -152,7 +161,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
                 maximumDate={new Date()}
             />
         )}
-        
+
         <Text style={styles.label}>Amount Paid (UGX)</Text>
         <TextInput
             style={styles.input}
@@ -161,15 +170,22 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
             onChangeText={(t) => updateField('amountPaid', t.replace(",", "."))}
             placeholder="e.g. 5000"
         />
-        
+
         <Text style={styles.label}>Paid By</Text>
-        <TextInput
-            style={styles.input}
-            value={formData.paidBy}
-            onChangeText={(t) => updateField('paidBy', t)}
-            placeholder="Enter name of person who paid"
-            autoCapitalize="words"
-        />
+        <View style={styles.pickerWrap}>
+            <Picker
+                selectedValue={formData.paidBy}
+                onValueChange={(selectedId) => updateField('paidBy', selectedId)}
+            >
+                {STAFF_DATA.map((w) => (
+                    <Picker.Item
+                        key={w.id}
+                        label={w.name}
+                        value={w.id}
+                    />
+                ))}
+            </Picker>
+        </View>
     </View>
 );
 
@@ -183,17 +199,17 @@ const STEPS = [
 ];
 
 const initialFormState = {
-    // Harvest Details (Removed: grade, cherryColor)
+    // Harvest Details
     workerName: "", // maps to Worker_name
-    blockId: BLOCK_DATA[0].id, // maps to block_ID
-    weight: "", // maps to weight on delivery
-    date: new Date(), // maps to date of delivery
-    amountPaid: "", // maps to amount paid
-    paidBy: "", // maps to paid by
-    
+    blockId: BLOCK_DATA[0].id, // Integer PK from blocks table
+    weight: "", // maps to weight_on_delivery
+    date: new Date(), // maps to date_of_delivery
+    amountPaid: "", // maps to amount_paid
+    paidBy: STAFF_DATA[0].id, // Integer PK from users table
+
     // System fields
     showDatePicker: false,
-    generatedId: generateHarvestId(new Date()), // maps to Harvest_ID
+    generatedId: generateHarvestId(new Date()), // Local ID for tracking
 };
 
 
@@ -267,6 +283,48 @@ export default function HarvestFormScreen({ navigation }) {
     };
     
 
+    const handleSyncNow = async (harvestData) => {
+        try {
+            console.log('[HarvestForm] Syncing to backend now...');
+            const response = await postHarvestRecord(harvestData);
+
+            if (response.success) {
+                // Remove from local queue since it's synced
+                await removeRecordFromQueue(harvestData.id);
+                Alert.alert(
+                    "Success!",
+                    "Harvest record saved and synced to cloud successfully.",
+                    [{ text: "OK", onPress: () => navigation.navigate('Harvests') }]
+                );
+            } else {
+                // Failed to sync, keep in queue
+                Alert.alert(
+                    "Sync Failed",
+                    "Record saved locally but couldn't sync to cloud. It will sync automatically when online.",
+                    [{ text: "OK", onPress: () => navigation.navigate('Harvests') }]
+                );
+            }
+        } catch (error) {
+            console.error('[HarvestForm] Sync error:', error);
+            Alert.alert(
+                "Sync Failed",
+                "Record saved locally but couldn't sync to cloud. It will sync automatically when online.",
+                [{ text: "OK", onPress: () => navigation.navigate('Harvests') }]
+            );
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleSyncLater = () => {
+        Alert.alert(
+            "Saved Locally",
+            "Harvest record saved to local database. You can sync it later using the cloud sync button.",
+            [{ text: "OK", onPress: () => navigation.navigate('Harvests') }]
+        );
+        setIsSaving(false);
+    };
+
     const handleSubmit = async () => {
         if (isSaving) return;
 
@@ -283,11 +341,11 @@ export default function HarvestFormScreen({ navigation }) {
             const harvestData = {
                 // Fields aligned with API schema
                 workerName: formData.workerName.trim(),
-                blockId: formData.blockId,
+                blockId: formData.blockId, // Integer PK
                 weight: Number(formData.weight),
                 date: formData.date,
                 amountPaid: Number(formData.amountPaid),
-                paidBy: formData.paidBy,
+                paidBy: formData.paidBy, // Integer PK (don't trim)
                 id: formData.generatedId,
 
                 // System/Internal fields
@@ -301,35 +359,32 @@ export default function HarvestFormScreen({ navigation }) {
             await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
 
             console.log('[HarvestForm] Saved to local storage:', harvestData);
-            const localId = formData.generatedId;
-
-            // Try to sync immediately to cloud (silent fail if offline)
-            try {
-                console.log('[HarvestForm] Attempting immediate sync...');
-                // const synced = await SyncService.syncImmediately('harvests', localId);
-                const synced = false; // Mocking failure for demonstration
-                
-                if (synced) {
-                    Alert.alert("Success", "Harvest saved and synced to cloud!");
-                } else {
-                    Alert.alert("Saved Locally", "Harvest saved. Will sync when online.");
-                }
-            } catch (syncError) {
-                console.log('[HarvestForm] Sync failed (offline?), staying in queue:', syncError.message);
-                Alert.alert("Saved Locally", "Harvest saved. Will sync when online.");
-            }
 
             // Reset form
             setFormData(initialFormState);
-            setCurrentStep(0); // Go back to the first step
+            setCurrentStep(0);
 
-            // Navigate back to summary with refresh parameter
-            navigation.navigate('HarvestSummary', { shouldRefresh: true });
-            
+            // Show sync options dialog
+            Alert.alert(
+                "Data Saved Successfully!",
+                "Would you like to sync this record to the cloud now or sync later?",
+                [
+                    {
+                        text: "Sync Later",
+                        style: "cancel",
+                        onPress: () => handleSyncLater()
+                    },
+                    {
+                        text: "Sync Now",
+                        onPress: () => handleSyncNow(harvestData)
+                    }
+                ],
+                { cancelable: false }
+            );
+
         } catch (error) {
             console.error('[HarvestForm] Local save failed:', error);
             Alert.alert("Error", "Failed to save harvest. Please try again.");
-        } finally {
             setIsSaving(false);
         }
     };
@@ -338,8 +393,8 @@ export default function HarvestFormScreen({ navigation }) {
 
     // A small placeholder view to navigate back to the summary screen
     const BackButton = () => (
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('HarvestSummary')}>
-            <Text style={styles.secondaryBtnText}>Back to Harvest Summary</Text>
+        <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('Harvests')}>
+            <Text style={styles.secondaryBtnText}>Back to Production Harvests</Text>
         </TouchableOpacity>
     );
 

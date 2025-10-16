@@ -15,7 +15,8 @@ const CoffeeColors = {
 
   // Status colors
   ERROR_RED: '#D32F2F',       // Error messages
-  SUCCESS_GREEN: '#4CAF50',   // Success messages
+  SUCCESS_GREEN: '#4CAF50',   // Success messages (used in some components)
+  GREEN: '#8d6e63',           // Maps to MEDIUM_BROWN for consistency with Aggregation
 };
 
 export default CoffeeColors;

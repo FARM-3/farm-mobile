@@ -322,15 +322,23 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // 2. Import your screens and theme
-import CoffeeColors from './theme/colors'; 
+import CoffeeColors from './theme/colors';
 
-// FIX: Importing the correct file name: BlockDetailsForm
-import BlockDetailsForm from './features/blocks/BlockDetailsForm'; 
-// Assuming BlockSummary is correct, but ensuring it's the right component name
-import BlockSummary from './features/blocks/BlockSummary'; 
-import DashboardScreen from './features/dashboard/screens/DashboardScreen'; 
-// import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen'; 
-// import HarvestSummaryScreen from './features/harvest/screens/HarvestSummaryScreen'; // <-- ADDED IMPORT
+// Dashboard screens
+import DashboardScreen from './features/dashboard/screens/DashboardScreen';
+import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
+
+// Block screens
+import BlockDetailsForm from './features/blocks/BlockDetailsForm';
+import BlockSummary from './features/blocks/BlockSummary';
+
+// Harvest screens
+import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen';
+import ProductionHarvestsScreen from './features/harvest/screens/ProductionHarvestsScreen';
+import HarvestDetailsScreen from './features/harvest/screens/HarvestDetailsScreen';
+
+// Aggregation screens
+import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
 
 // Initialize the stack navigator
 const Stack = createNativeStackNavigator();
@@ -343,51 +351,70 @@ const App = () => {
                 <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
                 {/* 4. Define the Stack Navigator and its screens */}
                 <Stack.Navigator
-                    // Set the starting screen to the Block Summary
-                    initialRouteName="BlockSummary"
+                    // Set the starting screen to Dashboard
+                    initialRouteName="Dashboard"
                     screenOptions={{
-                        headerStyle: { backgroundColor: CoffeeColors.DARK_BROWN },
-                        headerTintColor: CoffeeColors.WHITE,
-                        headerTitleStyle: { fontWeight: 'bold' },
+                        headerShown: false, // Hide React Navigation header since we use custom Header component
                     }}
                 >
-                    {/* Define the Block Details Form screen */}
+                    {/* Dashboard screen */}
                     <Stack.Screen
-                        name="BlockDetailsForm"
-                        component={BlockDetailsForm}
-                        options={{ title: 'Add Block Details' }}
+                        name="Dashboard"
+                        component={DashboardScreen}
+                        options={{ title: 'Rugyeyo Farm Dashboard' }}
                     />
-                    
-                    {/* Define the Block Summary screen (where navigation.addListener is used) */}
+
+                    {/* Aggregation screen */}
+                    <Stack.Screen
+                        name="Aggregation"
+                        component={AggregationScreen}
+                        options={{ title: 'Aggregation' }}
+                    />
+
+                    {/* Harvest screens */}
+                    <Stack.Screen
+                        name="Harvests"
+                        component={ProductionHarvestsScreen}
+                        options={{ title: 'Production Harvests' }}
+                    />
+
+                    <Stack.Screen
+                        name="HarvestDetails"
+                        component={HarvestDetailsScreen}
+                        options={{ title: 'Harvest Details' }}
+                    />
+
+                    <Stack.Screen
+                        name="HarvestForm"
+                        component={HarvestFormScreen}
+                        options={{ title: 'New Harvest Entry' }}
+                    />
+
+                    {/* Processing screen */}
+                    <Stack.Screen
+                        name="Processing"
+                        component={ProcessingScreen}
+                        options={{ title: 'Processing' }}
+                    />
+
+                    {/* Block screens */}
                     <Stack.Screen
                         name="BlockSummary"
                         component={BlockSummary}
                         options={{ title: 'Block Data Summary' }}
                     />
 
-                    {/* Define the Block Registration screen */}
+                    <Stack.Screen
+                        name="BlockDetailsForm"
+                        component={BlockDetailsForm}
+                        options={{ title: 'Add Block Details' }}
+                    />
+
                     <Stack.Screen
                         name="BlockRegistration"
                         component={BlockDetailsForm}
                         options={{ title: 'Block Registration' }}
                     />
-
-                    {/* Define the Harvest Form screen */}
-                    {/* <Stack.Screen
-                        name="HarvestForm"
-                        component={HarvestFormScreen}
-                        options={{ title: 'New Harvest Entry' }}
-                    /> */}
-
-                    {/* NEW: Define the Harvest Summary screen */}
-                    {/* <Stack.Screen
-                        name="HarvestSummary"
-                        component={HarvestSummaryScreen}
-                        options={{ title: 'Harvest History' }}
-                    /> */}
-
-                    {/* Example of other screens, if needed */}
-                    {/* <Stack.Screen name="Dashboard" component={DashboardScreen} /> */}
                     
                 </Stack.Navigator>
             </SafeAreaView>
