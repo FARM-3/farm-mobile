@@ -1527,7 +1527,7 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
                             setSelectedFarmer(null);
                             setViewMode('table'); // Go to records view
                         }}>
-                        <Text style={[styles.tabText, activeTab === 'farmers' && styles.activeTabText]}>Register Farmer</Text>
+                        <Text style={[styles.tabText, activeTab === 'farmers' && styles.activeTabText]}>Farmer Registry</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.tabButton, activeTab === 'harvests' && styles.activeTab]}

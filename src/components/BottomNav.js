@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     backgroundColor: CoffeeColors.LIGHT_GRAY,
-    borderTopWidth: 1,
+    borderTopWidth: 2,
     borderTopColor: CoffeeColors.MEDIUM_BROWN,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -91,6 +91,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
+    overflow: 'hidden',
   },
   navItem: {
     alignItems: 'center',

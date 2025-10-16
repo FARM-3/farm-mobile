@@ -63,12 +63,20 @@ export const fetchFarmers = async () => {
         const rawList = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.results) ? payload.results : []);
 
         // Map farmers to a predictable shape: { id, name, ... }
-        return rawList.map(f => ({
+        const farmers = rawList.map(f => ({
             id: f.id ?? f.pk ?? f._id ?? null,
             name: f.name || f.full_name || f.farmer_name || f.displayName || '',
             // keep original object for reference
             __raw: f,
         }));
+
+        console.log('[aggregationService] Normalized farmers:', farmers.length);
+
+        // Return in expected format with success flag
+        return {
+            success: true,
+            farmers: farmers
+        };
     } catch (error) {
         console.error('[aggregationService] Error fetching farmers:', error.response?.data || error.message);
 
@@ -77,7 +85,10 @@ export const fetchFarmers = async () => {
             console.warn('[aggregationService] Unauthorized - user may need to login again');
         }
 
-        return [];
+        return {
+            success: false,
+            farmers: []
+        };
     }
 };
 
@@ -279,7 +290,7 @@ export const fetchHarvests = async () => {
             const weight = h.weight_on_delivery ?? h.quantity ?? h.weight ?? h.weight_kg ?? 0;
 
             // Date mapping
-            const date = h.date_of_delivery ?? h.date_harvested ?? h.harvest_date ?? h.date ?? '';
+            const date = h.date_of_delivery ?? h.date_harvested ?? h.harvest_date ?? h.date ?? h.created_at ?? '';
 
             const amountPaid = h.amount_paid ?? h.amount ?? h.paid_amount ?? 0;
 
@@ -287,9 +298,12 @@ export const fetchHarvests = async () => {
                 id: h.id ?? h.pk ?? null,
                 farmer: (h.farmer && (typeof h.farmer === 'number' || typeof h.farmer === 'string')) ? h.farmer : (h.farmer?.id ?? null),
                 farmer_name: farmerName,
+                weight: Number(weight) || 0,
                 weight_on_delivery: Number(weight) || 0,
                 weight_after_floating: Number(h.weight_after_floating ?? h.after_floating ?? 0) || 0,
+                date: date,
                 date_of_delivery: date,
+                created_at: h.created_at || date,
                 grade: h.grade ?? h.quality ?? '',
                 cherry_colour: h.cherry_colour ?? h.cherryColor ?? h.cherry_colour ?? '',
                 stage: h.stage ?? '',
@@ -301,7 +315,13 @@ export const fetchHarvests = async () => {
             };
         });
 
-        return normalized;
+        console.log('[aggregationService] Normalized harvests:', normalized.length);
+
+        // Return in expected format with success flag
+        return {
+            success: true,
+            harvests: normalized
+        };
     } catch (error) {
         console.error('[aggregationService] Error fetching harvests:', error.response?.data || error.message);
 
@@ -309,7 +329,10 @@ export const fetchHarvests = async () => {
             console.warn('[aggregationService] Unauthorized - user may need to login again');
         }
 
-        return [];
+        return {
+            success: false,
+            harvests: []
+        };
     }
 };
 

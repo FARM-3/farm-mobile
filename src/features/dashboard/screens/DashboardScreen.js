@@ -133,7 +133,7 @@ const DashboardScreen = ({ navigation }) => {
     );
   }
 
-  const aggFarmerInfo = formatLastRecord(lastRecords.aggregationFarmer, 'farmer');
+  const aggHarvestInfo = formatLastRecord(lastRecords.aggregationHarvest, 'aggHarvest');
   const harvestInfo = formatLastRecord(lastRecords.harvest, 'harvest');
   const blockInfo = formatLastRecord(lastRecords.block, 'block');
 
@@ -147,9 +147,9 @@ const DashboardScreen = ({ navigation }) => {
           iconName="people-outline"
           title="Aggregation"
           description="Record farmer details and harvest weights."
-          time={aggFarmerInfo.time}
-          recorder={aggFarmerInfo.recorder}
-          color={CoffeeColors.GOLD}
+          time={aggHarvestInfo.time}
+          recorder={aggHarvestInfo.recorder}
+          color={CoffeeColors.ACCENT}
           onPress={() => navigation.navigate('Aggregation')}
         />
         <Card
@@ -158,7 +158,7 @@ const DashboardScreen = ({ navigation }) => {
           description="View and manage recent harvest records."
           time={harvestInfo.time}
           recorder={harvestInfo.recorder}
-          color={CoffeeColors.LIGHT_BROWN}
+          color={CoffeeColors.ACCENT}
           onPress={() => navigation.navigate('Harvests')}
         />
         <Card
@@ -167,7 +167,7 @@ const DashboardScreen = ({ navigation }) => {
           description="Manage coffee farm blocks and field data."
           time={blockInfo.time}
           recorder={blockInfo.recorder}
-          color={CoffeeColors.MEDIUM_BROWN}
+          color={CoffeeColors.ACCENT}
           onPress={() => navigation.navigate('BlockSummary')}
         />
         <Card
@@ -176,29 +176,9 @@ const DashboardScreen = ({ navigation }) => {
           description="Track processing stages: washing, drying, hulling."
           time="02:00 PM"
           recorder="Emily"
-          color={CoffeeColors.DARK_BROWN}
+          color={CoffeeColors.ACCENT}
           onPress={() => navigation.navigate('Processing')}
         />
-        <Card
-          iconName="archive-outline"
-          title="Inventory"
-          description="Manage parchment and green bean stock locations."
-          time="04:00 PM"
-          recorder="John"
-          color={CoffeeColors.GOLD}
-          onPress={() => handleComingSoon('Inventory')}
-        />
-        <Card
-          iconName="sparkles-outline"
-          title="Quality Control (QC)"
-          description="Log cup scores, moisture, and defect analysis."
-          time="08:00 AM"
-          recorder="Aisha"
-          color={CoffeeColors.ACCENT}
-          onPress={() => handleComingSoon('Quality Control')}
-        />
-        {/* Empty card placeholder to maintain grid layout */}
-        <View style={styles.card} />
       </ScrollView>
 
       {/* Bottom Navigation Bar */}

@@ -32,7 +32,7 @@ const CoffeeColors = {
 
 
 // --- Main Component ---
-export default function LoginScreen({ onNavigate }) {
+export default function LoginScreen({ navigation }) {
   // --- STATE ---
   const [phoneNumber, setPhoneNumber] = useState("");
   const [pin, setPin] = useState(["", "", "", ""]);
@@ -122,9 +122,7 @@ export default function LoginScreen({ onNavigate }) {
       // Navigate to Dashboard
       setTimeout(() => {
         setLoading(false);
-        if (onNavigate) {
-          onNavigate('Dashboard');
-        }
+        navigation.replace('Dashboard');
       }, 500);
 
     } catch (err) {

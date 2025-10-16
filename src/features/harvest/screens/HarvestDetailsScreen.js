@@ -28,8 +28,7 @@ import {
 import Header from '../../../components/Header';
 import BottomNav from '../../../components/BottomNav';
 
-const BLOCK_OPTIONS = ["All Blocks", "Block A-1", "Block B-2", "Block C-3"];
-const SYNC_STATUS_OPTIONS = ["All Statuses", "Synced", "Pending"];
+const FILTER_BY_OPTIONS = ["All Records", "Synced Only", "Pending Only"];
 
 export default function HarvestDetailsScreen({ route = {}, navigation }) {
     const [allRecords, setAllRecords] = useState([]);
@@ -39,8 +38,7 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
 
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterBlock, setFilterBlock] = useState(BLOCK_OPTIONS[0]);
-    const [filterStatus, setFilterStatus] = useState(SYNC_STATUS_OPTIONS[0]);
+    const [filterBy, setFilterBy] = useState(FILTER_BY_OPTIONS[0]);
 
     // Ref for synchronized scrolling
     const headerScrollRef = useRef(null);
@@ -108,26 +106,25 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
     useEffect(() => {
         let result = allRecords;
 
+        // Apply search filter
         if (searchTerm) {
             const lowerSearch = searchTerm.toLowerCase();
             result = result.filter(record =>
                 record.name?.toLowerCase().includes(lowerSearch) ||
-                record.id?.toString().toLowerCase().includes(lowerSearch)
+                record.id?.toString().toLowerCase().includes(lowerSearch) ||
+                record.block?.toLowerCase().includes(lowerSearch)
             );
         }
 
-        if (filterBlock !== BLOCK_OPTIONS[0]) {
-            result = result.filter(record => record.block === filterBlock);
-        }
-
-        if (filterStatus === "Synced") {
+        // Apply filter by sync status
+        if (filterBy === "Synced Only") {
             result = result.filter(record => record.isSynced === true);
-        } else if (filterStatus === "Pending") {
+        } else if (filterBy === "Pending Only") {
             result = result.filter(record => record.isSynced === false);
         }
 
         setFilteredData(result);
-    }, [allRecords, searchTerm, filterBlock, filterStatus]);
+    }, [allRecords, searchTerm, filterBy]);
 
     useEffect(() => {
         loadAndSyncData();
@@ -210,30 +207,41 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
         );
     };
 
-    const handleScroll = (event, index) => {
+    const handleScroll = (event, sourceIndex) => {
         const scrollX = event.nativeEvent.contentOffset.x;
 
-        if (headerScrollRef.current) {
+        // Sync header
+        if (sourceIndex !== -1 && headerScrollRef.current) {
             headerScrollRef.current.scrollTo({ x: scrollX, animated: false });
         }
 
+        // Sync all rows
         rowScrollRefs.current.forEach((ref, i) => {
-            if (ref && i !== index) {
+            if (ref && i !== sourceIndex) {
                 ref.scrollTo({ x: scrollX, animated: false });
             }
         });
+
+        // If header is the source, sync all rows
+        if (sourceIndex === -1) {
+            rowScrollRefs.current.forEach((ref) => {
+                if (ref) {
+                    ref.scrollTo({ x: scrollX, animated: false });
+                }
+            });
+        }
     };
 
     const renderRow = ({ item, index }) => (
         <ScrollView
             horizontal
-            showsHorizontalScrollIndicator={false}
+            showsHorizontalScrollIndicator={true}
             style={styles.rowScrollView}
             ref={(ref) => rowScrollRefs.current[index] = ref}
             onScroll={(event) => handleScroll(event, index)}
             scrollEventThrottle={16}
-            decelerationRate="fast"
-            snapToAlignment="start"
+            bounces={false}
+            bouncesZoom={false}
         >
             <View style={[styles.row, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
                 <Text style={styles.cell}>{item.weight}</Text>
@@ -282,7 +290,7 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
                     style={styles.backButton}
                     onPress={() => navigation.navigate('Harvests')}
                 >
-                    <Ionicons name="arrow-back" size={20} color={CoffeeColors.CREAM} />
+                    <Ionicons name="arrow-back" size={20} color={CoffeeColors.WHITE} />
                     <Text style={styles.backButtonText}>Back to Production Harvests</Text>
                 </TouchableOpacity>
                 {/* Sync Status Banner */}
@@ -293,24 +301,24 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Search Bar */}
-                <TextInput
-                    style={styles.searchBar}
-                    placeholder="Search by worker name or record ID..."
-                    value={searchTerm}
-                    onChangeText={setSearchTerm}
-                />
-
-                {/* Filters */}
-                <View style={styles.filtersContainer}>
-                    <View style={styles.pickerWrap}>
-                        <Picker selectedValue={filterBlock} onValueChange={setFilterBlock}>
-                            {BLOCK_OPTIONS.map(b => <Picker.Item key={b} label={b} value={b} />)}
-                        </Picker>
-                    </View>
-                    <View style={styles.pickerWrap}>
-                        <Picker selectedValue={filterStatus} onValueChange={setFilterStatus}>
-                            {SYNC_STATUS_OPTIONS.map(s => <Picker.Item key={s} label={s} value={s} />)}
+                {/* Search Bar and Filter */}
+                <View style={styles.searchFilterContainer}>
+                    <TextInput
+                        style={styles.searchBar}
+                        placeholder="Search by worker name, ID, or block..."
+                        value={searchTerm}
+                        onChangeText={setSearchTerm}
+                        placeholderTextColor={CoffeeColors.GRAY_TEXT}
+                    />
+                    <View style={styles.filterByContainer}>
+                        <Picker
+                            selectedValue={filterBy}
+                            onValueChange={setFilterBy}
+                            style={styles.filterByPicker}
+                        >
+                            {FILTER_BY_OPTIONS.map(option => (
+                                <Picker.Item key={option} label={option} value={option} />
+                            ))}
                         </Picker>
                     </View>
                 </View>
@@ -321,31 +329,33 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
                     onPress={exportToExcel}
                     disabled={filteredData.length === 0}
                 >
-                    <Ionicons name="download-outline" size={18} color={CoffeeColors.CREAM} />
+                    <Ionicons name="download-outline" size={18} color={CoffeeColors.WHITE} />
                     <Text style={styles.exportText}>Export {filteredData.length} Records to CSV</Text>
                 </TouchableOpacity>
 
                 {/* Header */}
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={true}
-                    ref={headerScrollRef}
-                    onScroll={(event) => handleScroll(event, -1)}
-                    scrollEventThrottle={16}
-                    decelerationRate="fast"
-                    snapToAlignment="start"
-                >
-                    <View style={[styles.row, styles.headerRow]}>
-                        <Text style={styles.headerCell}>Weight</Text>
-                        <Text style={styles.headerCell}>Block</Text>
-                        <Text style={styles.headerCell}>Date</Text>
-                        <Text style={styles.headerCell}>Worker</Text>
-                        <Text style={styles.headerCell}>Amount Paid</Text>
-                        <Text style={styles.headerCell}>Paid By</Text>
-                        <Text style={styles.headerCell}>Status</Text>
-                        <Text style={styles.headerCell}>Actions</Text>
-                    </View>
-                </ScrollView>
+                <View style={styles.headerContainer}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={true}
+                        ref={headerScrollRef}
+                        onScroll={(event) => handleScroll(event, -1)}
+                        scrollEventThrottle={16}
+                        bounces={false}
+                        bouncesZoom={false}
+                    >
+                        <View style={[styles.row, styles.headerRow]}>
+                            <Text style={styles.headerCell}>Weight</Text>
+                            <Text style={styles.headerCell}>Block</Text>
+                            <Text style={styles.headerCell}>Date</Text>
+                            <Text style={styles.headerCell}>Worker</Text>
+                            <Text style={styles.headerCell}>Amount Paid</Text>
+                            <Text style={styles.headerCell}>Paid By</Text>
+                            <Text style={styles.headerCell}>Status</Text>
+                            <Text style={styles.headerCell}>Actions</Text>
+                        </View>
+                    </ScrollView>
+                </View>
 
                 {/* Data Rows */}
                 <FlatList
@@ -391,33 +401,42 @@ const styles = StyleSheet.create({
         fontSize: 12,
         flexShrink: 1,
     },
-    searchBar: {
-        backgroundColor: CoffeeColors.WHITE,
-        padding: 10,
-        borderRadius: 8,
+    searchFilterContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginBottom: 10,
+        gap: 8,
+    },
+    searchBar: {
+        flex: 1,
+        backgroundColor: CoffeeColors.WHITE,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
         borderWidth: 1,
         borderColor: CoffeeColors.LIGHT_BROWN,
+        fontSize: 14,
+        color: CoffeeColors.DARK_BROWN,
     },
-    filtersContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 10,
-    },
-    pickerWrap: {
-        flex: 1,
-        marginHorizontal: 4,
+    filterByContainer: {
+        minWidth: 140,
         backgroundColor: CoffeeColors.WHITE,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: CoffeeColors.LIGHT_BROWN,
         overflow: 'hidden',
+        height: 42,
+        justifyContent: 'center',
+    },
+    filterByPicker: {
+        height: 42,
+        color: CoffeeColors.DARK_BROWN,
     },
     exportButton: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: CoffeeColors.ACCENT,
         padding: 12,
         borderRadius: 8,
         marginBottom: 10,
@@ -428,7 +447,7 @@ const styles = StyleSheet.create({
         elevation: 5,
     },
     exportText: {
-        color: CoffeeColors.CREAM,
+        color: CoffeeColors.WHITE,
         fontWeight: '700',
         marginLeft: 8,
     },
@@ -443,24 +462,34 @@ const styles = StyleSheet.create({
         paddingHorizontal: 5,
         minWidth: 900,
     },
+    headerContainer: {
+        marginBottom: 8,
+        backgroundColor: CoffeeColors.DARK_BROWN,
+        borderRadius: 6,
+        overflow: 'hidden',
+    },
     headerRow: {
         backgroundColor: CoffeeColors.DARK_BROWN,
-        marginBottom: 8,
         borderRadius: 6,
-        paddingVertical: 8,
+        paddingVertical: 10,
     },
     backButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: CoffeeColors.ACCENT,
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 6,
         marginBottom: 10,
         alignSelf: 'flex-start',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
     backButtonText: {
-        color: CoffeeColors.CREAM,
+        color: CoffeeColors.WHITE,
         fontWeight: '600',
         marginLeft: 6,
         fontSize: 14,
