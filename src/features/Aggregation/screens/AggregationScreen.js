@@ -549,7 +549,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
                     <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: CoffeeColors.MEDIUM_BROWN, flex: 1, marginRight: 8 }]}
+                        style={[styles.actionButton, { backgroundColor: CoffeeColors.ACCENT, flex: 1, marginRight: 8 }]}
                         onPress={onExit}
                     >
                         <Ionicons name="add-circle" size={20} color={CoffeeColors.WHITE} style={{ marginRight: 8 }} />
@@ -1822,11 +1822,11 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
     },
     nextButton: {
-        backgroundColor: CoffeeColors.DARK_BROWN,
+        backgroundColor: CoffeeColors.ACCENT,
         borderWidth: 0,
     },
     submitButton: {
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: CoffeeColors.ACCENT,
         padding: 12,
         borderRadius: 8,
         flex: 1,

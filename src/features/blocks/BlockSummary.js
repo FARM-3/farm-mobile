@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../../theme/colors';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
+import ApiService from '../../services/ApiService';
 
 const BLOCK_SYNC_QUEUE_KEY = "blocks_sync_queue";
 
@@ -78,22 +79,15 @@ const BlockSummary = ({ route = {}, navigation }) => {
 
     for (const record of records) {
       try {
-        const response = await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(record)
-        });
+        // Use ApiService (includes authentication)
+        await ApiService.post('harvests/blocks/', record);
 
-        if (response.ok) {
-          await removeBlockFromQueue(record.block_id);
-          syncedCount++;
-        } else {
-          console.warn(`Sync failed for block ${record.block_id}: Status ${response.status}`);
-        }
+        // Success - remove from queue
+        await removeBlockFromQueue(record.block_id);
+        syncedCount++;
       } catch (error) {
-        console.warn(`Sync failed for block ${record.block_id}:`, error.message);
+        const errorMsg = error.response?.data?.detail || error.message;
+        console.warn(`Sync failed for block ${record.block_id}:`, errorMsg);
       }
     }
 
@@ -121,25 +115,14 @@ const BlockSummary = ({ route = {}, navigation }) => {
 
       // 3. Fetching Remote Data
       try {
-        const remoteResponse = await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
-          headers: {
-            'Content-Type': 'application/json',
-            // Add authorization if needed
-          }
-        });
-        if (remoteResponse.ok) {
-          const data = await remoteResponse.json();
-          // API returns paginated response with results array
-          remoteRecords = data.results || [];
-          setSyncStatus(`Online: Loaded ${remoteRecords.length} blocks from server.`);
-        } else {
-          const errorText = await remoteResponse.text();
-          console.error('API Error:', errorText);
-          setSyncStatus("Online: Failed to fetch remote data.");
-        }
+        const remoteResponse = await ApiService.get('harvests/blocks/');
+        // API returns paginated response with results array
+        remoteRecords = remoteResponse.data.results || [];
+        setSyncStatus(`Online: Loaded ${remoteRecords.length} blocks from server.`);
       } catch (error) {
-        console.error('Network error:', error);
-        setSyncStatus("Online: Network error fetching data.");
+        const errorMsg = error.response?.data?.detail || error.message;
+        console.error('API Error:', errorMsg);
+        setSyncStatus("Online: Failed to fetch remote data.");
       }
     } else {
       setSyncStatus("Offline Mode: Data saved locally. Sync will occur when online.");
@@ -288,9 +271,9 @@ const BlockSummary = ({ route = {}, navigation }) => {
         <Ionicons
           name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
           size={16}
-          color={item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT}
+          color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT}
         />
-        <Text style={{ color: item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT, marginLeft: 4, fontSize: 12 }}>
+        <Text style={{ color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT, marginLeft: 4, fontSize: 12 }}>
           {item.isSynced ? 'Synced' : 'Pending'}
         </Text>
       </View>
@@ -495,7 +478,7 @@ const styles = StyleSheet.create({
   },
   dataRow: {
     borderLeftWidth: 5,
-    borderLeftColor: CoffeeColors.GREEN,
+    borderLeftColor: CoffeeColors.MEDIUM_BROWN,
   },
   cell: {
     flex: 1,

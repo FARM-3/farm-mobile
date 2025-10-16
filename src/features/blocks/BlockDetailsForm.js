@@ -1,7 +1,7 @@
 // BlockRegistrationStepper.js - Updated with Navigation and SuccessModal
 import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, TextInput, Button, StyleSheet, ScrollView,
+  View, Text, TextInput, StyleSheet, ScrollView,
   Modal, TouchableOpacity, Alert, ActivityIndicator
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
@@ -10,10 +10,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import Header from '../../components/Header';
 import BottomNav from '../../components/BottomNav';
-
-// Assuming you have a file at this path
-// import CoffeeColors from '../../theme/colors';
-const CoffeeColors = { primary: '#4CAF50', secondary: '#333' };
+import CoffeeColors from '../../theme/colors';
+import ApiService from '../../services/ApiService';
 
 // === Success Modal Component (Moved here for simplicity) ===
 const SuccessModal = ({ isVisible, message, blockId, onClose, onGoToSummary }) => (
@@ -133,7 +131,7 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
     updateField('typeOfSeedling', value ? `Robusta (${value})` : '');
   };
 
-  const onDateChange = (event, selectedDate) => {
+  const onDateChange = (_event, selectedDate) => {
     setShowDatePicker(false);
     if (selectedDate) updateField('datePlanted', selectedDate);
   };
@@ -541,45 +539,81 @@ const BlockRegistrationStepper = ({ navigation }) => {
         source_of_seedling: sourceSeedlingValue,
         type_of_seedling: formData.typeOfSeedling,
         age_of_seedling: Number(formData.ageTrees) || 0,
-        fertilizer_type: formData.fertilizerType,
-        fertilizer_list: fertilizerValue,
+        fertilizers: formData.fertilizerType,
+        fertilizer_names: fertilizerValue,
         use_pesticides: formData.usePesticides,
         pesticides_list: pesticidesValue,
         standard_practices: standardPracticesValue,
       };
 
-      const netState = await NetInfo.fetch();
-      if (netState.isConnected) {
-        const response = await fetch('https://api-3181.onrender.com/api/blocks/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+      // ALWAYS save offline first
+      await saveBlockOffline(payload);
+      setIsLoading(false);
 
-        if (response.ok) {
-          const result = await response.json();
-          const blockId = result.block_id || 'Unknown';
-          setGeneratedBlockId(blockId);
-          setSuccessMessage(`Block successfully registered with ID: ${blockId}`);
-          setShowSuccessModal(true);
-        } else {
-          const errorText = await response.text();
-          console.error('Server error:', errorText);
-          Alert.alert('Error', 'Failed to save block online. Saving offline...');
-          await saveBlockOffline(payload);
-          setSuccessMessage('Failed to save online. Block saved offline and will sync when online.');
-          setShowSuccessModal(true);
-        }
-      } else {
-        await saveBlockOffline(payload);
-        setGeneratedBlockId(''); // No ID when offline
-        setSuccessMessage('Block saved offline. Will sync when online.');
-        setShowSuccessModal(true);
-      }
+      // Show sync prompt
+      Alert.alert(
+        'Block Saved Locally',
+        'Block saved successfully! Would you like to sync to the cloud now?',
+        [
+          {
+            text: 'Sync Later',
+            style: 'cancel',
+            onPress: () => {
+              setGeneratedBlockId('');
+              setSuccessMessage('Block saved locally. Sync to cloud later from the Block Summary screen.');
+              setShowSuccessModal(true);
+            }
+          },
+          {
+            text: 'Sync Now',
+            onPress: async () => {
+              // Check connectivity
+              const netState = await NetInfo.fetch();
+              if (!netState.isConnected) {
+                Alert.alert('No Connection', 'Cannot sync without internet. Block saved locally.');
+                setGeneratedBlockId('');
+                setSuccessMessage('Block saved locally. No internet connection.');
+                setShowSuccessModal(true);
+                return;
+              }
+
+              // Attempt to sync using ApiService (includes authentication)
+              setIsLoading(true);
+              try {
+                const response = await ApiService.post('harvests/blocks/', payload);
+
+                // Success - response.data contains the result
+                const blockId = response.data.block_id || 'Unknown';
+
+                // Remove from offline queue since it synced successfully
+                const pending = await AsyncStorage.getItem('blocks_sync_queue');
+                const pendingBlocks = pending ? JSON.parse(pending) : [];
+                const updatedQueue = pendingBlocks.filter(b =>
+                  b.date_planted !== payload.date_planted ||
+                  b.no_of_trees !== payload.no_of_trees
+                );
+                await AsyncStorage.setItem('blocks_sync_queue', JSON.stringify(updatedQueue));
+
+                setGeneratedBlockId(blockId);
+                setSuccessMessage(`Block successfully synced to cloud! Block ID: ${blockId}`);
+                setShowSuccessModal(true);
+              } catch (err) {
+                console.error('Sync error:', err);
+                const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
+                Alert.alert('Sync Failed', `Failed to sync to cloud: ${errorMsg}. Block saved locally and will sync later.`);
+                setGeneratedBlockId('');
+                setSuccessMessage('Block saved locally. Sync failed, will retry later.');
+                setShowSuccessModal(true);
+              } finally {
+                setIsLoading(false);
+              }
+            }
+          }
+        ]
+      );
     } catch (err) {
       console.error('Submit error:', err);
-      Alert.alert('Error', 'Failed to save block. Please check your connection.');
-    } finally {
+      Alert.alert('Error', 'Failed to save block. Please try again.');
       setIsLoading(false);
     }
   };
@@ -608,8 +642,8 @@ const BlockRegistrationStepper = ({ navigation }) => {
   const isLastStep = currentStep === STEPS.length - 1;
 
   return (
-    <View style={{ flex: 1, backgroundColor: CoffeeColors.primary }}>
-      <Header title="Block Registration" onNavigate={(screen) => navigation.navigate(screen)} />
+    <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
+      <Header title="Block Registration" navigation={navigation} />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <TouchableOpacity onPress={handleViewSummary} style={styles.navLink}>
           <Text style={styles.navLinkText}>View Block Summary 📋</Text>
@@ -620,7 +654,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
           <CurrentStepComponent formData={formData} updateField={updateField} />
         </View>
 
-        {isLoading && <ActivityIndicator size="large" color={CoffeeColors.primary} />}
+        {isLoading && <ActivityIndicator size="large" color={CoffeeColors.MEDIUM_BROWN} />}
 
         <SuccessModal
           isVisible={showSuccessModal}
@@ -632,11 +666,17 @@ const BlockRegistrationStepper = ({ navigation }) => {
 
         {/* Navigation Buttons - Inside ScrollView */}
         <View style={styles.buttonGroup}>
-          {currentStep > 0 && (
-            <TouchableOpacity style={styles.backButton} onPress={handleBack} disabled={isLoading}>
-              <Text style={styles.backButtonText}>Back</Text>
-            </TouchableOpacity>
-          )}
+          {/* Always show back button - on step 0 it goes to summary, otherwise goes to previous step */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={currentStep === 0 ? () => navigation.navigate('BlockSummary') : handleBack}
+            disabled={isLoading}
+          >
+            <Text style={styles.backButtonText}>
+              {currentStep === 0 ? 'Cancel' : 'Back'}
+            </Text>
+          </TouchableOpacity>
+
           {!isLastStep && (
             <TouchableOpacity
               style={styles.nextButton}
@@ -676,23 +716,23 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: 'bold',
     marginBottom: 10,
-    color: CoffeeColors.secondary,
+    color: CoffeeColors.DARK_BROWN,
   },
   navLink: {
     paddingBottom: 10,
     marginBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: CoffeeColors.LIGHT_BROWN,
   },
   navLinkText: {
-    color: CoffeeColors.primary,
+    color: CoffeeColors.MEDIUM_BROWN,
     fontSize: 16,
     fontWeight: '600',
   },
   stepIndicator: {
     fontSize: 16,
     fontWeight: '500',
-    color: CoffeeColors.primary,
+    color: CoffeeColors.MEDIUM_BROWN,
     marginBottom: 15,
   },
   stepContainer: {
@@ -709,16 +749,16 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: CoffeeColors.secondary,
+    color: CoffeeColors.DARK_BROWN,
     marginBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: CoffeeColors.LIGHT_BROWN,
     paddingBottom: 5,
   },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: CoffeeColors.secondary,
+    color: CoffeeColors.DARK_BROWN,
     marginBottom: 5,
     marginTop: 5,
   },
@@ -763,12 +803,12 @@ const styles = StyleSheet.create({
     borderColor: '#666',
   },
   radioCircleSelected: {
-    borderColor: CoffeeColors.primary,
-    backgroundColor: CoffeeColors.primary,
+    borderColor: CoffeeColors.MEDIUM_BROWN,
+    backgroundColor: CoffeeColors.MEDIUM_BROWN,
   },
   radioText: {
     fontSize: 16,
-    color: CoffeeColors.secondary,
+    color: CoffeeColors.DARK_BROWN,
   },
   checkboxContainer: {
     flexDirection: 'row',
@@ -777,7 +817,7 @@ const styles = StyleSheet.create({
   },
   checkboxText: {
     fontSize: 16,
-    color: CoffeeColors.secondary,
+    color: CoffeeColors.DARK_BROWN,
     marginLeft: 5,
   },
 
@@ -787,19 +827,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 15,
     borderTopWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
+    borderColor: CoffeeColors.LIGHT_BROWN,
+    backgroundColor: CoffeeColors.WHITE,
   },
   nextButton: {
     flex: 1,
-    backgroundColor: CoffeeColors.primary,
+    backgroundColor: CoffeeColors.ACCENT,
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
   },
   submitButton: {
     flex: 1,
-    backgroundColor: CoffeeColors.primary,
+    backgroundColor: CoffeeColors.ACCENT,
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -816,7 +856,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   backButtonText: {
-    color: CoffeeColors.secondary,
+    color: CoffeeColors.DARK_BROWN,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -846,7 +886,7 @@ const modalStyles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 15,
-    color: CoffeeColors.primary,
+    color: CoffeeColors.MEDIUM_BROWN,
   },
   modalText: {
     marginBottom: 15,
@@ -857,7 +897,7 @@ const modalStyles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
     fontSize: 14,
-    color: '#666',
+    color: CoffeeColors.GRAY_TEXT,
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -865,14 +905,14 @@ const modalStyles = StyleSheet.create({
     gap: 10,
   },
   button: {
-    backgroundColor: CoffeeColors.primary,
+    backgroundColor: CoffeeColors.ACCENT,
     borderRadius: 10,
     padding: 10,
     elevation: 2,
     flex: 1,
   },
   secondaryButton: {
-    backgroundColor: CoffeeColors.secondary,
+    backgroundColor: CoffeeColors.MEDIUM_BROWN,
   },
   textStyle: {
     color: 'white',

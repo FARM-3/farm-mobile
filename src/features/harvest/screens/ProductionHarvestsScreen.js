@@ -113,17 +113,17 @@ export default function ProductionHarvestsScreen({ navigation }) {
 
     // Initial load
     useEffect(() => {
-        loadAndSyncData();
-    }, [loadAndSyncData]);
+        loadData();
+    }, [loadData]);
 
     // Refresh when screen comes into focus
     useEffect(() => {
         const unsubscribe = navigation.addListener('focus', () => {
             console.log('[ProductionHarvests] Screen focused, refreshing data...');
-            loadAndSyncData();
+            loadData();
         });
         return unsubscribe;
-    }, [navigation, loadAndSyncData]);
+    }, [navigation, loadData]);
 
     const handleEdit = (item) => {
         Alert.alert(
@@ -163,7 +163,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
                         try {
                             await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify([]));
                             Alert.alert('Success', 'Cleared all local unsynced records. You can now submit new records.');
-                            await loadAndSyncData();
+                            await loadData();
                         } catch (error) {
                             Alert.alert('Error', 'Failed to clear records: ' + error.message);
                         }
@@ -250,7 +250,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
                 {/* Sync Status Banner */}
                 <View style={styles.syncBanner}>
                     <Text style={styles.syncText}>{syncStatus}</Text>
-                    <TouchableOpacity onPress={loadAndSyncData} style={{ marginLeft: 10 }}>
+                    <TouchableOpacity onPress={loadData} style={{ marginLeft: 10 }}>
                         <Ionicons name="reload-circle-sharp" size={24} color={CoffeeColors.CREAM} />
                     </TouchableOpacity>
                 </View>
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     addButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: CoffeeColors.ACCENT,
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderRadius: 8,

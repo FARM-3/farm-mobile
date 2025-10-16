@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
     },
     nextBtn: {
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: CoffeeColors.ACCENT,
         justifyContent: 'center',
         shadowColor: CoffeeColors.DARK_BROWN,
         shadowOffset: { width: 0, height: 2 },
