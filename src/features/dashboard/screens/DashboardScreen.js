@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
-import Header from '../../../components/Header';
-import BottomNav from '../../../components/BottomNav';
 import { fetchFarmers, fetchHarvests } from '../../../services/aggregationService';
 import { fetchAllHarvestRecords } from '../../../services/harvestRecord';
+
+// Primary tomato red color and its shades
+const PRIMARY_RED = '#ff6347';
+const DARK_RED = '#e53935';
+const LIGHT_RED = '#ff7f50';
+const VERY_LIGHT_RED = '#ffcccc';
 
 const DashboardScreen = ({ navigation }) => {
   const [lastRecords, setLastRecords] = useState({
@@ -18,276 +20,317 @@ const DashboardScreen = ({ navigation }) => {
     aggregationHarvest: null,
     harvest: null,
     block: null,
-    loading: true
+    loading: true,
   });
-  const [userName, setUserName] = useState('');
 
-  // Load user name from AsyncStorage
-  useEffect(() => {
-    const loadUserName = async () => {
-      try {
-        const userData = await AsyncStorage.getItem('user');
-        if (userData) {
-          const user = JSON.parse(userData);
-          // Try different possible name fields from the backend
-          const name = user.first_name || user.name || user.username || 'User';
-          setUserName(name);
-        }
-      } catch (error) {
-        console.error('[Dashboard] Error loading user name:', error);
-      }
-    };
-    loadUserName();
-  }, []);
+  const [stats, setStats] = useState({
+    farmers: 0,
+    harvests: 0,
+    blocks: 0,
+    processing: 0,
+  });
 
-  // Load last records from each module
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadLastRecords();
-    });
+    const unsubscribe = navigation.addListener('focus', loadDashboardData);
     return unsubscribe;
   }, [navigation]);
 
-  const loadLastRecords = async () => {
+  const loadDashboardData = async () => {
     try {
-      // Fetch last Aggregation Farmer record
       const farmersResponse = await fetchFarmers();
-      const lastFarmer = farmersResponse.success && farmersResponse.farmers.length > 0
-        ? farmersResponse.farmers[0]
-        : null;
-
-      // Fetch last Aggregation Harvest record
+      const farmers = farmersResponse.success ? farmersResponse.farmers : [];
       const harvestsResponse = await fetchHarvests();
-      const lastAggHarvest = harvestsResponse.success && harvestsResponse.harvests.length > 0
-        ? harvestsResponse.harvests[0]
-        : null;
-
-      // Fetch last Production Harvest record
+      const harvests = harvestsResponse.success ? harvestsResponse.harvests : [];
       const productionResponse = await fetchAllHarvestRecords();
-      const lastProduction = productionResponse.success && productionResponse.remoteData?.results?.length > 0
-        ? productionResponse.remoteData.results[0]
-        : null;
-
-      // Fetch last Block record from AsyncStorage
       const blocksData = await AsyncStorage.getItem('blocks_sync_queue');
       const blocks = blocksData ? JSON.parse(blocksData) : [];
-      const lastBlock = blocks.length > 0 ? blocks[blocks.length - 1] : null;
+
+      setStats({
+        farmers: farmers.length,
+        harvests: harvests.length,
+        blocks: blocks.length,
+        processing: 12,
+      });
 
       setLastRecords({
-        aggregationFarmer: lastFarmer,
-        aggregationHarvest: lastAggHarvest,
-        harvest: lastProduction,
-        block: lastBlock,
-        loading: false
+        aggregationFarmer: farmers[0] || null,
+        aggregationHarvest: harvests[0] || null,
+        harvest: productionResponse.remoteData?.results?.[0] || null,
+        block: blocks[0] || null,
+        loading: false,
       });
     } catch (error) {
-      console.error('[Dashboard] Error loading last records:', error);
+      console.error('[Dashboard] Error loading data:', error);
       setLastRecords(prev => ({ ...prev, loading: false }));
     }
   };
 
-  // Format last record info
-  const formatLastRecord = (record, type) => {
-    if (!record) return { time: 'No records yet', recorder: 'Start by adding one' };
+  const getTimeAgo = (timestamp) => {
+    if (!timestamp) return 'Recently';
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffMs = now - then;
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
 
-    try {
-      switch (type) {
-        case 'farmer':
-          return {
-            time: new Date(record.created_at || record.date).toLocaleDateString(),
-            recorder: `${record.farmer_name || 'Unknown'} • ${record.village || 'N/A'}`
-          };
-        case 'aggHarvest':
-          return {
-            time: new Date(record.created_at || record.date).toLocaleDateString(),
-            recorder: `${record.farmer_name || 'Unknown'} • ${record.weight || 'N/A'} kg`
-          };
-        case 'harvest':
-          return {
-            time: new Date(record.date_of_delivery || record.created_at).toLocaleDateString(),
-            recorder: `${record.worker_name || 'Unknown'} • ${record.weight_on_delivery || 'N/A'} kg`
-          };
-        case 'block':
-          return {
-            time: new Date(record.date_planted || record.created_at).toLocaleDateString(),
-            recorder: `Block ${record.block_id || 'N/A'} • ${record.no_of_trees || '0'} trees`
-          };
-        default:
-          return { time: 'No data', recorder: 'N/A' };
-      }
-    } catch (error) {
-      return { time: 'Invalid date', recorder: 'Error loading data' };
+  const quickActions = [
+    {
+      label: 'Record Harvest',
+      sublabel: 'Own production',
+      color: PRIMARY_RED,
+      screen: 'HarvestForm',
+    },
+    {
+      label: 'Buy Coffee',
+      sublabel: 'From farmers',
+      color: PRIMARY_RED,
+      screen: 'Aggregation',
+      params: { initialTab: 'harvests' }
+    },
+    {
+      label: 'Add Farmer',
+      sublabel: 'New supplier',
+      color: PRIMARY_RED,
+      screen: 'Aggregation',
+      params: { initialTab: 'farmers' }
+    },
+    {
+      label: 'Add Block',
+      sublabel: 'Field data',
+      color: PRIMARY_RED,
+      screen: 'BlockRegistration'
     }
-  };
-
-  // Glassmorphic Card component
-  const Card = ({ iconName, title, description, time, recorder, color, onPress }) => (
-    <TouchableOpacity style={styles.cardContainer} activeOpacity={0.7} onPress={onPress}>
-      <BlurView intensity={80} tint="light" style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.iconContainer}>
-            <Ionicons name={iconName} size={28} color={CoffeeColors.DARK_BROWN} />
-          </View>
-          <Text style={styles.cardTitle}>{title}</Text>
-        </View>
-        <Text style={styles.cardDescription}>{description}</Text>
-        <View style={styles.cardFooter}>
-          <Text style={styles.cardInfo}>{time}</Text>
-          <Text style={styles.cardRecorder}>{recorder}</Text>
-        </View>
-      </BlurView>
-    </TouchableOpacity>
-  );
-
-  // Placeholder navigation handler for screens not yet added to navigator
-  const handleComingSoon = (featureName) => {
-    Alert.alert(
-      `${featureName} Coming Soon`,
-      `The ${featureName} feature is currently under development.`,
-      [{ text: 'OK' }]
-    );
-  };
+  ];
 
   if (lastRecords.loading) {
     return (
       <View style={styles.container}>
-        <Header title="Rugyeyo Farm" navigation={navigation} />
+        <LinearGradient colors={[DARK_RED, '#d32f2f', '#ff6347']} style={styles.header}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerLeft}>
+              <View style={styles.avatarIcon}>
+                <Ionicons name="leaf" size={20} color="#fff" />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
+                <Text style={styles.headerSubtitle}>Welcome back, Manager</Text>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />
+          <ActivityIndicator size="large" color={PRIMARY_BROWN} />
           <Text style={styles.loadingText}>Loading dashboard...</Text>
         </View>
-        <BottomNav activeScreen="Dashboard" />
       </View>
     );
   }
 
-  const aggHarvestInfo = formatLastRecord(lastRecords.aggregationHarvest, 'aggHarvest');
-  const harvestInfo = formatLastRecord(lastRecords.harvest, 'harvest');
-  const blockInfo = formatLastRecord(lastRecords.block, 'block');
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 18) return 'Good Afternoon';
-    return 'Good Evening';
-  };
-
   return (
     <View style={styles.container}>
-      {/* Very Faded Coffee Background */}
-      <ImageBackground
-        source={require('../../../assets/roasted-coffee-beans.jpg')}
-        style={styles.backgroundImage}
-        imageStyle={styles.backgroundImageStyle}
+      {/* Header with Bottom Curve - Full Width */}
+      <LinearGradient
+        colors={[DARK_RED, '#d32f2f', '#ff6347']}
+        style={styles.header}
       >
-        <View style={styles.whiteOverlay} />
-
-        {/* Header */}
-        <Header title="Rugyeyo Farm" navigation={navigation} />
-
-        {/* Personalized Greeting */}
-        {userName && (
-          <View style={styles.greetingContainer}>
-            <Text style={styles.greetingText}>Hi, {userName}!</Text>
-            <Text style={styles.greetingSubtext}>{getGreeting()}</Text>
+        {/* Top Content */}
+        <View style={styles.headerTopContent}>
+          <View style={styles.headerGreeting}>
+            <Text style={styles.headerMainText}>
+              <Text style={styles.headerBold}>Rugyeyo Farm,</Text>
+              {'\n'}
+              <Text style={styles.headerLight}>Welcome back</Text>
+            </Text>
           </View>
-        )}
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.headerButton}>
+              <Ionicons name="notifications-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerButton}>
+              <Ionicons name="share-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-        {/* Quick Action Buttons */}
-        <View style={styles.quickActionsContainer}>
-          <TouchableOpacity
-            style={styles.quickActionButtonContainer}
-            onPress={() => {
-              navigation.navigate('Aggregation', {
-                screen: 'Aggregation',
-                params: { activeTab: 'farmers', viewMode: 'form' }
-              });
-            }}
-            activeOpacity={0.7}
-          >
-            <BlurView intensity={45} tint="light" style={styles.quickActionButton}>
-              <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(76, 175, 80, 0.15)' }]}>
-                <Ionicons name="person-add-outline" size={22} color="#4CAF50" />
-              </View>
-              <Text style={styles.quickActionText}>Register{'\n'}Farmer</Text>
-            </BlurView>
-          </TouchableOpacity>
+        {/* Subtitle */}
+        <Text style={styles.headerSubtitle}>Track your farm operations and performance</Text>
+      </LinearGradient>
 
-          <TouchableOpacity
-            style={styles.quickActionButtonContainer}
-            onPress={() => {
-              navigation.navigate('Aggregation', {
-                screen: 'Aggregation',
-                params: { activeTab: 'harvests', viewMode: 'form' }
-              });
-            }}
-            activeOpacity={0.7}
-          >
-            <BlurView intensity={45} tint="light" style={styles.quickActionButton}>
-              <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(255, 152, 0, 0.15)' }]}>
-                <Ionicons name="cash-outline" size={22} color="#FF9800" />
-              </View>
-              <Text style={styles.quickActionText}>Buy{'\n'}Coffee</Text>
-            </BlurView>
-          </TouchableOpacity>
+      {/* Weather Widget - Positioned on top of header */}
+      <View style={styles.weatherCardContainer}>
+        <View style={styles.weatherCard}>
+          <View style={styles.weatherContent}>
+            <View>
+              <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
+              <Text style={styles.weatherTemp}>24°C</Text>
+              <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
+            </View>
+            <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
+              <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
+            </LinearGradient>
+          </View>
+        </View>
+      </View>
 
-          <TouchableOpacity
-            style={styles.quickActionButtonContainer}
-            onPress={() => navigation.navigate('HarvestForm')}
-            activeOpacity={0.7}
-          >
-            <BlurView intensity={45} tint="light" style={styles.quickActionButton}>
-              <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(78, 52, 46, 0.15)' }]}>
-                <Ionicons name="basket-outline" size={22} color={CoffeeColors.DARK_BROWN} />
+      <ScrollView contentContainerStyle={styles.scrollViewContent} showsVerticalScrollIndicator={false}>
+
+        {/* Stats Overview */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <View style={styles.statContent}>
+              <View style={styles.statTextContainer}>
+                <Text style={styles.statLabel}>Total Farmers</Text>
+                <Text style={styles.statValue}>{stats.farmers}</Text>
+                <Text style={styles.statChange}>+12 this month</Text>
               </View>
-              <Text style={styles.quickActionText}>Production{'\n'}Harvest</Text>
-            </BlurView>
+              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_RED }]}>
+                <Ionicons name="people" size={22} color={DARK_RED} />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={styles.statContent}>
+              <View style={styles.statTextContainer}>
+                <Text style={styles.statLabel}>Harvests</Text>
+                <Text style={styles.statValue}>{stats.harvests}</Text>
+                <Text style={[styles.statChange, { color: PRIMARY_RED }]}>Last: 45m ago</Text>
+              </View>
+              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_RED }]}>
+                <Ionicons name="cube" size={22} color={DARK_RED} />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={styles.statContent}>
+              <View style={styles.statTextContainer}>
+                <Text style={styles.statLabel}>Active Blocks</Text>
+                <Text style={styles.statValue}>{stats.blocks}</Text>
+                <Text style={[styles.statChange, { color: PRIMARY_RED }]}>8.5 hectares</Text>
+              </View>
+              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_RED }]}>
+                <Ionicons name="grid" size={22} color={DARK_RED} />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={styles.statContent}>
+              <View style={styles.statTextContainer}>
+                <Text style={styles.statLabel}>Processing</Text>
+                <Text style={styles.statValue}>{stats.processing}</Text>
+                <Text style={[styles.statChange, { color: PRIMARY_RED }]}>3 batches today</Text>
+              </View>
+              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_RED }]}>
+                <Ionicons name="cafe" size={22} color={DARK_RED} />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+        </View>
+
+        <View style={styles.quickActionsGrid}>
+          {quickActions.map((action, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.quickActionButton}
+              onPress={() => {
+                if (action.params) {
+                  navigation.navigate(action.screen, action.params);
+                } else {
+                  navigation.navigate(action.screen);
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.quickActionLabel}>{action.label}</Text>
+              <Text style={styles.quickActionSublabel}>{action.sublabel}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Recent Activity */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <TouchableOpacity>
+            <Text style={styles.viewAllText}>View All</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Content Area */}
-        <ScrollView contentContainerStyle={[styles.scrollViewContent, { paddingBottom: 110 }]}>
-        <Card
-          iconName="people-outline"
-          title="Aggregation"
-          description="Record farmer details and harvest weights."
-          time={aggHarvestInfo.time}
-          recorder={aggHarvestInfo.recorder}
-          color={CoffeeColors.ACCENT}
-          onPress={() => navigation.navigate('Aggregation')}
-        />
-        <Card
-          iconName="leaf-outline"
-          title="Harvest"
-          description="View and manage recent harvest records."
-          time={harvestInfo.time}
-          recorder={harvestInfo.recorder}
-          color={CoffeeColors.ACCENT}
-          onPress={() => navigation.navigate('Harvests')}
-        />
-        <Card
-          iconName="grid-outline"
-          title="Blocks"
-          description="Manage coffee farm blocks and field data."
-          time={blockInfo.time}
-          recorder={blockInfo.recorder}
-          color={CoffeeColors.ACCENT}
-          onPress={() => navigation.navigate('BlockSummary')}
-        />
-        <Card
-          iconName="cube-outline"
-          title="Processing"
-          description="Track processing stages: washing, drying, hulling."
-          time="02:00 PM"
-          recorder="Emily"
-          color={CoffeeColors.ACCENT}
-          onPress={() => navigation.navigate('Processing')}
-        />
-        </ScrollView>
+        <View style={styles.recentActivityCard}>
+          <View style={styles.activityItem}>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>New harvest recorded</Text>
+              <Text style={styles.activitySubtitle}>150 kg coffee beans from Block A</Text>
+              <Text style={[styles.activityTime, { color: PRIMARY_RED }]}>45 minutes ago</Text>
+            </View>
+          </View>
 
-        {/* Bottom Navigation Bar */}
-        <BottomNav activeScreen="Dashboard" />
-      </ImageBackground>
+          <View style={styles.activityDivider} />
+
+          <View style={styles.activityItem}>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>Farmer registration</Text>
+              <Text style={styles.activitySubtitle}>John Mugisha added to network</Text>
+              <Text style={[styles.activityTime, { color: PRIMARY_RED }]}>2 hours ago</Text>
+            </View>
+          </View>
+
+          <View style={styles.activityDivider} />
+
+          <View style={styles.activityItem}>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>Processing completed</Text>
+              <Text style={styles.activitySubtitle}>Batch #247 - Drying stage finished</Text>
+              <Text style={[styles.activityTime, { color: PRIMARY_RED }]}>5 hours ago</Text>
+            </View>
+          </View>
+
+          <View style={styles.activityDivider} />
+
+          <View style={styles.activityItem}>
+            <View style={styles.activityContent}>
+              <Text style={styles.activityTitle}>Quality check completed</Text>
+              <Text style={styles.activitySubtitle}>Grade A certification • by Sarah</Text>
+              <Text style={[styles.activityTime, { color: PRIMARY_RED }]}>7 hours ago</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navButtonActive}>
+          <Ionicons name="grid" size={22} color={PRIMARY_RED} />
+          <Text style={styles.navTextActive}>Dashboard</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Aggregation')}>
+          <Ionicons name="people" size={22} color="#9ca3af" />
+          <Text style={styles.navText}>Farmers</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Harvests')}>
+          <Ionicons name="leaf" size={22} color="#9ca3af" />
+          <Text style={styles.navText}>Harvests</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Processing')}>
+          <Ionicons name="cafe" size={22} color="#9ca3af" />
+          <Text style={styles.navText}>Processing</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -295,161 +338,340 @@ const DashboardScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: CoffeeColors.WHITE,
-  },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  backgroundImageStyle: {
-    opacity: 100, // Very faded - almost white
-    resizeMode: 'cover',
-  },
-  whiteOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)', // Strong white overlay for almost white appearance
+    backgroundColor: '#faf8f3',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: CoffeeColors.WHITE,
+    backgroundColor: '#faf8f3',
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: CoffeeColors.DARK_BROWN,
+    marginTop: 12,
+    fontSize: Fonts.sizes.regular,
+    color: PRIMARY_RED,
+    fontWeight: Fonts.weights.semiBold,
+    fontFamily: Fonts.semiBold,
   },
-  greetingContainer: {
+  header: {
+    paddingTop: 50,
+    paddingBottom: 100,
     paddingHorizontal: 20,
-    paddingVertical: 18,
-    marginHorizontal: 15,
-    marginTop: 10,
-    marginBottom: 5,
-    borderRadius: 16,
-    backgroundColor: CoffeeColors.WHITE,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 69, 19, 0.1)',
-    shadowColor: CoffeeColors.DARK_BROWN,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    shadowColor: PRIMARY_RED,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: 'hidden',
   },
-  greetingText: {
-    fontFamily: Fonts.bold,
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: CoffeeColors.DARK_BROWN,
-    marginBottom: 4,
-  },
-  greetingSubtext: {
-    fontFamily: Fonts.regular,
-    fontSize: 16,
-    color: CoffeeColors.MEDIUM_BROWN,
-  },
-  quickActionsContainer: {
+  headerTopContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 15,
-    paddingVertical: 15,
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  headerGreeting: {
+    flex: 1,
+    marginRight: 12,
+  },
+  headerMainText: {
+    fontSize: Fonts.sizes.huge,
+    lineHeight: 36,
+    color: '#fff',
+    fontFamily: Fonts.regular,
+  },
+  headerBold: {
+    fontWeight: Fonts.weights.bold,
+    fontSize: Fonts.sizes.huge,
+    fontFamily: Fonts.bold,
+  },
+  headerLight: {
+    fontWeight: Fonts.weights.regular,
+    fontSize: Fonts.sizes.huge,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontFamily: Fonts.regular,
+  },
+  headerSubtitle: {
+    fontSize: Fonts.sizes.small,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: 0,
+    fontWeight: Fonts.weights.regular,
+    fontFamily: Fonts.regular,
+  },
+  headerActions: {
+    flexDirection: 'row',
     gap: 10,
   },
-  quickActionButtonContainer: {
-    flex: 1,
-  },
-  quickActionButton: {
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  quickActionIconContainer: {
+  headerButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    shadowColor: 'rgba(0, 0, 0, 0.1)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  quickActionText: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 11,
-    fontWeight: '600',
-    color: CoffeeColors.DARK_BROWN,
-    textAlign: 'center',
-    lineHeight: 14,
+  weatherCardContainer: {
+    position: 'absolute',
+    top: 220,
+    left: 20,
+    right: 20,
+    zIndex: 10,
   },
   scrollViewContent: {
-    padding: 15,
+    padding: 20,
+    paddingTop: 160,
+    paddingBottom: 100,
+  },
+  weatherCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: PRIMARY_RED,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 0,
+    borderColor: '#f0f0f0',
+    overflow: 'hidden',
+  },
+  weatherContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  weatherLocation: {
+    fontSize: Fonts.sizes.small,
+    color: '#6b7280',
+    marginBottom: 4,
+    fontFamily: Fonts.regular,
+  },
+  weatherTemp: {
+    fontSize: Fonts.sizes.massive,
+    fontWeight: Fonts.weights.bold,
+    color: '#1f2937',
+    marginBottom: 4,
+    fontFamily: Fonts.bold,
+  },
+  weatherCondition: {
+    fontSize: Fonts.sizes.small,
+    color: '#6b7280',
+    fontFamily: Fonts.regular,
+  },
+  weatherIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  cardContainer: {
+  statCard: {
     width: '48%',
-    marginBottom: 15,
-  },
-  card: {
+    backgroundColor: '#fff',
     borderRadius: 20,
-    padding: 18,
-    overflow: 'hidden',
-    minHeight: 200,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  cardHeader: {
-    alignItems: 'center',
+    padding: 16,
     marginBottom: 12,
+    borderWidth: 0,
+    borderColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    overflow: 'hidden',
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  statContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  statTextContainer: {
+    flex: 1,
+  },
+  statIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    marginLeft: 8,
   },
-  cardTitle: {
-    fontFamily: Fonts.bold,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: CoffeeColors.DARK_BROWN,
-    textAlign: 'center',
-  },
-  cardDescription: {
-    fontFamily: Fonts.regular,
-    fontSize: 13,
-    color: CoffeeColors.GRAY_TEXT,
-    marginBottom: 12,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  cardFooter: {
-    marginTop: 'auto',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(139, 69, 19, 0.1)',
-  },
-  cardInfo: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 12,
-    color: CoffeeColors.MEDIUM_BROWN,
-    fontWeight: '600',
+  statLabel: {
+    fontSize: Fonts.sizes.tiny,
+    color: '#6b7280',
     marginBottom: 4,
-  },
-  cardRecorder: {
     fontFamily: Fonts.regular,
-    fontSize: 11,
-    color: CoffeeColors.GRAY_TEXT,
+  },
+  statValue: {
+    fontSize: Fonts.sizes.xxlarge,
+    fontWeight: Fonts.weights.bold,
+    color: '#1f2937',
+    marginBottom: 2,
+    fontFamily: Fonts.bold,
+  },
+  statChange: {
+    fontSize: Fonts.sizes.tiny,
+    color: PRIMARY_RED,
+    marginTop: 2,
+    fontFamily: Fonts.regular,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: Fonts.sizes.xlarge,
+    fontWeight: Fonts.weights.semiBold,
+    color: '#1f2937',
+    fontFamily: Fonts.semiBold,
+  },
+  viewAllText: {
+    fontSize: Fonts.sizes.small,
+    color: PRIMARY_RED,
+    fontWeight: Fonts.weights.semiBold,
+    fontFamily: Fonts.semiBold,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  quickActionButton: {
+    width: '48%',
+    backgroundColor: PRIMARY_RED,
+    borderRadius: 20,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: PRIMARY_RED,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    marginBottom: 12,
+    minHeight: 85,
+  },
+  quickActionLabel: {
+    fontSize: Fonts.sizes.regular,
+    fontWeight: Fonts.weights.bold,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 4,
+    fontFamily: Fonts.bold,
+  },
+  quickActionSublabel: {
+    fontSize: Fonts.sizes.small,
+    color: 'rgba(255, 255, 255, 0.85)',
+    textAlign: 'center',
+    fontFamily: Fonts.regular,
+  },
+  recentActivityCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+    borderWidth: 0,
+    borderColor: '#f0f0f0',
+    overflow: 'hidden',
+  },
+  activityItem: {
+    paddingVertical: 4,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: Fonts.sizes.regular,
+    fontWeight: Fonts.weights.semiBold,
+    color: '#1f2937',
+    marginBottom: 2,
+    fontFamily: Fonts.semiBold,
+  },
+  activitySubtitle: {
+    fontSize: Fonts.sizes.small,
+    color: '#6b7280',
+    marginBottom: 4,
+    fontFamily: Fonts.regular,
+  },
+  activityTime: {
+    fontSize: Fonts.sizes.small,
+    fontWeight: Fonts.weights.medium,
+    fontFamily: Fonts.regular,
+  },
+  activityDivider: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginVertical: 12,
+  },
+  bottomNav: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  navButtonActive: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#ffe6e6',
+    marginHorizontal: 4,
+  },
+  navButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    marginHorizontal: 4,
+  },
+  navTextActive: {
+    fontSize: Fonts.sizes.tiny,
+    fontWeight: Fonts.weights.semiBold,
+    color: PRIMARY_RED,
+    marginTop: 4,
+    fontFamily: Fonts.semiBold,
+  },
+  navText: {
+    fontSize: Fonts.sizes.tiny,
+    fontWeight: Fonts.weights.semiBold,
+    color: '#6b7280',
+    marginTop: 4,
+    fontFamily: Fonts.semiBold,
   },
 });
 
