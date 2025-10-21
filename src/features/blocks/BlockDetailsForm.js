@@ -13,6 +13,25 @@ import BottomNav from '../../components/BottomNav';
 import CoffeeColors from '../../theme/colors';
 import ApiService from '../../services/ApiService';
 
+// Helper function to generate sequential block ID (BLK-01, BLK-02, etc.)
+const generateBlockId = async () => {
+  try {
+    // Get the last used block number from AsyncStorage
+    const lastBlockNumber = await AsyncStorage.getItem('last_block_number');
+    const nextNumber = lastBlockNumber ? parseInt(lastBlockNumber) + 1 : 1;
+
+    // Save the new number
+    await AsyncStorage.setItem('last_block_number', nextNumber.toString());
+
+    // Format with leading zeros (e.g., 01, 02, 03)
+    return `BLK-${String(nextNumber).padStart(2, '0')}`;
+  } catch (error) {
+    console.error('Error generating block ID:', error);
+    // Fallback to timestamp-based ID if AsyncStorage fails
+    return `BLK-${Date.now().toString().slice(-4)}`;
+  }
+};
+
 // === Success Modal Component (Moved here for simplicity) ===
 const SuccessModal = ({ isVisible, message, blockId, onClose, onGoToSummary }) => (
   <Modal
@@ -468,34 +487,81 @@ const BlockRegistrationStepper = ({ navigation }) => {
       if (pendingBlocks.length === 0) return;
 
       let syncedCount = 0;
+      const failedBlocks = [];
+
       for (const block of pendingBlocks) {
         try {
-          const response = await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(block)
-          });
-          if (response.ok) {
+          // Ensure block has block_id before syncing
+          if (!block.block_id) {
+            console.warn('Generating block_id for legacy block');
+            // Generate block_id for legacy blocks saved without it
+            block.block_id = await generateBlockId();
+          }
+
+          const response = await ApiService.post('harvests/blocks/', block);
+          if (response.status === 201 || response.status === 200) {
             syncedCount++;
+            console.log(`✓ Synced block: ${block.block_id}`);
           }
         } catch (error) {
-          console.error('Failed to sync block:', error);
+          console.warn(`Sync failed for block ${block.block_id || 'undefined'}:`, error.message);
+          failedBlocks.push(block);
         }
       }
-      // Clear the queue after attempting sync
-      await AsyncStorage.removeItem('blocks_sync_queue');
+      // Update queue - keep only failed blocks
+      if (failedBlocks.length > 0) {
+        await AsyncStorage.setItem('blocks_sync_queue', JSON.stringify(failedBlocks));
+      } else {
+        await AsyncStorage.removeItem('blocks_sync_queue');
+      }
+
+      console.log(`Block synchronization complete. Synced ${syncedCount} of ${pendingBlocks.length} blocks.`);
+
       if (syncedCount > 0) {
-        Alert.alert('Sync Complete', `${syncedCount} block(s) synced successfully!`);
+        Alert.alert('Sync Complete', `${syncedCount} block(s) synced successfully!${failedBlocks.length > 0 ? ` ${failedBlocks.length} failed.` : ''}`);
       }
     } catch (err) {
       console.error('Sync error:', err);
     }
   };
 
+  // Initialize block counter from backend on mount
+  const initializeBlockCounter = async () => {
+    try {
+      const response = await ApiService.get('harvests/blocks/');
+      if (response.data && response.data.results) {
+        // Find the highest block number from existing blocks
+        let maxNumber = 0;
+        response.data.results.forEach(block => {
+          if (block.block_id && block.block_id.startsWith('BLK-')) {
+            const numberPart = block.block_id.replace('BLK-', '');
+            const num = parseInt(numberPart);
+            if (!isNaN(num) && num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        });
+
+        // Update AsyncStorage with the highest number found
+        const currentStored = await AsyncStorage.getItem('last_block_number');
+        if (!currentStored || parseInt(currentStored) < maxNumber) {
+          await AsyncStorage.setItem('last_block_number', maxNumber.toString());
+          console.log(`Initialized block counter to ${maxNumber}`);
+        }
+      }
+    } catch (error) {
+      console.log('Could not initialize block counter from backend:', error.message);
+    }
+  };
+
   useEffect(() => {
+    initializeBlockCounter(); // Sync counter with backend
     syncPendingBlocks(); // Initial check/sync
     const unsubscribe = NetInfo.addEventListener(state => {
-      if (state.isConnected) syncPendingBlocks();
+      if (state.isConnected) {
+        initializeBlockCounter();
+        syncPendingBlocks();
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -532,7 +598,11 @@ const BlockRegistrationStepper = ({ navigation }) => {
       const standardPracticesValue = formData.standardPractices.join(', ') +
         (formData.otherStandardPractice && formData.standardPractices.includes('other') ? `, ${formData.otherStandardPractice}` : '');
 
+      // Generate a unique sequential block_id for this submission
+      const blockId = await generateBlockId();
+
       const payload = {
+        block_id: blockId,
         no_of_trees: Number(formData.numTrees),
         date_planted: formData.datePlanted.toISOString().split('T')[0],
         type_of_coffee: formData.typeCoffee,
@@ -559,7 +629,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
             text: 'Sync Later',
             style: 'cancel',
             onPress: () => {
-              setGeneratedBlockId('');
+              setGeneratedBlockId(blockId);
               setSuccessMessage('Block saved locally. Sync to cloud later from the Block Summary screen.');
               setShowSuccessModal(true);
             }
@@ -571,7 +641,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
               const netState = await NetInfo.fetch();
               if (!netState.isConnected) {
                 Alert.alert('No Connection', 'Cannot sync without internet. Block saved locally.');
-                setGeneratedBlockId('');
+                setGeneratedBlockId(blockId);
                 setSuccessMessage('Block saved locally. No internet connection.');
                 setShowSuccessModal(true);
                 return;
@@ -583,25 +653,24 @@ const BlockRegistrationStepper = ({ navigation }) => {
                 const response = await ApiService.post('harvests/blocks/', payload);
 
                 // Success - response.data contains the result
-                const blockId = response.data.block_id || 'Unknown';
+                const syncedBlockId = response.data.block_id || blockId;
 
                 // Remove from offline queue since it synced successfully
                 const pending = await AsyncStorage.getItem('blocks_sync_queue');
                 const pendingBlocks = pending ? JSON.parse(pending) : [];
                 const updatedQueue = pendingBlocks.filter(b =>
-                  b.date_planted !== payload.date_planted ||
-                  b.no_of_trees !== payload.no_of_trees
+                  b.block_id !== payload.block_id
                 );
                 await AsyncStorage.setItem('blocks_sync_queue', JSON.stringify(updatedQueue));
 
-                setGeneratedBlockId(blockId);
-                setSuccessMessage(`Block successfully synced to cloud! Block ID: ${blockId}`);
+                setGeneratedBlockId(syncedBlockId);
+                setSuccessMessage(`Block successfully synced to cloud! Block ID: ${syncedBlockId}`);
                 setShowSuccessModal(true);
               } catch (err) {
                 console.error('Sync error:', err);
                 const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
                 Alert.alert('Sync Failed', `Failed to sync to cloud: ${errorMsg}. Block saved locally and will sync later.`);
-                setGeneratedBlockId('');
+                setGeneratedBlockId(blockId);
                 setSuccessMessage('Block saved locally. Sync failed, will retry later.');
                 setShowSuccessModal(true);
               } finally {

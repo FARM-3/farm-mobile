@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, SafeAreaView, View, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Font from 'expo-font';
 
 // 1. Import Navigation components
 import { NavigationContainer } from '@react-navigation/native';
@@ -13,7 +15,20 @@ import CoffeeColors from './theme/colors';
 import AuthService from './services/AuthService';
 import DatabaseService from './services/DatabaseService';
 
+// TEMPORARY: Helper function to reset the app and see Welcome screen
+// Call this from console: global.resetApp()
+global.resetApp = async () => {
+    try {
+        await AsyncStorage.clear();
+        console.log('[resetApp] All data cleared! Please reload the app to see the Welcome screen.');
+        console.log('[resetApp] Press "r" in the terminal or shake device and reload.');
+    } catch (error) {
+        console.error('[resetApp] Error:', error);
+    }
+};
+
 // Dashboard screens
+import WelcomeScreen from './features/dashboard/screens/WelcomeScreen';
 import LoginScreen from './features/dashboard/screens/LoginScreen';
 import DashboardScreen from './features/dashboard/screens/DashboardScreen';
 import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
@@ -21,6 +36,7 @@ import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 // Block screens
 import BlockDetailsForm from './features/blocks/BlockDetailsForm';
 import BlockSummary from './features/blocks/BlockSummary';
+import BlockDetailsScreen from './features/blocks/BlockDetailsScreen';
 
 // Harvest screens
 import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen';
@@ -35,7 +51,32 @@ const Stack = createNativeStackNavigator();
 
 const App = () => {
     const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-    const [initialRoute, setInitialRoute] = useState('Login');
+    const [initialRoute, setInitialRoute] = useState('Welcome');
+    const [fontsLoaded, setFontsLoaded] = useState(false);
+
+    // Load custom fonts
+    useEffect(() => {
+        const loadFonts = async () => {
+            try {
+                console.log('[App] Loading fonts...');
+                await Font.loadAsync({
+                    'Eina-Regular': require('./assets/fonts/Eina03-Regular.ttf'),
+                    'Eina-SemiBold': require('./assets/fonts/Eina03-Bold.ttf'), // Using Bold as SemiBold
+                    'Eina-Bold': require('./assets/fonts/Eina03-Bold.ttf'),
+                    'Eina-Light': require('./assets/fonts/Eina03-Light.ttf'),
+                });
+                console.log('[App] Fonts loaded successfully');
+                setFontsLoaded(true);
+            } catch (error) {
+                console.error('[App] Error loading fonts:', error);
+                console.error('[App] Error details:', error.message);
+                // Continue without custom fonts (will use system fonts)
+                setFontsLoaded(true);
+            }
+        };
+
+        loadFonts();
+    }, []);
 
     // Initialize database and check auth on app start
     useEffect(() => {
@@ -45,19 +86,25 @@ const App = () => {
                 await DatabaseService.init();
                 console.log('[App] Database initialized successfully');
 
+                // Check if user has seen welcome screen
+                const hasSeenWelcome = await AsyncStorage.getItem('hasSeenWelcome');
+
                 // Check if user is already logged in
                 const isAuthenticated = await AuthService.isAuthenticated();
 
                 if (isAuthenticated) {
                     console.log('[App] User is authenticated, setting Dashboard as initial route');
                     setInitialRoute('Dashboard');
-                } else {
-                    console.log('[App] User not authenticated, setting Login as initial route');
+                } else if (hasSeenWelcome === 'true') {
+                    console.log('[App] User has seen welcome, setting Login as initial route');
                     setInitialRoute('Login');
+                } else {
+                    console.log('[App] First time user, setting Welcome as initial route');
+                    setInitialRoute('Welcome');
                 }
             } catch (error) {
                 console.error('[App] Initialization error:', error);
-                setInitialRoute('Login');
+                setInitialRoute('Welcome');
             } finally {
                 setIsCheckingAuth(false);
             }
@@ -66,8 +113,8 @@ const App = () => {
         initializeApp();
     }, []);
 
-    // Show loading screen while checking auth
-    if (isCheckingAuth) {
+    // Show loading screen while checking auth or loading fonts
+    if (isCheckingAuth || !fontsLoaded) {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
@@ -91,6 +138,13 @@ const App = () => {
                         headerShown: false, // Hide React Navigation header since we use custom Header component
                     }}
                 >
+                    {/* Welcome screen */}
+                    <Stack.Screen
+                        name="Welcome"
+                        component={WelcomeScreen}
+                        options={{ title: 'Welcome' }}
+                    />
+
                     {/* Login screen */}
                     <Stack.Screen
                         name="Login"
@@ -142,7 +196,13 @@ const App = () => {
                     <Stack.Screen
                         name="BlockSummary"
                         component={BlockSummary}
-                        options={{ title: 'Block Data Summary' }}
+                        options={{ title: 'Block Summary' }}
+                    />
+
+                    <Stack.Screen
+                        name="BlockDetails"
+                        component={BlockDetailsScreen}
+                        options={{ title: 'Block Details' }}
                     />
 
                     <Stack.Screen

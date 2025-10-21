@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, ImageBackground } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import CoffeeColors from '../../../theme/colors';
+import Fonts from '../../../theme/fonts';
 import Header from '../../../components/Header';
 import BottomNav from '../../../components/BottomNav';
 import { fetchFarmers, fetchHarvests } from '../../../services/aggregationService';
@@ -17,6 +20,25 @@ const DashboardScreen = ({ navigation }) => {
     block: null,
     loading: true
   });
+  const [userName, setUserName] = useState('');
+
+  // Load user name from AsyncStorage
+  useEffect(() => {
+    const loadUserName = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('user');
+        if (userData) {
+          const user = JSON.parse(userData);
+          // Try different possible name fields from the backend
+          const name = user.first_name || user.name || user.username || 'User';
+          setUserName(name);
+        }
+      } catch (error) {
+        console.error('[Dashboard] Error loading user name:', error);
+      }
+    };
+    loadUserName();
+  }, []);
 
   // Load last records from each module
   useEffect(() => {
@@ -98,16 +120,22 @@ const DashboardScreen = ({ navigation }) => {
     }
   };
 
-  // Card component
+  // Glassmorphic Card component
   const Card = ({ iconName, title, description, time, recorder, color, onPress }) => (
-    <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={onPress}>
-      <View style={styles.cardHeader}>
-        <Ionicons name={iconName} size={24} color={color} />
-        <Text style={styles.cardTitle}>{title}</Text>
-      </View>
-      <Text style={styles.cardDescription}>{description}</Text>
-      <Text style={styles.cardInfo}>{time}</Text>
-      <Text style={styles.cardRecorder}>{recorder}</Text>
+    <TouchableOpacity style={styles.cardContainer} activeOpacity={0.7} onPress={onPress}>
+      <BlurView intensity={15} tint="light" style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconContainer}>
+            <Ionicons name={iconName} size={28} color={CoffeeColors.DARK_BROWN} />
+          </View>
+          <Text style={styles.cardTitle}>{title}</Text>
+        </View>
+        <Text style={styles.cardDescription}>{description}</Text>
+        <View style={styles.cardFooter}>
+          <Text style={styles.cardInfo}>{time}</Text>
+          <Text style={styles.cardRecorder}>{recorder}</Text>
+        </View>
+      </BlurView>
     </TouchableOpacity>
   );
 
@@ -137,12 +165,88 @@ const DashboardScreen = ({ navigation }) => {
   const harvestInfo = formatLastRecord(lastRecords.harvest, 'harvest');
   const blockInfo = formatLastRecord(lastRecords.block, 'block');
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  };
+
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <Header title="Rugyeyo Farm" navigation={navigation} />
+      {/* Very Faded Coffee Background */}
+      <ImageBackground
+        source={require('../../../assets/roasted-coffee-beans.jpg')}
+        style={styles.backgroundImage}
+        imageStyle={styles.backgroundImageStyle}
+      >
+        <View style={styles.whiteOverlay} />
 
-      <ScrollView contentContainerStyle={[styles.scrollViewContent, { paddingBottom: 110 }]}>
+        {/* Header */}
+        <Header title="Rugyeyo Farm" navigation={navigation} />
+
+        {/* Personalized Greeting */}
+        {userName && (
+          <View style={styles.greetingContainer}>
+            <Text style={styles.greetingText}>Hi, {userName}!</Text>
+            <Text style={styles.greetingSubtext}>{getGreeting()}</Text>
+          </View>
+        )}
+
+        {/* Quick Action Buttons */}
+        <View style={styles.quickActionsContainer}>
+          <TouchableOpacity
+            style={styles.quickActionButtonContainer}
+            onPress={() => {
+              navigation.navigate('Aggregation', {
+                screen: 'Aggregation',
+                params: { activeTab: 'farmers', viewMode: 'form' }
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <BlurView intensity={15} tint="light" style={styles.quickActionButton}>
+              <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(76, 175, 80, 0.15)' }]}>
+                <Ionicons name="person-add-outline" size={22} color="#4CAF50" />
+              </View>
+              <Text style={styles.quickActionText}>Register{'\n'}Farmer</Text>
+            </BlurView>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButtonContainer}
+            onPress={() => {
+              navigation.navigate('Aggregation', {
+                screen: 'Aggregation',
+                params: { activeTab: 'harvests', viewMode: 'form' }
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <BlurView intensity={15} tint="light" style={styles.quickActionButton}>
+              <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(255, 152, 0, 0.15)' }]}>
+                <Ionicons name="cash-outline" size={22} color="#FF9800" />
+              </View>
+              <Text style={styles.quickActionText}>Buy{'\n'}Coffee</Text>
+            </BlurView>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButtonContainer}
+            onPress={() => navigation.navigate('HarvestForm')}
+            activeOpacity={0.7}
+          >
+            <BlurView intensity={15} tint="light" style={styles.quickActionButton}>
+              <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(78, 52, 46, 0.15)' }]}>
+                <Ionicons name="basket-outline" size={22} color={CoffeeColors.DARK_BROWN} />
+              </View>
+              <Text style={styles.quickActionText}>Production{'\n'}Harvest</Text>
+            </BlurView>
+          </TouchableOpacity>
+        </View>
+
+        {/* Content Area */}
+        <ScrollView contentContainerStyle={[styles.scrollViewContent, { paddingBottom: 110 }]}>
         <Card
           iconName="people-outline"
           title="Aggregation"
@@ -179,10 +283,11 @@ const DashboardScreen = ({ navigation }) => {
           color={CoffeeColors.ACCENT}
           onPress={() => navigation.navigate('Processing')}
         />
-      </ScrollView>
+        </ScrollView>
 
-      {/* Bottom Navigation Bar */}
-      <BottomNav activeScreen="Dashboard" />
+        {/* Bottom Navigation Bar */}
+        <BottomNav activeScreen="Dashboard" />
+      </ImageBackground>
     </View>
   );
 };
@@ -190,17 +295,95 @@ const DashboardScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: CoffeeColors.LIGHT_GRAY,
+    backgroundColor: CoffeeColors.WHITE,
+  },
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  backgroundImageStyle: {
+    opacity: 100, // Very faded - almost white
+    resizeMode: 'cover',
+  },
+  whiteOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)', // Strong white overlay for almost white appearance
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: CoffeeColors.WHITE,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
     color: CoffeeColors.DARK_BROWN,
+  },
+  greetingContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    marginHorizontal: 15,
+    marginTop: 10,
+    marginBottom: 5,
+    borderRadius: 16,
+    backgroundColor: CoffeeColors.WHITE,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 69, 19, 0.1)',
+    shadowColor: CoffeeColors.DARK_BROWN,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  greetingText: {
+    fontFamily: Fonts.bold,
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: CoffeeColors.DARK_BROWN,
+    marginBottom: 4,
+  },
+  greetingSubtext: {
+    fontFamily: Fonts.regular,
+    fontSize: 16,
+    color: CoffeeColors.MEDIUM_BROWN,
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+    gap: 10,
+  },
+  quickActionButtonContainer: {
+    flex: 1,
+  },
+  quickActionButton: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  quickActionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickActionText: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 11,
+    fontWeight: '600',
+    color: CoffeeColors.DARK_BROWN,
+    textAlign: 'center',
+    lineHeight: 14,
   },
   scrollViewContent: {
     padding: 15,
@@ -208,42 +391,63 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  card: {
-    backgroundColor: CoffeeColors.WHITE,
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 15,
+  cardContainer: {
     width: '48%',
-    elevation: 5,
-    shadowColor: CoffeeColors.DARK_BROWN,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    minHeight: 180,
+    marginBottom: 15,
+  },
+  card: {
+    borderRadius: 20,
+    padding: 18,
+    overflow: 'hidden',
+    minHeight: 200,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   cardHeader: {
-    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  iconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
   },
   cardTitle: {
+    fontFamily: Fonts.bold,
     fontSize: 18,
     fontWeight: 'bold',
-    marginLeft: 10,
     color: CoffeeColors.DARK_BROWN,
+    textAlign: 'center',
   },
   cardDescription: {
-    fontSize: 14,
+    fontFamily: Fonts.regular,
+    fontSize: 13,
     color: CoffeeColors.GRAY_TEXT,
-    marginBottom: 8,
+    marginBottom: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  cardFooter: {
+    marginTop: 'auto',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(139, 69, 19, 0.1)',
   },
   cardInfo: {
+    fontFamily: Fonts.semiBold,
     fontSize: 12,
     color: CoffeeColors.MEDIUM_BROWN,
     fontWeight: '600',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   cardRecorder: {
+    fontFamily: Fonts.regular,
     fontSize: 11,
     color: CoffeeColors.GRAY_TEXT,
   },

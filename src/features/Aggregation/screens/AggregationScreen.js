@@ -30,7 +30,7 @@ const farmerFieldDefinitions = [
             { key: 'gender', label: 'Gender', type: 'picker', pickerKey: 'gender' },
             { key: 'nin', label: 'NIN', keyboardType: 'default' },
             { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
-            { key: 'contact', label: 'Contact', keyboardType: 'phone-pad', required: true },
+            { key: 'contact', label: 'Phone Number', keyboardType: 'phone-pad', required: true },
             { key: 'email', label: 'Email (optional)', keyboardType: 'email-address' },
             { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'yes-no' },
             { key: 'cooperative', label: 'Cooperative Name', keyboardType: 'default', dependsOn: { field: 'in_cooperative', value: true } },
@@ -810,7 +810,7 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
 // === 4. MAIN COMPONENT (POLISHED)            ===
 // ===============================================
 
-const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
+const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) => {
     const onNavigate = onNavigateProp ?? ((screen) => { if (navigation && navigation.navigate) navigation.navigate(screen); });
 
     // --- State declarations ---
@@ -836,6 +836,17 @@ const AggregationScreen = ({ navigation, onNavigate: onNavigateProp }) => {
     // NEW: State for detail view
     const [selectedFarmer, setSelectedFarmer] = useState(null);
     const [selectedHarvest, setSelectedHarvest] = useState(null); 
+
+    // Handle navigation params from Dashboard quick actions
+    useEffect(() => {
+        if (route?.params) {
+            const { activeTab: tab, viewMode: mode } = route.params;
+            if (tab) setActiveTab(tab);
+            if (mode) setViewMode(mode);
+            // Clear params after handling to prevent re-triggering
+            navigation.setParams({ activeTab: undefined, viewMode: undefined });
+        }
+    }, [route?.params]);
 
     // --- Data Loading and Initialization ---
     const loadRecords = async () => {

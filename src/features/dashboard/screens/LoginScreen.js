@@ -11,23 +11,21 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
+  ImageBackground,
 } from "react-native";
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from "@expo/vector-icons";
 import AuthService from "../../../services/AuthService";
+import Fonts from "../../../theme/fonts";
+import CoffeeColors from "../../../theme/colors";
 
-// --- Coffee Theme ---
-const CoffeeColors = {
+// --- Additional Login Screen Colors ---
+const LoginColors = {
   SCREEN_BG: '#FFF8F6',
   LIGHT_BG: '#FEEFEA',
-  DARK_BROWN: '#4A3423',
   BUTTON_BROWN: '#8B4513',
-  MEDIUM_BROWN: '#795548',
   LIGHT_BROWN: '#BCAAA4',
-  GOLD: '#FFD700',
-  WHITE: '#FFFFFF',
   GRAY_TEXT: '#8D8D8D',
-  ERROR_RED: '#D32F2F',
-  SUCCESS_GREEN: '#4CAF50',
 };
 
 
@@ -218,10 +216,10 @@ export default function LoginScreen({ navigation }) {
     const isFocused = focusedField.row === row && focusedField.idx === idx;
     const isError = messageType === 'error' && currentPin.join('').length === 4;
 
-    if (isFocused) return CoffeeColors.BUTTON_BROWN;
+    if (isFocused) return LoginColors.BUTTON_BROWN;
     if (isError) return CoffeeColors.ERROR_RED;
 
-    return CoffeeColors.LIGHT_BROWN;
+    return LoginColors.LIGHT_BROWN;
   };
 
   // --- UI RENDER FUNCTIONS ---
@@ -256,17 +254,28 @@ export default function LoginScreen({ navigation }) {
    */
   const renderLoginMode = () => (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.centeredContent}>
+      <View style={styles.fullScreenContainer}>
 
-          <View style={styles.iconCircle}>
-              <Ionicons name="lock-closed" size={32} color={CoffeeColors.BUTTON_BROWN} />
-          </View>
-
-          <Text style={styles.welcomeText}>Welcome Back</Text>
+          {/* Coffee Background Image with Gradient */}
+          <ImageBackground
+            source={require('../../../assets/coffee-background.jpg')}
+            style={styles.coffeeHeaderSection}
+            imageStyle={styles.coffeeImageStyle}
+          >
+            <LinearGradient
+              colors={['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)', 'rgba(255, 248, 246, 0.95)', 'rgba(255, 248, 246, 1)']}
+              locations={[0, 0.5, 0.85, 1]}
+              style={styles.gradientOverlay}
+            >
+              <View style={styles.welcomeTextContainer}>
+                <Text style={styles.welcomeText}>Welcome Back</Text>
+              </View>
+            </LinearGradient>
+          </ImageBackground>
 
           <View style={styles.contentWrapper}>
               <Text style={styles.instructionText}>
-                  Enter your 10-digit phone number and PIN to securely access your data.
+                  Enter your phone number and PIN to securely access your data.
               </Text>
 
               {/* Phone Number Input */}
@@ -279,7 +288,7 @@ export default function LoginScreen({ navigation }) {
                       setPhoneNumber(cleanText);
                       setMessage("");
                   }}
-                  placeholder=""
+                  placeholder="Enter phone number"
                   maxLength={10}
                   keyboardType="number-pad"
                   returnKeyType="next"
@@ -290,7 +299,7 @@ export default function LoginScreen({ navigation }) {
               />
 
               {/* PIN Input */}
-              <Text style={styles.enterPinLabel}>Enter PIN</Text>
+              <Text style={styles.enterPinLabel}>PIN</Text>
               {renderPinInput(pin, pinRefs, "login")}
 
               {/* Message Box */}
@@ -315,7 +324,7 @@ export default function LoginScreen({ navigation }) {
                   )}
               </TouchableOpacity>
 
-              {/* Forgot PIN Link */}
+              {/* Reset PIN Link */}
               <TouchableOpacity
                   style={styles.resetPinLinkContainer}
                   onPress={() => {
@@ -327,9 +336,10 @@ export default function LoginScreen({ navigation }) {
                   }}
                   disabled={loading}
               >
-                  <Text style={[styles.resetPinLinkText, { color: CoffeeColors.BUTTON_BROWN, fontSize: 13 }]}>Forgot PIN?</Text>
+                  <Text style={[styles.resetPinLinkText, { color: LoginColors.BUTTON_BROWN, fontSize: 13 }]}>Reset PIN</Text>
               </TouchableOpacity>
           </View>
+
       </View>
     </TouchableWithoutFeedback>
   );
@@ -341,7 +351,7 @@ export default function LoginScreen({ navigation }) {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.centeredContent}>
         <View style={styles.iconCircle}>
-          <Ionicons name="key" size={32} color={CoffeeColors.BUTTON_BROWN} />
+          <Ionicons name="key" size={32} color={LoginColors.BUTTON_BROWN} />
         </View>
 
         <Text style={styles.welcomeText}>Reset PIN</Text>
@@ -418,7 +428,7 @@ export default function LoginScreen({ navigation }) {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View style={styles.centeredContent}>
         <View style={styles.iconCircle}>
-          <Ionicons name="key" size={32} color={CoffeeColors.BUTTON_BROWN} />
+          <Ionicons name="key" size={32} color={LoginColors.BUTTON_BROWN} />
         </View>
 
         <Text style={styles.welcomeText}>Reset PIN</Text>
@@ -541,33 +551,47 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: CoffeeColors.SCREEN_BG,
+    backgroundColor: LoginColors.SCREEN_BG,
   },
   scrollContainer: {
     flexGrow: 1,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  centeredContent: {
-    width: '95%',
-    maxWidth: 400,
+  fullScreenContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  coffeeHeaderSection: {
+    width: '100%',
+    height: 280,
+  },
+  coffeeImageStyle: {
+    resizeMode: 'cover',
+  },
+  gradientOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: 20,
+  },
+  welcomeTextContainer: {
     alignItems: 'center',
+  },
+  welcomeText: {
+    fontFamily: Fonts.bold,
+    fontSize: 28,
+    fontWeight: '900',
+    color: CoffeeColors.DARK_BROWN,
+    textAlign: 'center',
   },
   contentWrapper: {
     width: '100%',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: CoffeeColors.WHITE,
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 8,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: LoginColors.SCREEN_BG,
   },
   iconCircle: {
-    backgroundColor: CoffeeColors.LIGHT_BG,
+    backgroundColor: LoginColors.LIGHT_BG,
     borderRadius: 50,
     width: 65,
     height: 65,
@@ -575,19 +599,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 25,
     borderWidth: 1,
-    borderColor: CoffeeColors.LIGHT_BROWN,
+    borderColor: LoginColors.LIGHT_BROWN,
     opacity: 0.85,
   },
-  welcomeText: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: CoffeeColors.DARK_BROWN,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
   instructionText: {
+    fontFamily: Fonts.regular,
     fontSize: 14,
-    color: CoffeeColors.GRAY_TEXT,
+    color: LoginColors.GRAY_TEXT,
     textAlign: 'center',
     marginBottom: 25,
     lineHeight: 20,
@@ -595,6 +613,7 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   enterPinLabel: {
+    fontFamily: Fonts.semiBold,
     fontSize: 15,
     color: CoffeeColors.DARK_BROWN,
     marginBottom: 10,
@@ -604,12 +623,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   textInput: {
+    fontFamily: Fonts.regular,
     width: '100%',
     height: 50,
     backgroundColor: CoffeeColors.WHITE,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: CoffeeColors.LIGHT_BROWN,
+    borderColor: LoginColors.LIGHT_BROWN,
     paddingHorizontal: 15,
     fontSize: 16,
     color: CoffeeColors.DARK_BROWN,
@@ -617,7 +637,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   focusedInput: {
-    borderColor: CoffeeColors.BUTTON_BROWN,
+    borderColor: LoginColors.BUTTON_BROWN,
   },
   pinInputContainer: {
     flexDirection: 'row',
@@ -625,42 +645,44 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 2,
     width: '100%',
-    paddingHorizontal: 10,
+    paddingHorizontal: 15,
   },
   pinInputBox: {
+    fontFamily: Fonts.semiBold,
     width: 55,
     height: 65,
     backgroundColor: CoffeeColors.WHITE,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: CoffeeColors.LIGHT_BROWN,
+    borderColor: LoginColors.LIGHT_BROWN,
     fontSize: 26,
     fontWeight: 'bold',
     color: CoffeeColors.DARK_BROWN,
     textAlign: 'center',
   },
   unlockButton: {
-    backgroundColor: CoffeeColors.BUTTON_BROWN,
+    backgroundColor: '#6d350f', // Darker brown when enabled (darker version of #8b4513)
     width: '100%',
     padding: 18,
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 18,
-    shadowColor: CoffeeColors.BUTTON_BROWN,
+    shadowColor: '#6d350f',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 15,
     elevation: 8,
   },
   loginButtonText: {
+    fontFamily: Fonts.semiBold,
     color: CoffeeColors.WHITE,
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
   disabledButton: {
-    opacity: 0.7,
+    backgroundColor: '#8b4513', // Lighter brown when disabled
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -672,6 +694,7 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   resetPinLinkText: {
+    fontFamily: Fonts.semiBold,
     color: CoffeeColors.MEDIUM_BROWN,
     fontSize: 15,
     fontWeight: '600',
@@ -710,7 +733,7 @@ const styles = StyleSheet.create({
     width: '100%',
     fontSize: 16,
     color: CoffeeColors.DARK_BROWN,
-    backgroundColor: CoffeeColors.LIGHT_BG,
+    backgroundColor: LoginColors.LIGHT_BG,
     padding: 15,
     borderRadius: 12,
     marginBottom: 15,

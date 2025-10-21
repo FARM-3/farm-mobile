@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Expo
+.expo/
+.expo-shared/
+
+# Build artifacts
+*.log
+*.lock
+package-lock.json
+yarn.lock
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Other
+Rugyeyo-fmis/
