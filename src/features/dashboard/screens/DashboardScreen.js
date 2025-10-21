@@ -123,7 +123,7 @@ const DashboardScreen = ({ navigation }) => {
   // Glassmorphic Card component
   const Card = ({ iconName, title, description, time, recorder, color, onPress }) => (
     <TouchableOpacity style={styles.cardContainer} activeOpacity={0.7} onPress={onPress}>
-      <BlurView intensity={15} tint="light" style={styles.card}>
+      <BlurView intensity={80} tint="light" style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.iconContainer}>
             <Ionicons name={iconName} size={28} color={CoffeeColors.DARK_BROWN} />
@@ -205,7 +205,7 @@ const DashboardScreen = ({ navigation }) => {
             }}
             activeOpacity={0.7}
           >
-            <BlurView intensity={15} tint="light" style={styles.quickActionButton}>
+            <BlurView intensity={45} tint="light" style={styles.quickActionButton}>
               <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(76, 175, 80, 0.15)' }]}>
                 <Ionicons name="person-add-outline" size={22} color="#4CAF50" />
               </View>
@@ -223,7 +223,7 @@ const DashboardScreen = ({ navigation }) => {
             }}
             activeOpacity={0.7}
           >
-            <BlurView intensity={15} tint="light" style={styles.quickActionButton}>
+            <BlurView intensity={45} tint="light" style={styles.quickActionButton}>
               <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(255, 152, 0, 0.15)' }]}>
                 <Ionicons name="cash-outline" size={22} color="#FF9800" />
               </View>
@@ -236,7 +236,7 @@ const DashboardScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('HarvestForm')}
             activeOpacity={0.7}
           >
-            <BlurView intensity={15} tint="light" style={styles.quickActionButton}>
+            <BlurView intensity={45} tint="light" style={styles.quickActionButton}>
               <View style={[styles.quickActionIconContainer, { backgroundColor: 'rgba(78, 52, 46, 0.15)' }]}>
                 <Ionicons name="basket-outline" size={22} color={CoffeeColors.DARK_BROWN} />
               </View>

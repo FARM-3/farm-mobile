@@ -1,7 +1,7 @@
 // src/features/blocks/BlockDetailsScreen.js
 // Detailed table view showing all block records with export functionality
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -11,6 +11,7 @@ import {
     Alert,
     ActivityIndicator,
     TextInput,
+    ScrollView,
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,6 +37,10 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
     const [filterBy, setFilterBy] = useState(FILTER_BY_OPTIONS[0]);
+
+    // Ref for synchronized scrolling
+    const headerScrollRef = useRef(null);
+    const rowScrollRefs = useRef([]);
 
     // --- OFFLINE SYNC UTILITIES ---
 
@@ -223,28 +228,64 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
         }
     };
 
-    const renderRow = ({ item }) => (
-        <View style={[styles.row, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
-            <Text style={[styles.cell, { width: 100 }]}>{item.block_id || 'N/A'}</Text>
-            <Text style={[styles.cell, { width: 80 }]}>{item.no_of_trees || 0}</Text>
-            <Text style={[styles.cell, { width: 120 }]}>{item.date_planted || 'N/A'}</Text>
-            <Text style={[styles.cell, { width: 120 }]}>{item.type_of_coffee || 'N/A'}</Text>
-            <Text style={[styles.cell, { width: 150 }]}>{item.source_of_seedling || 'N/A'}</Text>
-            <Text style={[styles.cell, { width: 120 }]}>{item.type_of_seedling || 'N/A'}</Text>
-            <Text style={[styles.cell, { width: 100 }]}>{item.age_of_seedling || 0}</Text>
-            <Text style={[styles.cell, { width: 150 }]}>{item.fertilizer_names || item.fertilizers || 'N/A'}</Text>
-            <Text style={[styles.cell, { width: 100 }]}>{item.use_pesticides === 'yes' ? 'Yes' : 'No'}</Text>
-            <View style={[styles.cell, { width: 100, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }]}>
-                <Ionicons
-                    name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
-                    size={16}
-                    color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT}
-                />
-                <Text style={{ color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT, marginLeft: 4, fontSize: 12 }}>
-                    {item.isSynced ? 'Synced' : 'Pending'}
-                </Text>
+    const handleScroll = (event, sourceIndex) => {
+        const scrollX = event.nativeEvent.contentOffset.x;
+
+        // Sync header
+        if (sourceIndex !== -1 && headerScrollRef.current) {
+            headerScrollRef.current.scrollTo({ x: scrollX, animated: false });
+        }
+
+        // Sync all rows
+        rowScrollRefs.current.forEach((ref, i) => {
+            if (ref && i !== sourceIndex) {
+                ref.scrollTo({ x: scrollX, animated: false });
+            }
+        });
+
+        // If header is the source, sync all rows
+        if (sourceIndex === -1) {
+            rowScrollRefs.current.forEach((ref) => {
+                if (ref) {
+                    ref.scrollTo({ x: scrollX, animated: false });
+                }
+            });
+        }
+    };
+
+    const renderRow = ({ item, index }) => (
+        <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={true}
+            style={styles.rowScrollView}
+            ref={(ref) => rowScrollRefs.current[index] = ref}
+            onScroll={(event) => handleScroll(event, index)}
+            scrollEventThrottle={16}
+            bounces={false}
+            bouncesZoom={false}
+        >
+            <View style={[styles.row, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
+                <Text style={styles.cell}>{item.block_id || 'N/A'}</Text>
+                <Text style={styles.cell}>{item.no_of_trees || 0}</Text>
+                <Text style={styles.cell}>{item.date_planted || 'N/A'}</Text>
+                <Text style={styles.cell}>{item.type_of_coffee || 'N/A'}</Text>
+                <Text style={styles.cell}>{item.source_of_seedling || 'N/A'}</Text>
+                <Text style={styles.cell}>{item.type_of_seedling || 'N/A'}</Text>
+                <Text style={styles.cell}>{item.age_of_seedling || 0}</Text>
+                <Text style={styles.cell}>{item.fertilizer_names || item.fertilizers || 'N/A'}</Text>
+                <Text style={styles.cell}>{item.use_pesticides === 'yes' ? 'Yes' : 'No'}</Text>
+                <View style={styles.statusCell}>
+                    <Ionicons
+                        name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
+                        size={16}
+                        color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT}
+                    />
+                    <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT, marginLeft: 4 }]}>
+                        {item.isSynced ? 'Synced' : 'Pending'}
+                    </Text>
+                </View>
             </View>
-        </View>
+        </ScrollView>
     );
 
     if (isLoading) {
@@ -308,17 +349,29 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
                 <Text style={styles.recordCount}>{filteredData.length} blocks</Text>
 
                 {/* Table Header */}
-                <View style={[styles.row, styles.headerRow]}>
-                    <Text style={[styles.headerCell, { width: 100 }]}>Block ID</Text>
-                    <Text style={[styles.headerCell, { width: 80 }]}>Trees</Text>
-                    <Text style={[styles.headerCell, { width: 120 }]}>Date</Text>
-                    <Text style={[styles.headerCell, { width: 120 }]}>Type</Text>
-                    <Text style={[styles.headerCell, { width: 150 }]}>Source</Text>
-                    <Text style={[styles.headerCell, { width: 120 }]}>Seedling</Text>
-                    <Text style={[styles.headerCell, { width: 100 }]}>Age</Text>
-                    <Text style={[styles.headerCell, { width: 150 }]}>Fertilizer</Text>
-                    <Text style={[styles.headerCell, { width: 100 }]}>Pesticides</Text>
-                    <Text style={[styles.headerCell, { width: 100 }]}>Status</Text>
+                <View style={styles.headerContainer}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={true}
+                        ref={headerScrollRef}
+                        onScroll={(event) => handleScroll(event, -1)}
+                        scrollEventThrottle={16}
+                        bounces={false}
+                        bouncesZoom={false}
+                    >
+                        <View style={[styles.row, styles.headerRow]}>
+                            <Text style={styles.headerCell}>Block ID</Text>
+                            <Text style={styles.headerCell}>Trees</Text>
+                            <Text style={styles.headerCell}>Date</Text>
+                            <Text style={styles.headerCell}>Type</Text>
+                            <Text style={styles.headerCell}>Source</Text>
+                            <Text style={styles.headerCell}>Seedling</Text>
+                            <Text style={styles.headerCell}>Age</Text>
+                            <Text style={styles.headerCell}>Fertilizer</Text>
+                            <Text style={styles.headerCell}>Pesticides</Text>
+                            <Text style={styles.headerCell}>Status</Text>
+                        </View>
+                    </ScrollView>
                 </View>
 
                 {/* Data Rows */}
@@ -432,25 +485,29 @@ const styles = StyleSheet.create({
         color: CoffeeColors.MEDIUM_BROWN,
         marginBottom: 10,
     },
+    headerContainer: {
+        marginBottom: 8,
+    },
+    rowScrollView: {
+        marginBottom: 5,
+    },
     row: {
         flexDirection: 'row',
         backgroundColor: CoffeeColors.WHITE,
-        marginBottom: 5,
         borderRadius: 6,
         paddingVertical: 10,
         paddingHorizontal: 5,
-        justifyContent: 'space-between',
     },
     headerRow: {
         backgroundColor: CoffeeColors.DARK_BROWN,
-        marginBottom: 8,
     },
     headerCell: {
-        flex: 1,
+        width: 120,
         fontWeight: '700',
         color: CoffeeColors.CREAM,
         textAlign: 'center',
         fontSize: 12,
+        paddingHorizontal: 8,
     },
     syncedRow: {
         borderLeftWidth: 4,
@@ -461,11 +518,22 @@ const styles = StyleSheet.create({
         borderLeftColor: CoffeeColors.ACCENT,
     },
     cell: {
-        flex: 1,
+        width: 120,
         color: CoffeeColors.GRAY_TEXT,
         textAlign: 'center',
         fontSize: 12,
-        alignSelf: 'center',
+        paddingHorizontal: 8,
+    },
+    cellText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    statusCell: {
+        width: 120,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 8,
     },
     emptyContainer: {
         alignItems: 'center',
