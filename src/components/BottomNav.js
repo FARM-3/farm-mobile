@@ -2,43 +2,45 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { BlurView } from 'expo-blur';
-import CoffeeColors from '../theme/colors';
 
-const BottomNav = ({ activeScreen }) => {
+// Brown color palette
+const PRIMARY_BROWN = '#8B4513';
+const LIGHT_BROWN = '#A0522D';
+
+const BottomNav = ({ activeScreen, active }) => {
   const navigation = useNavigation();
   const route = useRoute();
 
-  // Use the current route name if activeScreen is not provided
-  const currentScreen = activeScreen || route.name;
+  // Use the provided activeScreen/active prop, or fall back to current route name
+  const currentScreen = activeScreen || active || route.name;
 
   return (
     <View style={styles.bottomNavContainer} pointerEvents="box-none">
-      <BlurView intensity={80} tint="dark" style={styles.bottomNavBar}>
+      <View style={styles.bottomNavBar}>
         <TouchableOpacity
           style={[styles.navItem, currentScreen === 'Dashboard' && styles.navItemActive]}
           onPress={() => navigation.navigate('Dashboard')}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
-            name="grid-outline"
+            name="analytics"
             size={24}
-            color={currentScreen === 'Dashboard' ? CoffeeColors.GOLD : CoffeeColors.CREAM}
+            color={currentScreen === 'Dashboard' ? PRIMARY_BROWN : LIGHT_BROWN}
           />
           <Text style={[styles.navText, currentScreen === 'Dashboard' && styles.navTextActive]}>Dashboard</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.navItem, currentScreen === 'Aggregation' && styles.navItemActive]}
+          style={[styles.navItem, (currentScreen === 'Aggregation' || currentScreen === 'Aggregation') && styles.navItemActive]}
           onPress={() => navigation.navigate('Aggregation')}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
-            name="people-outline"
+            name="people-circle"
             size={24}
-            color={currentScreen === 'Aggregation' ? CoffeeColors.GOLD : CoffeeColors.CREAM}
+            color={(currentScreen === 'Aggregation') ? PRIMARY_BROWN : LIGHT_BROWN}
           />
-          <Text style={[styles.navText, currentScreen === 'Aggregation' && styles.navTextActive]}>Aggregations</Text>
+          <Text style={[styles.navText, (currentScreen === 'Aggregation') && styles.navTextActive]}>Farmers</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -47,9 +49,9 @@ const BottomNav = ({ activeScreen }) => {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
-            name="leaf-outline"
+            name="basket"
             size={24}
-            color={currentScreen === 'Harvests' ? CoffeeColors.GOLD : CoffeeColors.CREAM}
+            color={currentScreen === 'Harvests' ? PRIMARY_BROWN : LIGHT_BROWN}
           />
           <Text style={[styles.navText, currentScreen === 'Harvests' && styles.navTextActive]}>Harvests</Text>
         </TouchableOpacity>
@@ -60,13 +62,13 @@ const BottomNav = ({ activeScreen }) => {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons
-            name="cube-outline"
+            name="cog"
             size={24}
-            color={currentScreen === 'Processing' ? CoffeeColors.GOLD : CoffeeColors.CREAM}
+            color={currentScreen === 'Processing' ? PRIMARY_BROWN : LIGHT_BROWN}
           />
           <Text style={[styles.navText, currentScreen === 'Processing' && styles.navTextActive]}>Processing</Text>
         </TouchableOpacity>
-      </BlurView>
+      </View>
     </View>
   );
 };
@@ -83,40 +85,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: 'rgba(78, 52, 46, 0.85)', // DARK_BROWN with transparency
+    backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 215, 0, 0.2)', // Subtle gold border
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopColor: '#e5e7eb',
     paddingVertical: 12,
-    paddingHorizontal: 5,
-    paddingBottom: 32,
-    elevation: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     overflow: 'hidden',
   },
   navItem: {
     alignItems: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
   },
   navItemActive: {
-    backgroundColor: 'rgba(255, 215, 0, 0.15)', // Subtle gold glow for active
+    backgroundColor: '#ffe6e6',
   },
   navText: {
     fontSize: 10,
-    color: CoffeeColors.CREAM,
+    color: '#6b7280',
     marginTop: 4,
-    opacity: 0.8,
+    fontWeight: '600',
   },
   navTextActive: {
-    color: CoffeeColors.GOLD,
-    fontWeight: 'bold',
-    opacity: 1,
+    color: PRIMARY_BROWN,
+    fontWeight: '600',
   },
 });
 

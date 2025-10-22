@@ -8,11 +8,11 @@ import Fonts from '../../../theme/fonts';
 import { fetchFarmers, fetchHarvests } from '../../../services/aggregationService';
 import { fetchAllHarvestRecords } from '../../../services/harvestRecord';
 
-// Primary tomato red color and its shades
-const PRIMARY_RED = '#ff6347';
-const DARK_RED = '#e53935';
-const LIGHT_RED = '#ff7f50';
-const VERY_LIGHT_RED = '#ffcccc';
+// Primary brown color and its shades
+const PRIMARY_BROWN = '#8B4513';
+const DARK_BROWN = '#6B3410';
+const LIGHT_BROWN = '#A0522D';
+const VERY_LIGHT_BROWN = '#D2B48C';
 
 const DashboardScreen = ({ navigation }) => {
   const [lastRecords, setLastRecords] = useState({
@@ -83,27 +83,27 @@ const DashboardScreen = ({ navigation }) => {
     {
       label: 'Record Harvest',
       sublabel: 'Own production',
-      color: PRIMARY_RED,
+      color: PRIMARY_BROWN,
       screen: 'HarvestForm',
     },
     {
       label: 'Buy Coffee',
       sublabel: 'From farmers',
-      color: PRIMARY_RED,
+      color: PRIMARY_BROWN,
       screen: 'Aggregation',
       params: { initialTab: 'harvests' }
     },
     {
       label: 'Add Farmer',
       sublabel: 'New supplier',
-      color: PRIMARY_RED,
+      color: PRIMARY_BROWN,
       screen: 'Aggregation',
       params: { initialTab: 'farmers' }
     },
     {
       label: 'Add Block',
       sublabel: 'Field data',
-      color: PRIMARY_RED,
+      color: PRIMARY_BROWN,
       screen: 'BlockRegistration'
     }
   ];
@@ -111,7 +111,7 @@ const DashboardScreen = ({ navigation }) => {
   if (lastRecords.loading) {
     return (
       <View style={styles.container}>
-        <LinearGradient colors={[DARK_RED, '#d32f2f', '#ff6347']} style={styles.header}>
+        <LinearGradient colors={[DARK_BROWN, '#7a3f1a', '#8B4513']} style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
               <View style={styles.avatarIcon}>
@@ -136,7 +136,7 @@ const DashboardScreen = ({ navigation }) => {
     <View style={styles.container}>
       {/* Header with Bottom Curve - Full Width */}
       <LinearGradient
-        colors={[DARK_RED, '#d32f2f', '#ff6347']}
+        colors={[DARK_BROWN, '#7a3f1a', '#8B4513']}
         style={styles.header}
       >
         {/* Top Content */}
@@ -189,8 +189,8 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.statValue}>{stats.farmers}</Text>
                 <Text style={styles.statChange}>+12 this month</Text>
               </View>
-              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_RED }]}>
-                <Ionicons name="people" size={22} color={DARK_RED} />
+              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_BROWN }]}>
+                <Ionicons name="people" size={22} color={DARK_BROWN} />
               </View>
             </View>
           </View>
@@ -200,10 +200,10 @@ const DashboardScreen = ({ navigation }) => {
               <View style={styles.statTextContainer}>
                 <Text style={styles.statLabel}>Harvests</Text>
                 <Text style={styles.statValue}>{stats.harvests}</Text>
-                <Text style={[styles.statChange, { color: PRIMARY_RED }]}>Last: 45m ago</Text>
+                <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>Last: 45m ago</Text>
               </View>
-              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_RED }]}>
-                <Ionicons name="cube" size={22} color={DARK_RED} />
+              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_BROWN }]}>
+                <Ionicons name="cube" size={22} color={DARK_BROWN} />
               </View>
             </View>
           </View>
@@ -213,10 +213,10 @@ const DashboardScreen = ({ navigation }) => {
               <View style={styles.statTextContainer}>
                 <Text style={styles.statLabel}>Active Blocks</Text>
                 <Text style={styles.statValue}>{stats.blocks}</Text>
-                <Text style={[styles.statChange, { color: PRIMARY_RED }]}>8.5 hectares</Text>
+                <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>8.5 hectares</Text>
               </View>
-              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_RED }]}>
-                <Ionicons name="grid" size={22} color={DARK_RED} />
+              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_BROWN }]}>
+                <Ionicons name="grid" size={22} color={DARK_BROWN} />
               </View>
             </View>
           </View>
@@ -226,10 +226,10 @@ const DashboardScreen = ({ navigation }) => {
               <View style={styles.statTextContainer}>
                 <Text style={styles.statLabel}>Processing</Text>
                 <Text style={styles.statValue}>{stats.processing}</Text>
-                <Text style={[styles.statChange, { color: PRIMARY_RED }]}>3 batches today</Text>
+                <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>3 batches today</Text>
               </View>
-              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_RED }]}>
-                <Ionicons name="cafe" size={22} color={DARK_RED} />
+              <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_BROWN }]}>
+                <Ionicons name="cafe" size={22} color={DARK_BROWN} />
               </View>
             </View>
           </View>
@@ -273,7 +273,7 @@ const DashboardScreen = ({ navigation }) => {
             <View style={styles.activityContent}>
               <Text style={styles.activityTitle}>New harvest recorded</Text>
               <Text style={styles.activitySubtitle}>150 kg coffee beans from Block A</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_RED }]}>45 minutes ago</Text>
+              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>45 minutes ago</Text>
             </View>
           </View>
 
@@ -283,7 +283,7 @@ const DashboardScreen = ({ navigation }) => {
             <View style={styles.activityContent}>
               <Text style={styles.activityTitle}>Farmer registration</Text>
               <Text style={styles.activitySubtitle}>John Mugisha added to network</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_RED }]}>2 hours ago</Text>
+              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>2 hours ago</Text>
             </View>
           </View>
 
@@ -293,7 +293,7 @@ const DashboardScreen = ({ navigation }) => {
             <View style={styles.activityContent}>
               <Text style={styles.activityTitle}>Processing completed</Text>
               <Text style={styles.activitySubtitle}>Batch #247 - Drying stage finished</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_RED }]}>5 hours ago</Text>
+              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>5 hours ago</Text>
             </View>
           </View>
 
@@ -303,7 +303,7 @@ const DashboardScreen = ({ navigation }) => {
             <View style={styles.activityContent}>
               <Text style={styles.activityTitle}>Quality check completed</Text>
               <Text style={styles.activitySubtitle}>Grade A certification • by Sarah</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_RED }]}>7 hours ago</Text>
+              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>7 hours ago</Text>
             </View>
           </View>
         </View>
@@ -312,22 +312,22 @@ const DashboardScreen = ({ navigation }) => {
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navButtonActive}>
-          <Ionicons name="grid" size={22} color={PRIMARY_RED} />
+          <Ionicons name="analytics" size={24} color={PRIMARY_BROWN} />
           <Text style={styles.navTextActive}>Dashboard</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Aggregation')}>
-          <Ionicons name="people" size={22} color="#9ca3af" />
+          <Ionicons name="people-circle" size={24} color={LIGHT_BROWN} />
           <Text style={styles.navText}>Farmers</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Harvests')}>
-          <Ionicons name="leaf" size={22} color="#9ca3af" />
+          <Ionicons name="basket" size={24} color={LIGHT_BROWN} />
           <Text style={styles.navText}>Harvests</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Processing')}>
-          <Ionicons name="cafe" size={22} color="#9ca3af" />
+          <Ionicons name="cog" size={24} color={LIGHT_BROWN} />
           <Text style={styles.navText}>Processing</Text>
         </TouchableOpacity>
       </View>
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: Fonts.sizes.regular,
-    color: PRIMARY_RED,
+    color: PRIMARY_BROWN,
     fontWeight: Fonts.weights.semiBold,
     fontFamily: Fonts.semiBold,
   },
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
-    shadowColor: PRIMARY_RED,
+    shadowColor: PRIMARY_BROWN,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 24,
     padding: 20,
-    shadowColor: PRIMARY_RED,
+    shadowColor: PRIMARY_BROWN,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 12,
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
   },
   statChange: {
     fontSize: Fonts.sizes.tiny,
-    color: PRIMARY_RED,
+    color: PRIMARY_BROWN,
     marginTop: 2,
     fontFamily: Fonts.regular,
   },
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: Fonts.sizes.small,
-    color: PRIMARY_RED,
+    color: PRIMARY_BROWN,
     fontWeight: Fonts.weights.semiBold,
     fontFamily: Fonts.semiBold,
   },
@@ -556,12 +556,12 @@ const styles = StyleSheet.create({
   },
   quickActionButton: {
     width: '48%',
-    backgroundColor: PRIMARY_RED,
+    backgroundColor: PRIMARY_BROWN,
     borderRadius: 20,
     padding: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: PRIMARY_RED,
+    shadowColor: PRIMARY_BROWN,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -662,7 +662,7 @@ const styles = StyleSheet.create({
   navTextActive: {
     fontSize: Fonts.sizes.tiny,
     fontWeight: Fonts.weights.semiBold,
-    color: PRIMARY_RED,
+    color: PRIMARY_BROWN,
     marginTop: 4,
     fontFamily: Fonts.semiBold,
   },

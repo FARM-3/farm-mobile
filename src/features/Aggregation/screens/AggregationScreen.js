@@ -831,22 +831,29 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     const [loading, setLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const isSubmittingRef = useRef(false);
+    const paramsProcessedRef = useRef(false);
     const [userId, setUserId] = useState('user123');
 
     // NEW: State for detail view
     const [selectedFarmer, setSelectedFarmer] = useState(null);
-    const [selectedHarvest, setSelectedHarvest] = useState(null); 
+    const [selectedHarvest, setSelectedHarvest] = useState(null);
 
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
-        if (route?.params) {
-            const { activeTab: tab, viewMode: mode } = route.params;
-            if (tab) setActiveTab(tab);
-            if (mode) setViewMode(mode);
-            // Clear params after handling to prevent re-triggering
-            navigation.setParams({ activeTab: undefined, viewMode: undefined });
+        if (route?.params?.activeTab || route?.params?.viewMode) {
+            if (!paramsProcessedRef.current) {
+                paramsProcessedRef.current = true;
+                const { activeTab: tab, viewMode: mode } = route.params;
+                if (tab) setActiveTab(tab);
+                if (mode) setViewMode(mode);
+                // Clear params after handling to prevent re-triggering
+                navigation.setParams({ activeTab: undefined, viewMode: undefined });
+            }
+        } else {
+            // Reset the flag when params are cleared
+            paramsProcessedRef.current = false;
         }
-    }, [route?.params]);
+    }, [route?.params?.activeTab, route?.params?.viewMode, navigation]);
 
     // --- Data Loading and Initialization ---
     const loadRecords = async () => {
