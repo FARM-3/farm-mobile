@@ -10,7 +10,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 
 import CoffeeColors from '../../theme/colors';
-import Header from '../../components/Header';
+import Fonts from '../../theme/fonts';
+import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
 import ApiService from '../../services/ApiService';
 
@@ -194,9 +195,9 @@ const BlockSummary = ({ route = {}, navigation }) => {
             <Ionicons
               name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
               size={14}
-              color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT}
+              color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
             />
-            <Text style={[styles.syncStatusText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT }]}>
+            <Text style={[styles.syncStatusText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN }]}>
               {item.isSynced ? 'Synced' : 'Pending'}
             </Text>
           </View>
@@ -219,7 +220,7 @@ const BlockSummary = ({ route = {}, navigation }) => {
               handleDelete(item);
             }}
           >
-            <Ionicons name="trash" size={20} color={CoffeeColors.ACCENT} />
+            <Ionicons name="trash" size={20} color={CoffeeColors.DARK_BROWN} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -237,7 +238,7 @@ const BlockSummary = ({ route = {}, navigation }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-      <Header title="Block Summary" navigation={navigation} />
+      <SimpleHeader title="Block Summary" />
 
       <View style={styles.container}>
         {/* Sync Status Banner */}
@@ -316,6 +317,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: CoffeeColors.DARK_BROWN,
     fontSize: 16,
+    fontFamily: Fonts.regular,
   },
   syncBanner: {
     flexDirection: 'row',
@@ -330,6 +332,7 @@ const styles = StyleSheet.create({
     color: CoffeeColors.CREAM,
     fontSize: 13,
     flexShrink: 1,
+    fontFamily: Fonts.regular,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -347,6 +350,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 16,
     color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.regular,
   },
   actionBar: {
     flexDirection: 'row',
@@ -357,11 +361,11 @@ const styles = StyleSheet.create({
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CoffeeColors.ACCENT,
+    backgroundColor: CoffeeColors.DARK_BROWN,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
-    shadowColor: '#000',
+    shadowColor: CoffeeColors.DARK_BROWN,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 3,
@@ -370,12 +374,14 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: CoffeeColors.CREAM,
     fontWeight: '700',
+    fontFamily: Fonts.bold,
     marginLeft: 8,
     fontSize: 14,
   },
   recordCount: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: Fonts.semiBold,
     color: CoffeeColors.MEDIUM_BROWN,
   },
   dataListItem: {
@@ -389,7 +395,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderLeftWidth: 4,
     borderLeftColor: CoffeeColors.MEDIUM_BROWN,
-    shadowColor: '#000',
+    shadowColor: CoffeeColors.DARK_BROWN,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -398,16 +404,19 @@ const styles = StyleSheet.create({
   dataListItemTitle: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: CoffeeColors.DARK_BROWN,
     marginBottom: 4,
   },
   dataListItemUID: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: Fonts.semiBold,
     color: CoffeeColors.MEDIUM_BROWN,
   },
   dataListItemSubtitle: {
     fontSize: 13,
+    fontFamily: Fonts.regular,
     color: CoffeeColors.GRAY_TEXT,
     marginTop: 2,
   },
@@ -419,6 +428,7 @@ const styles = StyleSheet.create({
   syncStatusText: {
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: Fonts.semiBold,
     marginLeft: 4,
   },
   recordActions: {
@@ -445,11 +455,13 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: Fonts.semiBold,
     color: CoffeeColors.MEDIUM_BROWN,
   },
   emptySubtext: {
     marginTop: 8,
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: CoffeeColors.GRAY_TEXT,
     fontStyle: 'italic',
   },

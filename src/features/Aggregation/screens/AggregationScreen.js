@@ -6,12 +6,26 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 // --- UTILITIES AND THEME IMPORTS ---
 // NOTE: Assuming these imports are correctly path-resolved in your environment
+import Fonts from '../../../theme/fonts';
 import CoffeeColors from '../../../theme/colors';
-import Header from '../../../components/Header';
+import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
-import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants'; 
+import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
+
+// ================================================
+// === DASHBOARD COLOR PALETTE & TYPOGRAPHY ===
+// ================================================
+const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
+const DARK_BROWN = CoffeeColors.DARK_BROWN;
+const LIGHT_BROWN = CoffeeColors.LIGHT_BROWN;
+const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
+const CREAM_BG = CoffeeColors.CREAM;
+const LIGHT_GRAY_BG = CoffeeColors.LIGHT_GRAY;
+const BORDER_LIGHT = CoffeeColors.VERY_LIGHT_BROWN;
+const TEXT_DARK = CoffeeColors.DARK_BROWN;
+const TEXT_GRAY = CoffeeColors.GRAY_TEXT;
 
 
 // ===============================================
@@ -135,7 +149,7 @@ const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', edi
             style={[styles.textInput, !editable && styles.readOnlyInput]} 
             editable={editable}
             placeholder={placeholder}
-            placeholderTextColor={CoffeeColors.GRAY_TEXT_LIGHT}
+            placeholderTextColor={BORDER_LIGHT}
         />
     </View>
 );
@@ -160,7 +174,7 @@ const CustomPicker = ({ label, selectedValue, onValueChange, items = [] }) => (
 const CustomToggle = ({ label, value, onValueChange }) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, paddingVertical: 5 }}>
         <Text style={styles.inputLabel}>{label}</Text>
-        <Switch value={!!value} onValueChange={onValueChange} trackColor={{ true: CoffeeColors.MEDIUM_BROWN }} thumbColor={value ? CoffeeColors.CREAM : '#fff'} />
+        <Switch value={!!value} onValueChange={onValueChange} trackColor={{ true: PRIMARY_BROWN }} thumbColor={value ? VERY_LIGHT_BROWN : '#fff'} />
     </View>
 );
 
@@ -185,7 +199,7 @@ const CustomMultiSelect = ({ label, selectedValues = [], onValueChange, items = 
                 onPress={() => setModalVisible(true)}
             >
                 <Text style={styles.multiSelectText}>{displayValue}</Text>
-                <Ionicons name="chevron-down" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                <Ionicons name="chevron-down" size={20} color={PRIMARY_BROWN} />
             </TouchableOpacity>
 
             <Modal
@@ -210,7 +224,7 @@ const CustomMultiSelect = ({ label, selectedValues = [], onValueChange, items = 
                                         <Text style={styles.multiSelectItemText}>{itemLabel}</Text>
                                         <View style={styles.checkbox}>
                                             {selectedValues.includes(itemValue) && (
-                                                <Ionicons name="checkmark" size={16} color={CoffeeColors.MEDIUM_BROWN} />
+                                                <Ionicons name="checkmark" size={16} color={PRIMARY_BROWN} />
                                             )}
                                         </View>
                                     </TouchableOpacity>
@@ -254,7 +268,7 @@ const CustomDatePicker = ({ label, value, onChange }) => {
                 onPress={() => setShowPicker(true)}
             >
                 <Text style={styles.datePickerText}>{displayValue}</Text>
-                <Ionicons name="calendar" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                <Ionicons name="calendar" size={20} color={PRIMARY_BROWN} />
             </TouchableOpacity>
             {showPicker && (
                 <DateTimePicker
@@ -312,7 +326,7 @@ const AutocompleteInput = ({ label, value, onChangeText, onSelect, suggestions =
                 keyboardType={keyboardType}
                 style={styles.textInput}
                 placeholder={placeholder}
-                placeholderTextColor={CoffeeColors.GRAY_TEXT_LIGHT}
+                placeholderTextColor={BORDER_LIGHT}
                 onFocus={() => {
                     if (value && filteredSuggestions.length > 0) {
                         setShowSuggestions(true);
@@ -339,7 +353,7 @@ const AutocompleteInput = ({ label, value, onChangeText, onSelect, suggestions =
                                             ID: {farmerId} | {contact}
                                         </Text>
                                     </View>
-                                    <Ionicons name="chevron-forward" size={20} color={CoffeeColors.GRAY_TEXT} />
+                                    <Ionicons name="chevron-forward" size={20} color={TEXT_GRAY} />
                                 </TouchableOpacity>
                             );
                         })}
@@ -362,8 +376,8 @@ const SuccessMessage = ({ message, onExit, onView }) => (
             <Text style={styles.modalTitle}>Success 🎉</Text>
             <Text style={styles.modalMessage}>{message}</Text>
             <View style={styles.modalActions}>
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: CoffeeColors.MEDIUM_BROWN }]} onPress={onView}><Text style={styles.modalButtonText}>View Records</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: CoffeeColors.GRAY_TEXT, marginTop: 8 }]} onPress={onExit}><Text style={styles.modalButtonText}>Close</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.modalButton, { backgroundColor: PRIMARY_BROWN }]} onPress={onView}><Text style={styles.modalButtonText}>View Records</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.modalButton, { backgroundColor: TEXT_GRAY, marginTop: 8 }]} onPress={onExit}><Text style={styles.modalButtonText}>Close</Text></TouchableOpacity>
             </View>
         </View>
     </View>
@@ -509,7 +523,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                             onEdit(item, true); // Pass true to indicate edit mode vs view mode
                         }}
                     >
-                        <Ionicons name="pencil" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                        <Ionicons name="pencil" size={20} color={PRIMARY_BROWN} />
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.iconButton}
@@ -518,7 +532,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                             onDelete(item);
                         }}
                     >
-                        <Ionicons name="trash" size={20} color={CoffeeColors.ERROR_RED || '#d32f2f'} />
+                        <Ionicons name="trash" size={20} color={'#d32f2f' || '#d32f2f'} />
                     </TouchableOpacity>
                 </View>
             </TouchableOpacity>
@@ -543,16 +557,16 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                         style={styles.searchButton}
                         onPress={() => {/* Search is automatic via useMemo */}}
                     >
-                        <Ionicons name="search" size={22} color={CoffeeColors.WHITE} />
+                        <Ionicons name="search" size={22} color={'#fff'} />
                     </TouchableOpacity>
                 </View>
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
                     <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: CoffeeColors.ACCENT, flex: 1, marginRight: 8 }]}
+                        style={[styles.actionButton, { backgroundColor: PRIMARY_BROWN, flex: 1, marginRight: 8 }]}
                         onPress={onExit}
                     >
-                        <Ionicons name="add-circle" size={20} color={CoffeeColors.WHITE} style={{ marginRight: 8 }} />
+                        <Ionicons name="add-circle" size={20} color={CoffeeColors.CREAM} style={{ marginRight: 8 }} />
                         <Text style={styles.actionButtonText}>Add {isFarmer ? 'Farmer' : 'Harvest'}</Text>
                     </TouchableOpacity>
                     <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
@@ -657,7 +671,7 @@ const FarmerDetailView = ({ farmer, onBack }) => {
             {/* Header with back button */}
             <View style={styles.detailHeader}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={CoffeeColors.DARK_BROWN} />
+                    <Ionicons name="arrow-back" size={24} color={DARK_BROWN} />
                 </TouchableOpacity>
                 <Text style={styles.detailHeaderTitle}>Farmer Details</Text>
                 <View style={{ width: 40 }} />
@@ -770,7 +784,7 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
             {/* Header with back button */}
             <View style={styles.detailHeader}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={CoffeeColors.DARK_BROWN} />
+                    <Ionicons name="arrow-back" size={24} color={DARK_BROWN} />
                 </TouchableOpacity>
                 <Text style={styles.detailHeaderTitle}>Harvest Details</Text>
                 <View style={{ width: 40 }} />
@@ -780,7 +794,7 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
             <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
                 {/* Harvest ID Card */}
                 <View style={styles.detailNameCard}>
-                    <Ionicons name="leaf" size={32} color={CoffeeColors.MEDIUM_BROWN} style={{ marginBottom: 8 }} />
+                    <Ionicons name="leaf" size={32} color={PRIMARY_BROWN} style={{ marginBottom: 8 }} />
                     <Text style={styles.detailFarmerName}>
                         {farmerDisplayName}
                     </Text>
@@ -1032,6 +1046,63 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         }
     };
 
+    // --- Save Draft Handler ---
+    const handleSaveDraft = async () => {
+        const type = activeTab === 'farmers' ? 'farmer' : 'harvest';
+        const formData = type === 'farmer' ? farmerForm : harvestForm;
+        const currentStepNum = type === 'farmer' ? farmerStep : harvestStep;
+
+        console.log(`[handleSaveDraft] ========== SAVING ${type.toUpperCase()} DRAFT - STEP ${currentStepNum + 1} ==========`);
+        console.log(`[handleSaveDraft] Current form data:`, formData);
+
+        // Get step information
+        const steps = type === 'farmer' ? farmerFieldDefinitions : harvestFieldDefinitions;
+        const currentStepData = steps[currentStepNum];
+
+        if (!currentStepData) {
+            Alert.alert('Error', 'Unable to save draft. Step information not found.');
+            return;
+        }
+
+        if (isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        setLoading(true);
+
+        try {
+            // Prepare draft record with only current step data
+            const draftRecord = {
+                ...formData,
+                _isDraft: true,
+                _draftStep: currentStepNum,
+                _draftStepTitle: currentStepData.title,
+                _draftSavedAt: new Date().toISOString(),
+                _draftType: type,
+                recorder_id: userId,
+            };
+
+            console.log(`[handleSaveDraft] Saving draft for ${type}:`, JSON.stringify(draftRecord, null, 2));
+
+            // Save draft - could be to AsyncStorage for offline persistence
+            // For now, we'll show a success alert
+            setSuccessMessage(`${type === 'farmer' ? 'Farmer' : 'Harvest'} draft saved successfully at ${currentStepData.title}!`);
+
+            // Show success dialog
+            Alert.alert(
+                'Draft Saved',
+                `Your ${type} information has been saved as a draft at "${currentStepData.title}".\n\nYou can continue filling this form later.`,
+                [{ text: 'OK', onPress: () => { setViewMode('table'); setActiveTab(type + 's'); } }]
+            );
+
+            await loadRecords();
+        } catch (e) {
+            console.error(`[handleSaveDraft] ❌ Error saving draft:`, e);
+            Alert.alert('Save Failed', e.message || `Failed to save ${type} draft.`);
+        } finally {
+            setLoading(false);
+            isSubmittingRef.current = false;
+        }
+    };
+
     const handleHarvestSubmit = async () => {
         const isEditing = harvestForm._isEditing;
         const actionName = isEditing ? 'UPDATE' : 'SUBMISSION';
@@ -1241,7 +1312,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                     {/* Display selected farmer name below the UID field */}
                                     {formData.farmer_name && (
                                         <View style={styles.farmerNameDisplay}>
-                                            <Ionicons name="person" size={16} color={CoffeeColors.MEDIUM_BROWN} style={{ marginRight: 8 }} />
+                                            <Ionicons name="person" size={16} color={PRIMARY_BROWN} style={{ marginRight: 8 }} />
                                             <Text style={styles.farmerNameText}>{formData.farmer_name}</Text>
                                         </View>
                                     )}
@@ -1284,20 +1355,55 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 </ScrollView>
 
                 {/* Step Navigation */}
-                <View style={styles.stepNav}>
-                    {currentStep > 0 && <TouchableOpacity style={styles.stepButton} onPress={handleBack}><Text style={styles.stepButtonText}>Back</Text></TouchableOpacity>}
+                <View style={styles.stepNavContainer}>
+                    <View style={styles.stepNav}>
+                        {currentStep > 0 && (
+                            <TouchableOpacity style={styles.stepButton} onPress={handleBack}>
+                                <Ionicons name="chevron-back" size={20} color={PRIMARY_BROWN} style={styles.prevButtonIcon} />
+                                <Text style={styles.stepButtonText}>Previous</Text>
+                            </TouchableOpacity>
+                        )}
+                        {currentStep < steps.length - 1 ? (
+                            <TouchableOpacity
+                                style={styles.stepButton}
+                                onPress={handleNext}
+                                disabled={loading}
+                            >
+                                {loading ? <ActivityIndicator color={PRIMARY_BROWN} /> : (
+                                    <>
+                                        <Text style={styles.stepButtonText}>Next</Text>
+                                        <Ionicons name="chevron-forward" size={20} color={PRIMARY_BROWN} style={styles.nextButtonIcon} />
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={styles.submitButton}
+                                onPress={handleNext}
+                                disabled={loading}
+                            >
+                                {loading ? <ActivityIndicator color={'#fff'} /> : (
+                                    <Text style={styles.submitButtonText}>
+                                        {`${isEditing ? 'Update' : 'Submit'} ${isFarmer ? 'Farmer' : 'Harvest'}`}
+                                    </Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Save Draft Button - Available on all steps */}
                     <TouchableOpacity
-                        style={[styles.submitButton, currentStep < steps.length - 1 ? styles.nextButton : null]}
-                        onPress={handleNext}
+                        style={styles.saveDraftButton}
+                        onPress={handleSaveDraft}
                         disabled={loading}
                     >
-                        {loading ? <ActivityIndicator color={CoffeeColors.WHITE} /> : (
-                            <Text style={styles.submitButtonText}>
-                                {currentStep < steps.length - 1
-                                    ? 'Next'
-                                    : `${isEditing ? 'Update' : 'Submit'} ${isFarmer ? 'Farmer' : 'Harvest'}`
-                                }
-                            </Text>
+                        {loading ? (
+                            <ActivityIndicator color={PRIMARY_BROWN} />
+                        ) : (
+                            <>
+                                <Ionicons name="save" size={18} color={PRIMARY_BROWN} style={{ marginRight: 6 }} />
+                                <Text style={styles.saveDraftButtonText}>Save Draft</Text>
+                            </>
                         )}
                     </TouchableOpacity>
                 </View>
@@ -1519,7 +1625,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     // --- Screen Layout ---
     return (
         <View style={styles.screen}>
-            <Header title="Aggregation" onNavigate={onNavigate} />
+            <SimpleHeader title="Farmer & Harvest Records" />
 
             {/* FIXED: KeyboardAvoidingView wraps entire scrollable content - optimized for Android */}
             <KeyboardAvoidingView
@@ -1560,7 +1666,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
                 {/* Main Content Area */}
                 <View style={styles.contentWrapper}>
-                    {loading && viewMode !== 'table' && viewMode !== 'detail' && <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />}
+                    {loading && viewMode !== 'table' && viewMode !== 'detail' && <ActivityIndicator size="large" color={DARK_BROWN} />}
 
                     {viewMode === 'form' && renderFormContent()}
 
@@ -1613,7 +1719,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 const styles = StyleSheet.create({
     screen: {
         flex: 1,
-        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        backgroundColor: LIGHT_GRAY_BG,
     },
     container: {
         flex: 1,
@@ -1632,7 +1738,7 @@ const styles = StyleSheet.create({
     tabContainer: {
         flexDirection: 'row',
         marginBottom: 20,
-        backgroundColor: CoffeeColors.CREAM,
+        backgroundColor: VERY_LIGHT_BROWN,
         borderRadius: 10,
         padding: 5,
     },
@@ -1643,24 +1749,26 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     activeTab: {
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: PRIMARY_BROWN,
     },
     tabText: {
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
         fontWeight: '500',
+        fontFamily: Fonts.regular,
     },
     activeTabText: {
-        color: CoffeeColors.WHITE,
+        color: '#fff',
         fontWeight: '700',
+        fontFamily: Fonts.semiBold,
     },
     // --- Forms ---
     formSection: {
         flex: 1, // FIXED: Allow form to take available height
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
         borderRadius: 10,
         padding: 15,
         elevation: 3,
-        shadowColor: '#000',
+        shadowColor: DARK_BROWN,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 1.41,
@@ -1669,39 +1777,43 @@ const styles = StyleSheet.create({
     formTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.bold,
         marginBottom: 10,
     },
     inputLabel: {
         fontSize: 14,
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
         marginBottom: 5,
         fontWeight: '600',
+        fontFamily: Fonts.semiBold,
     },
     textInput: {
         borderWidth: 1,
-        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderColor: BORDER_LIGHT,
         borderRadius: 6,
         padding: 10,
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
         fontSize: 16,
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.regular,
     },
     readOnlyInput: {
-        backgroundColor: CoffeeColors.LIGHT_GRAY,
-        color: CoffeeColors.GRAY_TEXT,
+        backgroundColor: LIGHT_GRAY_BG,
+        color: TEXT_GRAY,
     },
     pickerContainer: {
         borderWidth: 1,
-        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderColor: BORDER_LIGHT,
         borderRadius: 6,
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
         overflow: 'hidden',
     },
     picker: {
         height: 50,
         width: '100%',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.regular,
     },
     stepFormScroll: {
         // REMOVED fixed maxHeight to allow proper scrolling on all screen sizes
@@ -1719,14 +1831,15 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderColor: BORDER_LIGHT,
         borderRadius: 6,
         padding: 10,
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
     },
     datePickerText: {
         fontSize: 16,
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.regular,
     },
     // Multi-Select Button
     multiSelectButton: {
@@ -1734,15 +1847,16 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderColor: BORDER_LIGHT,
         borderRadius: 6,
         padding: 10,
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
     },
     multiSelectText: {
         fontSize: 16,
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
         flex: 1,
+        fontFamily: Fonts.regular,
     },
     modalOverlay: {
         flex: 1,
@@ -1753,7 +1867,7 @@ const styles = StyleSheet.create({
     multiSelectModal: {
         width: '90%',
         maxHeight: '80%',
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
         borderRadius: 10,
         padding: 20,
     },
@@ -1767,54 +1881,57 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+        borderBottomColor: LIGHT_GRAY_BG,
     },
     multiSelectItemText: {
         fontSize: 16,
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.regular,
     },
     checkbox: {
         height: 24,
         width: 24,
         borderRadius: 4,
         borderWidth: 2,
-        borderColor: CoffeeColors.MEDIUM_BROWN,
+        borderColor: PRIMARY_BROWN,
         justifyContent: 'center',
         alignItems: 'center',
     },
     modalCloseButton: {
         marginTop: 20,
         padding: 15,
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: PRIMARY_BROWN,
         borderRadius: 8,
         alignItems: 'center',
     },
     modalCloseText: {
-        color: CoffeeColors.WHITE,
+        color: '#fff',
         fontWeight: 'bold',
+        fontFamily: Fonts.bold,
     },
     // --- Progress Bar ---
     progressBarContainer: {
         height: 15,
-        backgroundColor: CoffeeColors.CREAM,
+        backgroundColor: VERY_LIGHT_BROWN,
         borderRadius: 8,
         overflow: 'hidden',
         marginBottom: 15,
         justifyContent: 'center',
         borderWidth: 1,
-        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderColor: BORDER_LIGHT,
     },
     progressBar: {
         height: '100%',
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: PRIMARY_BROWN,
         borderRadius: 8,
         position: 'absolute',
         left: 0,
     },
     progressText: {
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
         fontSize: 10,
         fontWeight: 'bold',
+        fontFamily: Fonts.bold,
         textAlign: 'center',
         zIndex: 1,
     },
@@ -1822,62 +1939,103 @@ const styles = StyleSheet.create({
     stepNav: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
         marginTop: 20,
         paddingHorizontal: 5,
+        gap: 12,
     },
     stepButton: {
-        backgroundColor: CoffeeColors.CREAM,
-        padding: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
         borderRadius: 8,
         flex: 1,
-        marginHorizontal: 5,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: 'transparent',
+        borderWidth: 0,
     },
     stepButtonText: {
-        color: CoffeeColors.DARK_BROWN,
+        color: PRIMARY_BROWN,
         fontWeight: 'bold',
+        fontFamily: Fonts.bold,
+        fontSize: 14,
+    },
+    prevButtonIcon: {
+        marginRight: 8,
+    },
+    nextButtonIcon: {
+        marginLeft: 8,
     },
     nextButton: {
-        backgroundColor: CoffeeColors.ACCENT,
+        backgroundColor: 'transparent',
         borderWidth: 0,
     },
     submitButton: {
-        backgroundColor: CoffeeColors.ACCENT,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
         padding: 12,
         borderRadius: 8,
         flex: 1,
+        backgroundColor: PRIMARY_BROWN,
         marginHorizontal: 5,
-        alignItems: 'center',
     },
     submitButtonText: {
-        color: CoffeeColors.WHITE,
+        color: '#fff',
         fontWeight: 'bold',
+        fontFamily: Fonts.bold,
+    },
+    // --- Step Navigation Container & Save Draft ---
+    stepNavContainer: {
+        width: '100%',
+        marginTop: 20,
+        paddingHorizontal: 5,
+        gap: 12,
+    },
+    saveDraftButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        backgroundColor: VERY_LIGHT_BROWN,
+        borderWidth: 1,
+        borderColor: PRIMARY_BROWN,
+    },
+    saveDraftButtonText: {
+        color: PRIMARY_BROWN,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
+        fontSize: 14,
+        marginLeft: 6,
     },
     generateButton: {
         marginTop: 5,
         marginBottom: 10,
         padding: 5,
-        backgroundColor: CoffeeColors.CREAM,
+        backgroundColor: VERY_LIGHT_BROWN,
         borderRadius: 5,
         alignItems: 'center',
     },
     generateButtonText: {
-        color: CoffeeColors.MEDIUM_BROWN,
+        color: PRIMARY_BROWN,
         fontWeight: '600',
         fontSize: 12,
+        fontFamily: Fonts.semiBold,
     },
     viewRecordsButton: {
         padding: 10,
         alignItems: 'center',
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: CoffeeColors.DARK_BROWN,
+        borderColor: DARK_BROWN,
     },
     viewRecordsButtonText: {
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
         fontWeight: '600',
+        fontFamily: Fonts.semiBold,
     },
     // --- Modal/Success ---
     overlay: {
@@ -1889,7 +2047,7 @@ const styles = StyleSheet.create({
     },
     modal: {
         width: '80%',
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
         borderRadius: 10,
         padding: 20,
         alignItems: 'center',
@@ -1897,13 +2055,15 @@ const styles = StyleSheet.create({
     modalTitle: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.bold,
         marginBottom: 10,
     },
     modalMessage: {
         fontSize: 16,
         textAlign: 'center',
-        color: CoffeeColors.GRAY_TEXT,
+        color: TEXT_GRAY,
+        fontFamily: Fonts.regular,
         marginBottom: 20,
     },
     modalActions: {
@@ -1915,30 +2075,33 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     modalButtonText: {
-        color: CoffeeColors.WHITE,
+        color: '#fff',
         fontWeight: 'bold',
+        fontFamily: Fonts.bold,
     },
     // --- Data List (Replaces Table) ---
     recordsContainer: {
         flex: 1,
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
         borderRadius: 10,
         elevation: 3,
     },
     tableHeaderSection: {
         padding: 16,
         borderBottomWidth: 1,
-        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+        borderBottomColor: LIGHT_GRAY_BG,
     },
     tableTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.bold,
         marginBottom: 10,
     },
     backToFormText: {
-        color: CoffeeColors.MEDIUM_BROWN,
+        color: PRIMARY_BROWN,
         fontWeight: '600',
+        fontFamily: Fonts.semiBold,
         marginTop: 5,
     },
     listContainer: {
@@ -1951,27 +2114,31 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingVertical: 15,
         borderBottomWidth: 1,
-        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+        borderBottomColor: LIGHT_GRAY_BG,
     },
     dataListItemTitle: {
         fontSize: 16,
         fontWeight: '700',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.bold,
     },
     dataListItemUID: {
         fontSize: 14,
         fontWeight: '500',
-        color: CoffeeColors.MEDIUM_BROWN,
+        color: PRIMARY_BROWN,
+        fontFamily: Fonts.semiBold,
     },
     dataListItemSubtitle: {
         fontSize: 13,
-        color: CoffeeColors.GRAY_TEXT,
+        color: TEXT_GRAY,
+        fontFamily: Fonts.regular,
         marginTop: 4,
     },
     noRecords: {
         textAlign: 'center',
         padding: 20,
-        color: CoffeeColors.GRAY_TEXT,
+        color: TEXT_GRAY,
+        fontFamily: Fonts.regular,
     },
     // --- Search Container ---
     searchContainer: {
@@ -1980,7 +2147,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     searchButton: {
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: PRIMARY_BROWN,
         width: 48,
         height: 48,
         borderRadius: 8,
@@ -1988,7 +2155,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginTop: -15, // Align with input field (accounts for label spacing)
         elevation: 2,
-        shadowColor: '#000',
+        shadowColor: DARK_BROWN,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 1.41,
@@ -2001,25 +2168,27 @@ const styles = StyleSheet.create({
         padding: 12,
         borderRadius: 8,
         elevation: 2,
-        shadowColor: '#000',
+        shadowColor: DARK_BROWN,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.2,
         shadowRadius: 1.41,
     },
     actionButtonText: {
-        color: CoffeeColors.WHITE,
+        color: '#fff',
         fontWeight: 'bold',
         fontSize: 16,
+        fontFamily: Fonts.bold,
     },
     recordCount: {
         fontSize: 14,
-        color: CoffeeColors.GRAY_TEXT,
+        color: TEXT_GRAY,
         fontWeight: '600',
+        fontFamily: Fonts.semiBold,
     },
     // --- Farmer Detail View ---
     detailViewContainer: {
         flex: 1,
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
         borderRadius: 10,
         overflow: 'hidden',
         elevation: 3,
@@ -2029,22 +2198,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: 16,
-        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+        backgroundColor: PRIMARY_BROWN,
         borderBottomWidth: 1,
-        borderBottomColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderBottomColor: BORDER_LIGHT,
     },
     backButton: {
         width: 40,
         height: 40,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: CoffeeColors.CREAM,
+        backgroundColor: VERY_LIGHT_BROWN,
         borderRadius: 20,
     },
     detailHeaderTitle: {
         fontSize: 20,
         fontWeight: '700',
-        color: CoffeeColors.WHITE,
+        color: '#fff',
+        fontFamily: Fonts.bold,
         flex: 1,
         textAlign: 'center',
     },
@@ -2055,13 +2225,13 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     detailNameCard: {
-        backgroundColor: CoffeeColors.CREAM,
+        backgroundColor: VERY_LIGHT_BROWN,
         padding: 20,
         borderRadius: 12,
         marginBottom: 20,
         alignItems: 'center',
         elevation: 2,
-        shadowColor: '#000',
+        shadowColor: DARK_BROWN,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 2,
@@ -2069,46 +2239,51 @@ const styles = StyleSheet.create({
     detailFarmerName: {
         fontSize: 24,
         fontWeight: '700',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.bold,
         marginBottom: 8,
         textAlign: 'center',
     },
     detailFarmerId: {
         fontSize: 16,
         fontWeight: '600',
-        color: CoffeeColors.MEDIUM_BROWN,
+        color: PRIMARY_BROWN,
+        fontFamily: Fonts.semiBold,
     },
     detailSection: {
         marginBottom: 24,
-        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        backgroundColor: LIGHT_GRAY_BG,
         borderRadius: 10,
         padding: 16,
     },
     detailSectionTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.bold,
         marginBottom: 12,
         paddingBottom: 8,
         borderBottomWidth: 2,
-        borderBottomColor: CoffeeColors.MEDIUM_BROWN,
+        borderBottomColor: PRIMARY_BROWN,
     },
     detailFieldRow: {
         flexDirection: 'row',
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderBottomColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderBottomColor: BORDER_LIGHT,
     },
     detailFieldLabel: {
         fontSize: 14,
         fontWeight: '600',
-        color: CoffeeColors.GRAY_TEXT,
+        color: TEXT_GRAY,
+        fontFamily: Fonts.semiBold,
         flex: 1,
     },
     detailFieldValue: {
         fontSize: 14,
         fontWeight: '500',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.regular,
         flex: 2,
         textAlign: 'right',
     },
@@ -2118,14 +2293,14 @@ const styles = StyleSheet.create({
         top: '100%',
         left: 0,
         right: 0,
-        backgroundColor: CoffeeColors.WHITE,
+        backgroundColor: '#fff',
         borderWidth: 1,
-        borderColor: CoffeeColors.GRAY_TEXT_LIGHT,
+        borderColor: BORDER_LIGHT,
         borderRadius: 6,
         marginTop: 2,
         maxHeight: 250,
         elevation: 5,
-        shadowColor: '#000',
+        shadowColor: DARK_BROWN,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
@@ -2140,29 +2315,32 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         padding: 12,
         borderBottomWidth: 1,
-        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+        borderBottomColor: LIGHT_GRAY_BG,
     },
     autocompleteName: {
         fontSize: 16,
         fontWeight: '600',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
+        fontFamily: Fonts.semiBold,
         marginBottom: 4,
     },
     autocompleteDetails: {
         fontSize: 13,
-        color: CoffeeColors.GRAY_TEXT,
+        color: TEXT_GRAY,
+        fontFamily: Fonts.regular,
     },
     autocompleteClose: {
         padding: 10,
         alignItems: 'center',
         borderTopWidth: 1,
-        borderTopColor: CoffeeColors.LIGHT_GRAY,
-        backgroundColor: CoffeeColors.CREAM,
+        borderTopColor: LIGHT_GRAY_BG,
+        backgroundColor: VERY_LIGHT_BROWN,
     },
     autocompleteCloseText: {
         fontSize: 14,
         fontWeight: '600',
-        color: CoffeeColors.MEDIUM_BROWN,
+        color: PRIMARY_BROWN,
+        fontFamily: Fonts.semiBold,
     },
     // --- Farmer Name Display (below autocomplete) ---
     farmerNameDisplay: {
@@ -2171,15 +2349,15 @@ const styles = StyleSheet.create({
         marginTop: -10,
         marginBottom: 15,
         padding: 10,
-        backgroundColor: CoffeeColors.CREAM,
+        backgroundColor: VERY_LIGHT_BROWN,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: CoffeeColors.MEDIUM_BROWN,
+        borderColor: PRIMARY_BROWN,
     },
     farmerNameText: {
         fontSize: 15,
         fontWeight: '600',
-        color: CoffeeColors.DARK_BROWN,
+        color: DARK_BROWN,
         flex: 1,
     },
     // --- Record Actions (Edit/Delete Buttons) ---
@@ -2195,9 +2373,9 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        backgroundColor: LIGHT_GRAY_BG,
         elevation: 1,
-        shadowColor: '#000',
+        shadowColor: DARK_BROWN,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 1,

@@ -8,7 +8,8 @@ import {
   Alert,
 } from 'react-native';
 import CoffeeColors from '../../../theme/colors';
-import Header from '../../../components/Header';
+import Fonts from '../../../theme/fonts';
+import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 
 export default function ProcessingScreen({ navigation }) {
@@ -57,8 +58,8 @@ export default function ProcessingScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Unified Header */}
-      <Header title="Processing" navigation={navigation} />
+      {/* Simple White Header */}
+      <SimpleHeader title="Processing" />
 
       <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Processing Cards Grid */}
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 16,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: CoffeeColors.DARK_BROWN,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -119,20 +120,23 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: Fonts.bold,
     color: CoffeeColors.DARK_BROWN,
     marginBottom: 8,
     textAlign: 'center',
   },
   cardSubtitle: {
     fontSize: 11,
-    color: CoffeeColors.GRAY_TEXT,
+    color: CoffeeColors.MEDIUM_BROWN,
+    fontFamily: Fonts.regular,
     fontStyle: 'italic',
     textAlign: 'center',
     marginBottom: 4,
   },
   cardTime: {
     fontSize: 11,
-    color: CoffeeColors.GRAY_TEXT,
+    color: CoffeeColors.MEDIUM_BROWN,
     fontWeight: '600',
+    fontFamily: Fonts.semiBold,
   },
 });

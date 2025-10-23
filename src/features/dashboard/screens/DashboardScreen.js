@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Fonts from '../../../theme/fonts';
+import CoffeeColors from '../../../theme/colors';
 import { fetchFarmers, fetchHarvests } from '../../../services/aggregationService';
 import { fetchAllHarvestRecords } from '../../../services/harvestRecord';
+import AuthService from '../../../services/AuthService';
+import SyncService from '../../../services/SyncService';
+import { syncAllRecords, getUnsyncedRecords } from '../../../services/harvestRecord';
 
 // Primary brown color and its shades
-const PRIMARY_BROWN = '#8B4513';
-const DARK_BROWN = '#6B3410';
-const LIGHT_BROWN = '#A0522D';
-const VERY_LIGHT_BROWN = '#D2B48C';
+const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
+const DARK_BROWN = CoffeeColors.DARK_BROWN;
+const LIGHT_BROWN = CoffeeColors.LIGHT_BROWN;
+const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
 
 const DashboardScreen = ({ navigation }) => {
+  const [userName, setUserName] = useState('User');
   const [lastRecords, setLastRecords] = useState({
     aggregationFarmer: null,
     aggregationHarvest: null,
@@ -30,10 +35,34 @@ const DashboardScreen = ({ navigation }) => {
     processing: 0,
   });
 
+  const [syncStatus, setSyncStatus] = useState({ pending: 0 });
+  const [isSyncing, setIsSyncing] = useState(false);
+
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', loadDashboardData);
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadUserName();
+      loadDashboardData();
+      loadSyncStatus();
+    });
     return unsubscribe;
   }, [navigation]);
+
+  const loadUserName = async () => {
+    try {
+      const user = await AuthService.getCurrentUser();
+      if (user && user.name) {
+        setUserName(user.name);
+      } else if (user && user.first_name) {
+        setUserName(user.first_name);
+      } else if (user && user.username) {
+        setUserName(user.username);
+      }
+      console.log('[Dashboard] User loaded:', user?.name || user?.first_name || 'User');
+    } catch (error) {
+      console.error('[Dashboard] Error loading user name:', error);
+      setUserName('User');
+    }
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -79,6 +108,64 @@ const DashboardScreen = ({ navigation }) => {
     return `${diffDays}d ago`;
   };
 
+  const loadSyncStatus = async () => {
+    try {
+      const { records } = await getUnsyncedRecords();
+      setSyncStatus({ pending: records.length });
+    } catch (error) {
+      console.error('[Dashboard] Error loading sync status:', error);
+    }
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await syncAllRecords();
+
+      if (result.totalCount === 0) {
+        Alert.alert('Nothing to Sync', 'All harvest records are already synced.');
+      } else if (result.syncedCount > 0 && result.syncedCount < result.totalCount) {
+        Alert.alert(
+          'Partial Sync',
+          `Synced ${result.syncedCount} of ${result.totalCount} records. Some records failed to sync.`
+        );
+      } else if (result.syncedCount === 0 && result.totalCount > 0) {
+        Alert.alert(
+          'Sync Failed',
+          'Could not sync records. Please check your internet connection and try again.'
+        );
+      }
+      await loadSyncStatus();
+    } catch (error) {
+      Alert.alert('Sync Failed', error.message || 'Failed to sync data');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AuthService.logout();
+              navigation.navigate('Login');
+            } catch (error) {
+              console.error('[Dashboard] Logout error:', error);
+              Alert.alert('Error', 'Failed to logout');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const quickActions = [
     {
       label: 'Record Harvest',
@@ -119,7 +206,7 @@ const DashboardScreen = ({ navigation }) => {
               </View>
               <View>
                 <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
-                <Text style={styles.headerSubtitle}>Welcome back, Manager</Text>
+                <Text style={styles.headerSubtitle}>Welcome back, {userName}</Text>
               </View>
             </View>
           </View>
@@ -142,41 +229,64 @@ const DashboardScreen = ({ navigation }) => {
         {/* Top Content */}
         <View style={styles.headerTopContent}>
           <View style={styles.headerGreeting}>
+            {/* Rugyeyo Farm with Logo */}
+            <View style={styles.rugyeyoContainer}>
+              <Image
+                source={require('../../../assets/rugyeyo_logo.png')}
+                style={styles.headerLogo}
+                resizeMode="contain"
+              />
+              <Text style={styles.rugyeyoText}>Rugyeyo Farm</Text>
+            </View>
+
+            {/* Welcome back User */}
             <Text style={styles.headerMainText}>
-              <Text style={styles.headerBold}>Rugyeyo Farm,</Text>
-              {'\n'}
-              <Text style={styles.headerLight}>Welcome back</Text>
+              <Text style={styles.headerBold}>Welcome back, </Text>
+              <Text style={styles.headerLight}>{userName}</Text>
             </Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerButton}>
-              <Ionicons name="notifications-outline" size={20} color="#fff" />
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={handleSync}
+              disabled={isSyncing}
+            >
+              <Ionicons
+                name={isSyncing ? "sync" : "cloud-upload-outline"}
+                size={20}
+                color="#fff"
+              />
+              {syncStatus.pending > 0 && (
+                <View style={styles.syncBadge}>
+                  <Text style={styles.syncBadgeText}>{syncStatus.pending}</Text>
+                </View>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton}>
-              <Ionicons name="share-outline" size={20} color="#fff" />
+            <TouchableOpacity style={styles.headerButton} onPress={handleLogout}>
+              <Ionicons name="log-out-outline" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Subtitle */}
         <Text style={styles.headerSubtitle}>Track your farm operations and performance</Text>
-      </LinearGradient>
 
-      {/* Weather Widget - Positioned on top of header */}
-      <View style={styles.weatherCardContainer}>
-        <View style={styles.weatherCard}>
-          <View style={styles.weatherContent}>
-            <View>
-              <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
-              <Text style={styles.weatherTemp}>24°C</Text>
-              <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
+        {/* Weather Widget - Inside Header */}
+        <View style={styles.weatherCardContainer}>
+          <View style={styles.weatherCard}>
+            <View style={styles.weatherContent}>
+              <View>
+                <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
+                <Text style={styles.weatherTemp}>24°C</Text>
+                <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
+              </View>
+              <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
+                <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
+              </LinearGradient>
             </View>
-            <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
-              <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
-            </LinearGradient>
           </View>
         </View>
-      </View>
+      </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.scrollViewContent} showsVerticalScrollIndicator={false}>
 
@@ -355,7 +465,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 50,
-    paddingBottom: 100,
+    paddingBottom: 80,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
@@ -364,13 +474,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 12,
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   headerTopContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  rugyeyoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  headerLogo: {
+    width: 100,
+    height: 100,
+  },
+  rugyeyoText: {
+    fontSize: Fonts.sizes.massive,
+    fontWeight: Fonts.weights.bold,
+    fontFamily: Fonts.bold,
+    color: '#fff',
+    maxWidth: '70%',
   },
   headerGreeting: {
     flex: 1,
@@ -418,17 +545,35 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
+    position: 'relative',
+  },
+  syncBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  syncBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   weatherCardContainer: {
     position: 'absolute',
-    top: 220,
+    top: 250,
     left: 20,
     right: 20,
     zIndex: 10,
   },
   scrollViewContent: {
     padding: 20,
-    paddingTop: 160,
+    paddingTop: 80,
     paddingBottom: 100,
   },
   weatherCard: {
@@ -451,20 +596,20 @@ const styles = StyleSheet.create({
   },
   weatherLocation: {
     fontSize: Fonts.sizes.small,
-    color: '#6b7280',
+    color: CoffeeColors.GRAY_TEXT,
     marginBottom: 4,
     fontFamily: Fonts.regular,
   },
   weatherTemp: {
     fontSize: Fonts.sizes.massive,
     fontWeight: Fonts.weights.bold,
-    color: '#1f2937',
+    color: CoffeeColors.DARK_BROWN,
     marginBottom: 4,
     fontFamily: Fonts.bold,
   },
   weatherCondition: {
     fontSize: Fonts.sizes.small,
-    color: '#6b7280',
+    color: CoffeeColors.GRAY_TEXT,
     fontFamily: Fonts.regular,
   },
   weatherIcon: {
@@ -487,8 +632,8 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 0,
-    borderColor: '#f0f0f0',
-    shadowColor: '#000',
+    borderColor: CoffeeColors.VERY_LIGHT_BROWN,
+    shadowColor: DARK_BROWN,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -513,14 +658,14 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: Fonts.sizes.tiny,
-    color: '#6b7280',
+    color: CoffeeColors.GRAY_TEXT,
     marginBottom: 4,
     fontFamily: Fonts.regular,
   },
   statValue: {
     fontSize: Fonts.sizes.xxlarge,
     fontWeight: Fonts.weights.bold,
-    color: '#1f2937',
+    color: CoffeeColors.DARK_BROWN,
     marginBottom: 2,
     fontFamily: Fonts.bold,
   },
@@ -539,7 +684,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: Fonts.sizes.xlarge,
     fontWeight: Fonts.weights.semiBold,
-    color: '#1f2937',
+    color: CoffeeColors.DARK_BROWN,
     fontFamily: Fonts.semiBold,
   },
   viewAllText: {
@@ -587,13 +732,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 20,
     padding: 16,
-    shadowColor: '#000',
+    shadowColor: DARK_BROWN,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 4,
     borderWidth: 0,
-    borderColor: '#f0f0f0',
+    borderColor: CoffeeColors.VERY_LIGHT_BROWN,
     overflow: 'hidden',
   },
   activityItem: {
@@ -605,13 +750,13 @@ const styles = StyleSheet.create({
   activityTitle: {
     fontSize: Fonts.sizes.regular,
     fontWeight: Fonts.weights.semiBold,
-    color: '#1f2937',
+    color: CoffeeColors.DARK_BROWN,
     marginBottom: 2,
     fontFamily: Fonts.semiBold,
   },
   activitySubtitle: {
     fontSize: Fonts.sizes.small,
-    color: '#6b7280',
+    color: CoffeeColors.GRAY_TEXT,
     marginBottom: 4,
     fontFamily: Fonts.regular,
   },
@@ -622,7 +767,7 @@ const styles = StyleSheet.create({
   },
   activityDivider: {
     height: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
     marginVertical: 12,
   },
   bottomNav: {
@@ -634,13 +779,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 20,
     paddingTop: 12,
-    shadowColor: '#000',
+    shadowColor: DARK_BROWN,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: CoffeeColors.VERY_LIGHT_BROWN,
     flexDirection: 'row',
     justifyContent: 'space-around',
   },
@@ -669,7 +814,7 @@ const styles = StyleSheet.create({
   navText: {
     fontSize: Fonts.sizes.tiny,
     fontWeight: Fonts.weights.semiBold,
-    color: '#6b7280',
+    color: CoffeeColors.GRAY_TEXT,
     marginTop: 4,
     fontFamily: Fonts.semiBold,
   },

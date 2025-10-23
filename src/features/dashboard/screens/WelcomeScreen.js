@@ -7,10 +7,12 @@ import {
   Dimensions,
   StatusBar,
   Image,
+  ImageBackground,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../../../theme/colors';
+import Fonts from '../../../theme/fonts';
 
 const { width, height } = Dimensions.get('window');
 
@@ -29,80 +31,109 @@ export default function WelcomeScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={CoffeeColors.LIGHT_GRAY} />
+    <ImageBackground
+      source={require('../../../assets/welcome-coffee.jpg')}
+      style={styles.container}
+      resizeMode="cover"
+    >
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Logo Container */}
-      <View style={styles.logoContainer}>
-        <Image
-          source={require('../../../assets/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </View>
+      {/* Overlay for better text readability */}
+      <View style={styles.overlay} />
 
-      {/* App Title */}
-      <View style={styles.titleContainer}>
-        <Text style={styles.title}>Rugyeyo Farm</Text>
-        <Text style={styles.title}>Management App</Text>
-        <Text style={styles.subtitle}>
-          Manage your coffee farm efficiently
-        </Text>
-      </View>
+      {/* Content Container */}
+      <View style={styles.contentContainer}>
+        {/* Logo Container */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../../../assets/rugyeyo_logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
 
-      {/* Get Started Button */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleGetStarted}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.buttonText}>Get Started</Text>
-          <Ionicons name="arrow-forward" size={20} color={CoffeeColors.WHITE} style={styles.buttonIcon} />
-        </TouchableOpacity>
+        {/* App Title */}
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>Rugyeyo Farm</Text>
+          <Text style={styles.title}>Management App</Text>
+          <Text style={styles.subtitle}>
+            Manage your coffee farm efficiently
+          </Text>
+        </View>
+
+        {/* Get Started Button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleGetStarted}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.buttonText}>Get Started</Text>
+            <Ionicons name="arrow-forward" size={20} color={CoffeeColors.WHITE} style={styles.buttonIcon} />
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: CoffeeColors.LIGHT_GRAY,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  contentContainer: {
+    flex: 1,
     justifyContent: 'space-between',
     alignItems: 'center',
+    width: '100%',
     paddingVertical: 60,
     paddingHorizontal: 24,
+    zIndex: 1,
   },
   logoContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     width: '100%',
-    maxHeight: height * 0.5,
+    maxHeight: height * 0.4,
   },
   logo: {
-    width: width * 0.7,
-    height: width * 0.7,
-    maxWidth: 350,
-    maxHeight: 350,
+    width: 80,
+    height: 80,
+    resizeMode: 'contain',
   },
   titleContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginVertical: 30,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
-    color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.bold,
+    color: CoffeeColors.WHITE,
     textAlign: 'center',
     marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   subtitle: {
-    fontSize: 16,
-    color: CoffeeColors.MEDIUM_BROWN,
+    fontSize: 18,
+    fontFamily: Fonts.semiBold,
+    color: CoffeeColors.CREAM,
     textAlign: 'center',
     marginTop: 12,
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   buttonContainer: {
     width: '100%',
@@ -121,7 +152,7 @@ const styles = StyleSheet.create({
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 4.65,
     elevation: 8,
   },
@@ -129,6 +160,7 @@ const styles = StyleSheet.create({
     color: CoffeeColors.WHITE,
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: Fonts.bold,
     letterSpacing: 0.5,
   },
   buttonIcon: {

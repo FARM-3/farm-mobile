@@ -20,13 +20,14 @@ import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 
 import CoffeeColors from '../../../theme/colors';
+import Fonts from '../../../theme/fonts';
 import {
     fetchAllHarvestRecords,
     getUnsyncedRecords,
     syncAllRecords
 } from '../../../services/harvestRecord';
 // Import shared components
-import Header from '../../../components/Header';
+import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 
 // --- Constants for Filters ---
@@ -279,9 +280,9 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                     <Ionicons
                         name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
                         size={16}
-                        color={item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT}
+                        color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
                     />
-                    <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.GREEN : CoffeeColors.ACCENT, marginLeft: 4 }]}>
+                    <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN, marginLeft: 4 }]}>
                         {item.isSynced ? 'Synced' : 'Pending'}
                     </Text>
                 </View>
@@ -315,7 +316,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <Header title="Production Harvests" navigation={navigation} />
+            <SimpleHeader title="Production Harvests" />
             <View style={styles.container}>
 
                 {/* Add New Harvest Button */}
@@ -416,16 +417,17 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 10,
         color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.regular,
     },
     addButton: {
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: CoffeeColors.ACCENT,
+        backgroundColor: CoffeeColors.DARK_BROWN,
         padding: 12,
         borderRadius: 8,
         marginBottom: 10,
-        shadowColor: '#000',
+        shadowColor: CoffeeColors.DARK_BROWN,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
@@ -434,6 +436,7 @@ const styles = StyleSheet.create({
     addButtonText: {
         color: CoffeeColors.WHITE,
         fontWeight: '700',
+        fontFamily: Fonts.bold,
         marginLeft: 8,
         fontSize: 14,
     },
@@ -450,6 +453,7 @@ const styles = StyleSheet.create({
         color: CoffeeColors.CREAM,
         fontSize: 12,
         flexShrink: 1,
+        fontFamily: Fonts.regular,
     },
     searchBar: {
         backgroundColor: CoffeeColors.WHITE,
@@ -481,7 +485,7 @@ const styles = StyleSheet.create({
         padding: 12,
         borderRadius: 8,
         marginBottom: 10,
-        shadowColor: '#000',
+        shadowColor: CoffeeColors.DARK_BROWN,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
         shadowRadius: 3.84,
@@ -490,6 +494,7 @@ const styles = StyleSheet.create({
     exportText: {
         color: CoffeeColors.WHITE,
         fontWeight: '700',
+        fontFamily: Fonts.bold,
         marginLeft: 8,
     },
     rowScrollView: {
@@ -512,6 +517,7 @@ const styles = StyleSheet.create({
     headerCell: {
         width: 100,
         fontWeight: '700',
+        fontFamily: Fonts.bold,
         color: CoffeeColors.CREAM,
         textAlign: 'center',
         fontSize: 12,
@@ -519,11 +525,11 @@ const styles = StyleSheet.create({
     },
     syncedRow: {
         borderLeftWidth: 5,
-        borderLeftColor: CoffeeColors.GREEN,
+        borderLeftColor: CoffeeColors.MEDIUM_BROWN,
     },
     pendingRow: {
         borderLeftWidth: 5,
-        borderLeftColor: CoffeeColors.ACCENT, // Using accent color for pending
+        borderLeftColor: CoffeeColors.LIGHT_BROWN,
     },
     cell: {
         width: 100,
@@ -532,6 +538,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
         alignSelf: 'center',
         paddingHorizontal: 5,
+        fontFamily: Fonts.regular,
     },
     statusCell: {
         width: 100,
@@ -555,7 +562,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     deleteButton: {
-        backgroundColor: CoffeeColors.ACCENT,
+        backgroundColor: CoffeeColors.DARK_BROWN,
         borderRadius: 5,
         padding: 8,
         justifyContent: 'center',
@@ -563,12 +570,14 @@ const styles = StyleSheet.create({
     },
     cellText: {
         fontSize: 12,
+        fontFamily: Fonts.regular,
     },
     emptyText: {
         textAlign: 'center',
         marginTop: 20,
         color: CoffeeColors.MEDIUM_BROWN,
         fontStyle: 'italic',
+        fontFamily: Fonts.regular,
     }
 });
 

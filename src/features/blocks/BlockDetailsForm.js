@@ -8,9 +8,10 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import Header from '../../components/Header';
+import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
 import CoffeeColors from '../../theme/colors';
+import Fonts from '../../theme/fonts';
 import ApiService from '../../services/ApiService';
 
 // Helper function to generate sequential block ID (BLK-01, BLK-02, etc.)
@@ -712,7 +713,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-      <Header title="Block Registration" navigation={navigation} />
+      <SimpleHeader title="Block Registration" />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <TouchableOpacity onPress={handleViewSummary} style={styles.navLink}>
           <Text style={styles.navLinkText}>View Block Summary 📋</Text>
@@ -901,20 +902,20 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     flex: 1,
-    backgroundColor: CoffeeColors.ACCENT,
+    backgroundColor: CoffeeColors.DARK_BROWN,
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
   },
   submitButton: {
     flex: 1,
-    backgroundColor: CoffeeColors.ACCENT,
+    backgroundColor: CoffeeColors.DARK_BROWN,
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
   },
   backButton: {
-    backgroundColor: '#ccc',
+    backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
     padding: 15,
     borderRadius: 8,
     marginRight: 10,
@@ -923,11 +924,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: Fonts.bold,
   },
   backButtonText: {
     color: CoffeeColors.DARK_BROWN,
     fontSize: 16,
     fontWeight: 'bold',
+    fontFamily: Fonts.bold,
   },
 });
 
@@ -945,7 +948,7 @@ const modalStyles = StyleSheet.create({
     borderRadius: 20,
     padding: 35,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: CoffeeColors.DARK_BROWN,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
@@ -954,6 +957,7 @@ const modalStyles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: 'bold',
+    fontFamily: Fonts.bold,
     marginBottom: 15,
     color: CoffeeColors.MEDIUM_BROWN,
   },
@@ -961,11 +965,13 @@ const modalStyles = StyleSheet.create({
     marginBottom: 15,
     textAlign: 'center',
     fontSize: 16,
+    fontFamily: Fonts.regular,
   },
   modalTextSmall: {
     marginBottom: 20,
     textAlign: 'center',
     fontSize: 14,
+    fontFamily: Fonts.regular,
     color: CoffeeColors.GRAY_TEXT,
   },
   buttonContainer: {
@@ -974,7 +980,7 @@ const modalStyles = StyleSheet.create({
     gap: 10,
   },
   button: {
-    backgroundColor: CoffeeColors.ACCENT,
+    backgroundColor: CoffeeColors.DARK_BROWN,
     borderRadius: 10,
     padding: 10,
     elevation: 2,
@@ -986,6 +992,7 @@ const modalStyles = StyleSheet.create({
   textStyle: {
     color: 'white',
     fontWeight: 'bold',
+    fontFamily: Fonts.bold,
     textAlign: 'center',
     fontSize: 14,
   },

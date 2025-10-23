@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import CoffeeColors from '../../../theme/colors';
+import Fonts from '../../../theme/fonts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUnsyncedRecords, postHarvestRecord, removeRecordFromQueue } from '../../../services/harvestRecord';
-import Header from '../../../components/Header';
+import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
@@ -400,7 +401,7 @@ export default function HarvestFormScreen({ navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <Header title="New Harvest Entry" onNavigate={(screen) => navigation.navigate(screen)} />
+            <SimpleHeader title="New Harvest Entry" />
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.select({ ios: "padding", android: undefined })}
@@ -487,15 +488,17 @@ const styles = StyleSheet.create({
     mainTitle: {
         fontSize: 24,
         fontWeight: "800",
+        fontFamily: Fonts.bold,
         marginBottom: 20,
-        color: CoffeeColors.DARK_BROWN, 
+        color: CoffeeColors.DARK_BROWN,
         textAlign: 'center',
     },
     heading: {
         fontSize: 18,
         fontWeight: "700",
+        fontFamily: Fonts.bold,
         marginBottom: 15,
-        color: CoffeeColors.MEDIUM_BROWN, 
+        color: CoffeeColors.MEDIUM_BROWN,
         borderBottomWidth: 1,
         borderBottomColor: CoffeeColors.LIGHT_BROWN,
         paddingBottom: 5,
@@ -504,7 +507,8 @@ const styles = StyleSheet.create({
         marginTop: 15,
         marginBottom: 8,
         fontWeight: "600",
-        color: CoffeeColors.DARK_BROWN, 
+        fontFamily: Fonts.semiBold,
+        color: CoffeeColors.DARK_BROWN,
         fontSize: 16,
     },
     input: {
@@ -548,8 +552,9 @@ const styles = StyleSheet.create({
         elevation: 6,
     },
     saveBtnText: {
-        color: CoffeeColors.CREAM, 
+        color: CoffeeColors.CREAM,
         fontWeight: "800",
+        fontFamily: Fonts.bold,
         fontSize: 17,
     },
     secondaryBtn: {
@@ -558,7 +563,8 @@ const styles = StyleSheet.create({
         padding: 10,
     },
     secondaryBtnText: {
-        color: CoffeeColors.MEDIUM_BROWN, 
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontFamily: Fonts.semiBold,
         textDecorationLine: "underline",
         fontSize: 14,
     },
@@ -622,12 +628,15 @@ const stepStyles = StyleSheet.create({
     stepText: {
         color: CoffeeColors.WHITE,
         fontWeight: 'bold',
+        fontFamily: Fonts.bold,
         fontSize: 18,
     },
     stepLabel: {
         fontSize: 12,
         fontWeight: '600',
+        fontFamily: Fonts.semiBold,
         textAlign: 'center',
+        color: CoffeeColors.DARK_BROWN,
     },
     stepContainer: {
         backgroundColor: CoffeeColors.WHITE,

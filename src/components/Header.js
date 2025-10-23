@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform, StatusBar, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../theme/colors';
 import AuthService from '../services/AuthService';
 import SyncService from '../services/SyncService';
@@ -99,11 +100,16 @@ const Header = ({ title = 'Rugyeyo Farm', navigation: propNavigation, onNavigate
           onPress: async () => {
             try {
               await AuthService.logout();
-              // Use onNavigate if provided (legacy support), otherwise use navigation
+              // Clear the hasSeenWelcome flag so user sees Welcome screen again
+              await AsyncStorage.removeItem('hasSeenWelcome');
+              console.log('[Header] Logout successful, cleared hasSeenWelcome flag');
+
+              // Navigate to Welcome screen
               if (onNavigate) {
-                onNavigate('Login');
+                onNavigate('Welcome');
               } else if (navigation) {
-                navigation.navigate('Login');
+                // First navigate to Welcome
+                navigation.navigate('Welcome');
               }
             } catch (error) {
               console.error('[Header] Logout error:', error);

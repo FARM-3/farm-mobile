@@ -21,7 +21,8 @@ import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
 
 import CoffeeColors from '../../theme/colors';
-import Header from '../../components/Header';
+import Fonts from '../../theme/fonts';
+import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
 import ApiService from '../../services/ApiService';
 
@@ -278,9 +279,9 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
                     <Ionicons
                         name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
                         size={16}
-                        color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT}
+                        color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
                     />
-                    <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.ACCENT, marginLeft: 4 }]}>
+                    <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN, marginLeft: 4 }]}>
                         {item.isSynced ? 'Synced' : 'Pending'}
                     </Text>
                 </View>
@@ -299,7 +300,7 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <Header title="Block Details" navigation={navigation} />
+            <SimpleHeader title="Block Details" />
 
             <View style={styles.container}>
                 {/* Sync Status Banner */}
@@ -413,6 +414,7 @@ const styles = StyleSheet.create({
         marginTop: 10,
         color: CoffeeColors.DARK_BROWN,
         fontSize: 16,
+        fontFamily: Fonts.regular,
     },
     syncBanner: {
         flexDirection: 'row',
@@ -427,6 +429,7 @@ const styles = StyleSheet.create({
         color: CoffeeColors.CREAM,
         fontSize: 13,
         flexShrink: 1,
+        fontFamily: Fonts.regular,
     },
     searchContainer: {
         flexDirection: 'row',
@@ -444,6 +447,7 @@ const styles = StyleSheet.create({
         marginLeft: 10,
         fontSize: 16,
         color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.regular,
     },
     actionBar: {
         flexDirection: 'row',
@@ -467,7 +471,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderRadius: 8,
-        shadowColor: '#000',
+        shadowColor: CoffeeColors.DARK_BROWN,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 3,
@@ -476,12 +480,14 @@ const styles = StyleSheet.create({
     exportText: {
         color: CoffeeColors.WHITE,
         fontWeight: '700',
+        fontFamily: Fonts.bold,
         marginLeft: 8,
         fontSize: 14,
     },
     recordCount: {
         fontSize: 14,
         fontWeight: '600',
+        fontFamily: Fonts.semiBold,
         color: CoffeeColors.MEDIUM_BROWN,
         marginBottom: 10,
     },
@@ -504,6 +510,7 @@ const styles = StyleSheet.create({
     headerCell: {
         width: 120,
         fontWeight: '700',
+        fontFamily: Fonts.bold,
         color: CoffeeColors.CREAM,
         textAlign: 'center',
         fontSize: 12,
@@ -515,7 +522,7 @@ const styles = StyleSheet.create({
     },
     pendingRow: {
         borderLeftWidth: 4,
-        borderLeftColor: CoffeeColors.ACCENT,
+        borderLeftColor: CoffeeColors.LIGHT_BROWN,
     },
     cell: {
         width: 120,
@@ -523,10 +530,12 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontSize: 12,
         paddingHorizontal: 8,
+        fontFamily: Fonts.regular,
     },
     cellText: {
         fontSize: 12,
         fontWeight: '600',
+        fontFamily: Fonts.semiBold,
     },
     statusCell: {
         width: 120,
@@ -544,11 +553,13 @@ const styles = StyleSheet.create({
         marginTop: 16,
         fontSize: 18,
         fontWeight: '600',
+        fontFamily: Fonts.semiBold,
         color: CoffeeColors.MEDIUM_BROWN,
     },
     emptySubtext: {
         marginTop: 8,
         fontSize: 14,
+        fontFamily: Fonts.regular,
         color: CoffeeColors.GRAY_TEXT,
         fontStyle: 'italic',
     },
