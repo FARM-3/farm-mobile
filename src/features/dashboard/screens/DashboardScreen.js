@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, LogBox } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Suppress all console logs and warnings from appearing on the UI
+// Logs will still appear in the terminal for debugging
+LogBox.ignoreLogs([
+  'VirtualizedLists should never be nested inside plain ScrollViews',
+  '[ApiService]',
+  'Network Error',
+]);
+// Hide all yellow box warnings on screen (ignores all LogBox warnings)
+LogBox.ignoreAllLogs(true);
 
 import Fonts from '../../../theme/fonts';
 import CoffeeColors from '../../../theme/colors';
@@ -11,11 +21,11 @@ import { fetchAllHarvestRecords } from '../../../services/harvestRecord';
 import AuthService from '../../../services/AuthService';
 import SyncService from '../../../services/SyncService';
 import { syncAllRecords, getUnsyncedRecords } from '../../../services/harvestRecord';
+import BottomNav from '../../../components/BottomNav';
 
 // Primary brown color and its shades
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
 const DARK_BROWN = CoffeeColors.DARK_BROWN;
-const LIGHT_BROWN = CoffeeColors.LIGHT_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
 
 const DashboardScreen = ({ navigation }) => {
@@ -419,28 +429,7 @@ const DashboardScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navButtonActive}>
-          <Ionicons name="analytics" size={24} color={PRIMARY_BROWN} />
-          <Text style={styles.navTextActive}>Dashboard</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Aggregation')}>
-          <Ionicons name="people-circle" size={24} color={LIGHT_BROWN} />
-          <Text style={styles.navText}>Farmers</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Harvests')}>
-          <Ionicons name="basket" size={24} color={LIGHT_BROWN} />
-          <Text style={styles.navText}>Harvests</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Processing')}>
-          <Ionicons name="cog" size={24} color={LIGHT_BROWN} />
-          <Text style={styles.navText}>Processing</Text>
-        </TouchableOpacity>
-      </View>
+      <BottomNav activeScreen="Dashboard" />
     </View>
   );
 };
@@ -486,7 +475,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    gap: 12,
+    gap: 1,
   },
   headerLogo: {
     width: 100,
@@ -574,7 +563,7 @@ const styles = StyleSheet.create({
   scrollViewContent: {
     padding: 20,
     paddingTop: 80,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   weatherCard: {
     backgroundColor: '#fff',
@@ -769,54 +758,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
     marginVertical: 12,
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    paddingTop: 12,
-    shadowColor: DARK_BROWN,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
-    borderTopWidth: 1,
-    borderTopColor: CoffeeColors.VERY_LIGHT_BROWN,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  navButtonActive: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: '#ffe6e6',
-    marginHorizontal: 4,
-  },
-  navButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    marginHorizontal: 4,
-  },
-  navTextActive: {
-    fontSize: Fonts.sizes.tiny,
-    fontWeight: Fonts.weights.semiBold,
-    color: PRIMARY_BROWN,
-    marginTop: 4,
-    fontFamily: Fonts.semiBold,
-  },
-  navText: {
-    fontSize: Fonts.sizes.tiny,
-    fontWeight: Fonts.weights.semiBold,
-    color: CoffeeColors.GRAY_TEXT,
-    marginTop: 4,
-    fontFamily: Fonts.semiBold,
   },
 });
 

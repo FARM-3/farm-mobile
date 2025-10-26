@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
@@ -8,6 +9,7 @@ const PRIMARY_BROWN = '#8B4513';
 const LIGHT_BROWN = '#A0522D';
 
 const BottomNav = ({ activeScreen, active }) => {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute();
 
@@ -15,8 +17,8 @@ const BottomNav = ({ activeScreen, active }) => {
   const currentScreen = activeScreen || active || route.name;
 
   return (
-    <View style={styles.bottomNavContainer} pointerEvents="box-none">
-      <View style={styles.bottomNavBar}>
+    <View style={[styles.bottomNavContainer, { bottom: -20 + insets.bottom }]} pointerEvents="box-none">
+      <View style={[styles.bottomNavBar, { paddingBottom: insets.bottom || 20 }]}>
         <TouchableOpacity
           style={[styles.navItem, currentScreen === 'Dashboard' && styles.navItemActive]}
           onPress={() => navigation.navigate('Dashboard')}
@@ -78,7 +80,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
     zIndex: 999,
   },
   bottomNavBar: {
@@ -90,7 +91,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#e5e7eb',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingBottom: 20,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },

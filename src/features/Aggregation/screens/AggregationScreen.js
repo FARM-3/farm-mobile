@@ -1,11 +1,22 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch, FlatList, KeyboardAvoidingView, Platform, LogBox } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+// Suppress all console logs and warnings from appearing on the UI
+// Logs will still appear in the terminal for debugging
+LogBox.ignoreLogs([
+  'VirtualizedLists should never be nested inside plain ScrollViews',
+  '[ApiService]',
+  'Network Error',
+]);
+// Hide all yellow box warnings on screen
+LogBox.ignoreAllLogs(true);
+
 // --- UTILITIES AND THEME IMPORTS ---
 // NOTE: Assuming these imports are correctly path-resolved in your environment
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Fonts from '../../../theme/fonts';
 import CoffeeColors from '../../../theme/colors';
 import SimpleHeader from '../../../components/SimpleHeader';
@@ -394,7 +405,7 @@ const ProgressBar = ({ currentStep, totalSteps }) => {
 };
 
 // --- NEW/REPLACED Table Component: Searchable Data List ---
-const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, isFarmer, farmersList = [] }) => {
+const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, isFarmer, farmersList = [] }) => {
     const [searchText, setSearchText] = useState('');
 
     // Filtering logic based on search text across all listed fields
@@ -502,20 +513,47 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
         const thirdKey = fields.length > 2 ? fields[2].key : null;
 
         return (
-            <TouchableOpacity style={styles.dataListItem} onPress={() => onEdit(item)}>
+            <TouchableOpacity style={[styles.dataListItem, item._isDraft && styles.draftListItem]} onPress={() => onEdit(item)}>
                 <View style={{ flex: 1 }}>
-                    <Text style={styles.dataListItemTitle}>
-                        {String(displayName)}
-                        <Text style={styles.dataListItemUID}> ({displayId})</Text>
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.dataListItemTitle}>
+                            {String(displayName)}
+                            <Text style={styles.dataListItemUID}> ({displayId})</Text>
+                        </Text>
+                        {/* Draft Badge - Shows only for draft records */}
+                        {item._isDraft && (
+                            <View style={styles.draftBadge}>
+                                <Text style={styles.draftBadgeText}>DRAFT</Text>
+                            </View>
+                        )}
+                    </View>
                     <Text style={styles.dataListItemSubtitle}>
                         {secondKey ? `${fields[1].label}: ${item[secondKey] || 'N/A'}` : ''}
                         {thirdKey ? ` | ${fields[2].label}: ${item[thirdKey] || 'N/A'}` : ''}
                     </Text>
+                    {/* Show draft step if it's a draft */}
+                    {item._isDraft && (
+                        <Text style={styles.draftStepText}>
+                            Saved at: {item._draftStepTitle || 'Unknown Step'}
+                        </Text>
+                    )}
                 </View>
 
-                {/* Edit and Delete Icon Buttons */}
+                {/* Edit, Sync Draft (if draft), and Delete Icon Buttons */}
                 <View style={styles.recordActions}>
+                    {/* Sync Draft Button - Only shows for draft records */}
+                    {item._isDraft && onSyncDraft && (
+                        <TouchableOpacity
+                            style={[styles.iconButton, styles.syncButton]}
+                            onPress={(e) => {
+                                e.stopPropagation(); // Prevent triggering the main onPress
+                                onSyncDraft(item); // Sync draft to database
+                            }}
+                        >
+                            <Ionicons name="cloud-upload-outline" size={20} color="#4CAF50" />
+                        </TouchableOpacity>
+                    )}
+
                     <TouchableOpacity
                         style={styles.iconButton}
                         onPress={(e) => {
@@ -874,18 +912,41 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         console.log('[loadRecords] ========== FETCHING RECORDS ==========');
         setLoading(true);
         try {
+            // Fetch submitted farmers from backend
             const f = await fetchFarmers();
             console.log('[loadRecords] Fetched farmers count:', Array.isArray(f) ? f.length : 0);
             console.log('[loadRecords] First 3 farmers:', Array.isArray(f) ? f.slice(0, 3) : 'Not an array');
-            setFarmersList(Array.isArray(f) ? f : []);
+            console.log('[loadRecords] Full farmers response:', JSON.stringify(f, null, 2));
+
+            // Load farmer drafts from AsyncStorage
+            const farmerDraftsJson = await AsyncStorage.getItem('farmer_drafts');
+            const farmerDrafts = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
+            console.log('[loadRecords] Loaded farmer drafts count:', farmerDrafts.length);
+
+            // Combine submitted farmers and drafts
+            const allFarmers = [...(Array.isArray(f) ? f : []), ...farmerDrafts];
+            console.log('[loadRecords] Total farmers (submitted + drafts):', allFarmers.length);
+            setFarmersList(allFarmers);
+
         } catch (e) {
             console.error('[loadRecords] Failed to load farmers:', e);
+            console.error('[loadRecords] Error details:', JSON.stringify(e, null, 2));
             setFarmersList([]);
         }
         try {
+            // Fetch submitted harvests from backend
             const h = await fetchHarvests();
             console.log('[loadRecords] Fetched harvests count:', Array.isArray(h) ? h.length : 0);
-            setHarvestsList(Array.isArray(h) ? h : []);
+
+            // Load harvest drafts from AsyncStorage
+            const harvestDraftsJson = await AsyncStorage.getItem('harvest_drafts');
+            const harvestDrafts = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
+            console.log('[loadRecords] Loaded harvest drafts count:', harvestDrafts.length);
+
+            // Combine submitted harvests and drafts
+            const allHarvests = [...(Array.isArray(h) ? h : []), ...harvestDrafts];
+            setHarvestsList(allHarvests);
+
         } catch (e) {
             console.error('[loadRecords] Failed to load harvests:', e);
             setHarvestsList([]);
@@ -1069,9 +1130,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         setLoading(true);
 
         try {
-            // Prepare draft record with only current step data
+            // Generate unique ID for draft if not already present
+            const draftId = formData.uid || formData.harvest_id || formData.id || generateRecordId(type === 'farmer' ? 'FR' : 'PA');
+
+            // Prepare draft record
             const draftRecord = {
                 ...formData,
+                id: draftId, // Unique identifier for the draft
                 _isDraft: true,
                 _draftStep: currentStepNum,
                 _draftStepTitle: currentStepData.title,
@@ -1082,8 +1147,25 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
             console.log(`[handleSaveDraft] Saving draft for ${type}:`, JSON.stringify(draftRecord, null, 2));
 
-            // Save draft - could be to AsyncStorage for offline persistence
-            // For now, we'll show a success alert
+            // Save draft to AsyncStorage
+            const storageKey = type === 'farmer' ? 'farmer_drafts' : 'harvest_drafts';
+            const existingDrafts = await AsyncStorage.getItem(storageKey);
+            const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
+
+            // Check if draft with this ID already exists and update it, otherwise add new
+            const draftIndex = draftsArray.findIndex(d => d.id === draftId);
+            if (draftIndex >= 0) {
+                draftsArray[draftIndex] = draftRecord;
+                console.log(`[handleSaveDraft] Updated existing draft with ID: ${draftId}`);
+            } else {
+                draftsArray.push(draftRecord);
+                console.log(`[handleSaveDraft] Created new draft with ID: ${draftId}`);
+            }
+
+            // Save updated drafts array to AsyncStorage
+            await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
+            console.log(`[handleSaveDraft] ✅ Draft saved to AsyncStorage successfully`);
+
             setSuccessMessage(`${type === 'farmer' ? 'Farmer' : 'Harvest'} draft saved successfully at ${currentStepData.title}!`);
 
             // Show success dialog
@@ -1093,6 +1175,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 [{ text: 'OK', onPress: () => { setViewMode('table'); setActiveTab(type + 's'); } }]
             );
 
+            // Reload records to show the new draft
             await loadRecords();
         } catch (e) {
             console.error(`[handleSaveDraft] ❌ Error saving draft:`, e);
@@ -1575,6 +1658,135 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         }
     };
 
+    /**
+     * Handles syncing a draft record to the database.
+     * This function submits an incomplete draft without requiring full form completion.
+     */
+    const handleSyncDraft = async (draftRecord) => {
+        const type = draftRecord._draftType || (draftRecord.first_name ? 'farmer' : 'harvest');
+        const displayName = type === 'farmer'
+            ? `${draftRecord.first_name || ''} ${draftRecord.last_name || ''}`.trim()
+            : `Harvest ${draftRecord.id || draftRecord.harvest_id || 'Unknown'}`;
+
+        console.log(`[handleSyncDraft] Syncing ${type} draft:`, draftRecord);
+
+        Alert.alert(
+            'Sync Draft to Database',
+            `Are you sure you want to submit this ${type === 'farmer' ? 'farmer' : 'harvest'} draft to the database?\n\nYou can edit it later if needed.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Sync',
+                    style: 'default',
+                    onPress: async () => {
+                        setLoading(true);
+
+                        try {
+                            if (type === 'farmer') {
+                                // Sync farmer draft to database
+                                console.log('[handleSyncDraft] Submitting farmer draft to API...');
+                                const farmerData = {
+                                    uid: draftRecord.uid || draftRecord.farmer_id || draftRecord.id,
+                                    first_name: draftRecord.first_name || '',
+                                    last_name: draftRecord.last_name || '',
+                                    gender: draftRecord.gender || '',
+                                    nin: draftRecord.nin || '',
+                                    date_of_birth: draftRecord.date_of_birth || '',
+                                    contact: draftRecord.contact || '',
+                                    email: draftRecord.email || '',
+                                    farmer_type: draftRecord.farmer_type || 'individual',
+                                    started_farming: draftRecord.started_farming || '',
+                                    district: draftRecord.district || '',
+                                    other_district: draftRecord.other_district || '',
+                                    sub_county: draftRecord.sub_county || '',
+                                    other_sub_county: draftRecord.other_sub_county || '',
+                                    parish: draftRecord.parish || '',
+                                    village: draftRecord.village || '',
+                                    gps: draftRecord.gps || '',
+                                    nearest_landmark: draftRecord.nearest_landmark || '',
+                                    coffee_variety: draftRecord.coffee_variety || '',
+                                    no_of_trees: draftRecord.no_of_trees || 0,
+                                    all_your_trees: draftRecord.all_your_trees !== false,
+                                    other_farms: draftRecord.other_farms || '',
+                                    planted_date: draftRecord.planted_date || '',
+                                    spacing: draftRecord.spacing || '',
+                                    land_ownership: draftRecord.land_ownership || '',
+                                    deforested: draftRecord.deforested !== false,
+                                    seedling_source: draftRecord.seedling_source || '',
+                                    seedling_type: draftRecord.seedling_type || '',
+                                    age_of_seedlings: draftRecord.age_of_seedlings || '',
+                                    practices: draftRecord.practices || [],
+                                    irrigation: draftRecord.irrigation || '',
+                                    fertilizers: draftRecord.fertilizers || [],
+                                    pesticides: draftRecord.pesticides || [],
+                                    in_cooperative: draftRecord.in_cooperative || false,
+                                    cooperative: draftRecord.cooperative || '',
+                                };
+
+                                await submitFarmer(farmerData);
+                                console.log('[handleSyncDraft] Farmer draft synced successfully');
+                            } else {
+                                // Sync harvest draft to database
+                                console.log('[handleSyncDraft] Submitting harvest draft to API...');
+                                const harvestData = {
+                                    id: draftRecord.id || draftRecord.harvest_id,
+                                    farmer_uid: draftRecord.farmer_uid || draftRecord.name || '',
+                                    farmer_name: draftRecord.farmer_name || '',
+                                    weight_on_delivery: draftRecord.weight_on_delivery || 0,
+                                    number_of_bags: draftRecord.number_of_bags || 0,
+                                    date_of_delivery: draftRecord.date_of_delivery || '',
+                                    coffee_type: draftRecord.coffee_type || draftRecord.grade || '',
+                                    moisture_content: draftRecord.moisture_content || '',
+                                    amount_paid: draftRecord.amount_paid || '',
+                                    paid_by: draftRecord.paid_by || '',
+                                    weight_after_floating: draftRecord.weight_after_floating || '',
+                                    cherry_color: draftRecord.cherry_color || '',
+                                    stage: draftRecord.stage || '',
+                                };
+
+                                await submitHarvest(harvestData);
+                                console.log('[handleSyncDraft] Harvest draft synced successfully');
+                            }
+
+                            // Remove draft from AsyncStorage
+                            const storageKey = type === 'farmer' ? 'farmer_drafts' : 'harvest_drafts';
+                            const existingDrafts = await AsyncStorage.getItem(storageKey);
+                            const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
+                            const updatedDrafts = draftsArray.filter(d => d.id !== draftRecord.id);
+                            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
+
+                            console.log(`[handleSyncDraft] Draft removed from local storage`);
+
+                            // Update local state to remove the synced draft
+                            if (type === 'farmer') {
+                                setFarmersList(prev => prev.filter(f => f.id !== draftRecord.id));
+                            } else {
+                                setHarvestsList(prev => prev.filter(h => h.id !== draftRecord.id));
+                            }
+
+                            Alert.alert(
+                                'Success',
+                                `${type === 'farmer' ? 'Farmer' : 'Harvest'} draft "${displayName}" has been synced to the database successfully!`
+                            );
+
+                            // Reload records from server to ensure complete sync
+                            await loadRecords();
+                        } catch (error) {
+                            console.error('[handleSyncDraft] Sync failed:', error);
+                            const errorMsg = error.response?.data?.detail
+                                || error.response?.data?.message
+                                || error.message
+                                || `Failed to sync ${type} draft`;
+                            Alert.alert('Sync Failed', errorMsg);
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const renderTableContent = () => {
         if (activeTab === 'farmers') {
             return (
@@ -1595,6 +1807,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                         }
                     }}
                     onDelete={(r) => handleDelete(r, 'farmer')}
+                    onSyncDraft={(r) => handleSyncDraft(r)}
                 />
             );
         } else {
@@ -1617,6 +1830,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                         }
                     }}
                     onDelete={(r) => handleDelete(r, 'harvest')}
+                    onSyncDraft={(r) => handleSyncDraft(r)}
                 />
             );
         }
@@ -1794,7 +2008,7 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         padding: 10,
         backgroundColor: '#fff',
-        fontSize: 16,
+        fontSize: 14,
         color: DARK_BROWN,
         fontFamily: Fonts.regular,
     },
@@ -2133,6 +2347,32 @@ const styles = StyleSheet.create({
         color: TEXT_GRAY,
         fontFamily: Fonts.regular,
         marginTop: 4,
+    },
+    // --- Draft Styles ---
+    draftListItem: {
+        backgroundColor: 'rgba(255, 193, 7, 0.05)', // Subtle yellow background for draft items
+        borderLeftWidth: 4,
+        borderLeftColor: '#FFC107', // Amber/yellow color for draft indicator
+    },
+    draftBadge: {
+        backgroundColor: '#FFC107',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 4,
+        marginLeft: 4,
+    },
+    draftBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#fff',
+        fontFamily: Fonts.bold,
+    },
+    draftStepText: {
+        fontSize: 12,
+        color: '#FF9800',
+        fontFamily: Fonts.regular,
+        marginTop: 4,
+        fontStyle: 'italic',
     },
     noRecords: {
         textAlign: 'center',

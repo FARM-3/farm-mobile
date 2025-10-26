@@ -228,33 +228,34 @@ export const submitHarvest = async (data) => {
         console.log('[firebaseSetup] Submitting harvest...');
         console.log('[firebaseSetup] Raw harvest data received:', data);
 
-        // Transform React Native form data to Django API format
+        // Transform React Native form data to Django API format (/api/aggregation/farmer-harvest/)
         const apiPayload = {
-            // REQUIRED: id field (Django expects unique harvest ID)
-            id: data.id || data.harvest_id || '',
+            // REQUIRED: harvest_id field (unique identifier for this harvest)
+            harvest_id: data.id || data.harvest_id || '',
 
-            // REQUIRED: name field (Django expects farmer identifier here, not farmer_name)
+            // REQUIRED: name field (farmer identifier - farmer UID or name)
             name: data.farmer_uid || data.farmer_name || '',
 
-            // Weight fields (required by Django)
-            weight_on_delivery: Number(data.weight_on_delivery) || 0,
-            weight_after_floating: Number(data.weight_after_floating) || 0,
+            // OPTIONAL: coffee_type field (maps from form's coffee_type)
+            coffee_type: data.coffee_type || null,
 
-            // Date field (required)
-            date_of_delivery: data.date_of_delivery || new Date().toISOString().split('T')[0],
+            // OPTIONAL: weight_on_delivery (farmer's harvest weight in kg)
+            weight_on_delivery: data.weight_on_delivery ? Number(data.weight_on_delivery) : null,
 
-            // Grade field (map from coffee_type)
-            grade: data.coffee_type || data.grade || '',
+            // OPTIONAL: date_of_delivery (when harvest was delivered)
+            date_of_delivery: data.date_of_delivery || null,
 
-            // Cherry color field (Django doesn't allow blank, use placeholder)
-            cherry_color: data.cherry_colour || data.cherry_color || 'Not specified',
+            // OPTIONAL: moisture_content (percentage, collected from form)
+            moisture_content: data.moisture_content ? Number(data.moisture_content) : null,
 
-            // Stage field (Django doesn't allow blank, use placeholder)
-            stage: data.stage || 'Not specified',
+            // OPTIONAL: amount_paid (payment to farmer, expected as string by API)
+            amount_paid: data.amount_paid ? String(data.amount_paid) : null,
 
-            // Payment fields
-            amount_paid: String(data.amount_paid || '0'), // Django expects string
-            paid_by: data.paid_by || data.who_paid || '',
+            // OPTIONAL: paid_by (staff member who processed payment)
+            paid_by: data.paid_by || null,
+
+            // OPTIONAL: no_of_bags (number of bags delivered, collected as number_of_bags in form)
+            no_of_bags: data.number_of_bags ? Number(data.number_of_bags) : null,
         };
 
         console.log('[firebaseSetup] Transformed API payload:', JSON.stringify(apiPayload, null, 2));
