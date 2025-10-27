@@ -22,6 +22,7 @@ import AuthService from '../../../services/AuthService';
 import SyncService from '../../../services/SyncService';
 import { syncAllRecords, getUnsyncedRecords } from '../../../services/harvestRecord';
 import BottomNav from '../../../components/BottomNav';
+import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
 
 // Primary brown color and its shades
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
@@ -47,6 +48,7 @@ const DashboardScreen = ({ navigation }) => {
 
   const [syncStatus, setSyncStatus] = useState({ pending: 0 });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -59,7 +61,8 @@ const DashboardScreen = ({ navigation }) => {
 
   const loadUserName = async () => {
     try {
-      const user = await AuthService.getCurrentUser();
+      const response = await AuthService.getCurrentUser();
+      const user = response.user || response;
       if (user && user.name) {
         setUserName(user.name);
       } else if (user && user.first_name) {
@@ -154,26 +157,23 @@ const DashboardScreen = ({ navigation }) => {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AuthService.logout();
-              navigation.navigate('Login');
-            } catch (error) {
-              console.error('[Dashboard] Logout error:', error);
-              Alert.alert('Error', 'Failed to logout');
-            }
-          }
-        }
-      ]
-    );
+    setLogoutModalVisible(true);
+  };
+
+  const handleConfirmLogout = async () => {
+    setLogoutModalVisible(false);
+    try {
+      await AuthService.logout();
+      await AsyncStorage.removeItem('hasSeenWelcome');
+      navigation.navigate('Welcome');
+    } catch (error) {
+      console.error('[Dashboard] Logout error:', error);
+      Alert.alert('Error', 'Failed to logout');
+    }
+  };
+
+  const handleCancelLogout = () => {
+    setLogoutModalVisible(false);
   };
 
   const quickActions = [
@@ -216,7 +216,7 @@ const DashboardScreen = ({ navigation }) => {
               </View>
               <View>
                 <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
-                <Text style={styles.headerSubtitle}>Welcome back, {userName}</Text>
+                <Text style={styles.headerSubtitle}>Hello, {userName}</Text>
               </View>
             </View>
           </View>
@@ -251,7 +251,7 @@ const DashboardScreen = ({ navigation }) => {
 
             {/* Welcome back User */}
             <Text style={styles.headerMainText}>
-              <Text style={styles.headerBold}>Welcome back, </Text>
+              <Text style={styles.headerBold}>Hello, </Text>
               <Text style={styles.headerLight}>{userName}</Text>
             </Text>
           </View>
@@ -280,23 +280,23 @@ const DashboardScreen = ({ navigation }) => {
 
         {/* Subtitle */}
         <Text style={styles.headerSubtitle}>Track your farm operations and performance</Text>
+      </LinearGradient>
 
-        {/* Weather Widget - Inside Header */}
-        <View style={styles.weatherCardContainer}>
-          <View style={styles.weatherCard}>
-            <View style={styles.weatherContent}>
-              <View>
-                <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
-                <Text style={styles.weatherTemp}>24°C</Text>
-                <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
-              </View>
-              <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
-                <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
-              </LinearGradient>
+      {/* Weather Widget - Outside Header for proper zIndex stacking */}
+      <View style={styles.weatherCardContainer}>
+        <View style={styles.weatherCard}>
+          <View style={styles.weatherContent}>
+            <View>
+              <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
+              <Text style={styles.weatherTemp}>24°C</Text>
+              <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
             </View>
+            <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
+              <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
+            </LinearGradient>
           </View>
         </View>
-      </LinearGradient>
+      </View>
 
       <ScrollView contentContainerStyle={styles.scrollViewContent} showsVerticalScrollIndicator={false}>
 
@@ -430,6 +430,13 @@ const DashboardScreen = ({ navigation }) => {
       </ScrollView>
 
       <BottomNav activeScreen="Dashboard" />
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        visible={logoutModalVisible}
+        onConfirm={handleConfirmLogout}
+        onCancel={handleCancelLogout}
+      />
     </View>
   );
 };
@@ -438,6 +445,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#faf8f3',
+    position: 'relative',
   },
   loadingContainer: {
     flex: 1,

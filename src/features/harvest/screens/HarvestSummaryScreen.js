@@ -316,7 +316,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <SimpleHeader title="Production Harvests" />
+            <SimpleHeader title="Rugyeyo Harvests" />
             <View style={styles.container}>
 
                 {/* Add New Harvest Button */}

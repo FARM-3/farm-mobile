@@ -4,20 +4,107 @@ import AuthService from '../services/AuthService';
 // --- Helper for ID Generation ---
 
 /**
- * Utility to generate a unique ID based on logic requested by user.
- * Format: [Entity Prefix][Date (YYMMDD)][Random A/B/C letter][Last 3 digits of timestamp]
- * @param {string} type 'PA' for Farmer's Harvest (Production Aggregation) or 'FD' for Farmer's Details.
- * @returns {string} The unique ID.
+ * Get the next sequential ID suffix (A00, A01, ... A99, B00, ... Z99)
+ * Stores counter in localStorage to persist across sessions
+ * @returns {string} The suffix like "A00", "A01", "B00", etc.
+ */
+const getNextSequentialSuffix = () => {
+    try {
+        let counter = 0;
+
+        // Try to retrieve from localStorage
+        if (typeof localStorage !== 'undefined') {
+            const stored = localStorage.getItem('farmerIdCounter');
+            counter = stored ? parseInt(stored, 10) : 0;
+        }
+
+        // Increment counter for next use
+        const nextCounter = counter + 1;
+
+        // Store for next time
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('farmerIdCounter', String(nextCounter));
+        }
+
+        // Convert counter to Letter+Numbers format (A00 to Z99)
+        // 0-99 = A00-A99
+        // 100-199 = B00-B99
+        // ... up to 2599 = Z99
+        const letterIndex = Math.floor(counter / 100) % 26; // Which letter (0-25)
+        const numberPart = counter % 100; // Which number (0-99)
+
+        const letter = String.fromCharCode(65 + letterIndex); // A-Z
+        const numbers = String(numberPart).padStart(2, '0'); // 00-99
+
+        return `${letter}${numbers}`;
+    } catch (error) {
+        console.warn('Error getting sequential suffix, using fallback:', error);
+        // Fallback if localStorage fails
+        return 'A00';
+    }
+};
+
+/**
+ * Utility to generate a unique Farmer ID based on farmer's name and date.
+ * Format: [First Initial][Last Initial][DDMM][Letter][Number][Number]
+ * Examples: JK0127A00, JK0127A01, JK0127A02
+ * The last 3 characters increment sequentially: A00 -> A01 -> ... -> Z99
+ * @param {string} firstName - First name of the farmer
+ * @param {string} lastName - Last name of the farmer
+ * @returns {string} The unique Farmer ID.
+ */
+export const generateFarmerId = (firstName, lastName) => {
+    // Get initials
+    const firstInitial = (firstName || '').charAt(0).toUpperCase();
+    const lastInitial = (lastName || '').charAt(0).toUpperCase();
+
+    // Get current date in DDMM format
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+
+    // Get next sequential suffix (A00 -> A01 -> ... -> Z99)
+    const suffix = getNextSequentialSuffix();
+
+    return `${firstInitial}${lastInitial}${dd}${mm}${suffix}`;
+};
+
+/**
+ * Utility to generate a unique Harvest ID (Production Aggregation)
+ * Format: PA[DDMM][Sequential Letter][Sequential Number]
+ * @returns {string} The unique Harvest ID.
+ */
+export const generateHarvestId = () => {
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+
+    // Get sequential suffix (A00 to Z99)
+    const timestamp = now.getTime();
+    const sequenceNumber = Math.floor((timestamp % 26000) / 1000);
+    const letter = String.fromCharCode(65 + sequenceNumber); // A-Z
+    const counter = (timestamp % 1000).toString().slice(-2).padStart(2, '0');
+
+    return `PA${dd}${mm}${letter}${counter}`;
+};
+
+/**
+ * Legacy function for backward compatibility
+ * @deprecated Use generateFarmerId or generateHarvestId instead
  */
 export const generateRecordId = (type) => {
+    if (type === 'PA') {
+        return generateHarvestId();
+    }
+    // For FD, generate a generic ID (used only if no farmer name is available)
     const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
-    const prefix = type === 'PA' ? 'PA' : 'FD'; // Production Aggregation or Farmer Details
-    const randomChar = String.fromCharCode(65 + Math.floor(Math.random() * 3)); // A, B, or C
-    const timeSuffix = String(now.getTime()).slice(-3);
-    return `${prefix}${yy}${mm}${dd}${randomChar}${timeSuffix}`;
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const timestamp = now.getTime();
+    const sequenceNumber = Math.floor((timestamp % 26000) / 1000);
+    const letter = String.fromCharCode(65 + sequenceNumber);
+    const counter = (timestamp % 1000).toString().slice(-2).padStart(2, '0');
+    return `FD${dd}${mm}${letter}${counter}`;
 };
 
 

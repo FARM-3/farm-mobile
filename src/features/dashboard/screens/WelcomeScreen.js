@@ -32,7 +32,7 @@ export default function WelcomeScreen({ navigation }) {
 
   return (
     <ImageBackground
-      source={require('../../../assets/welcome-coffee.jpg')}
+      source={require('../../../assets/welcome_coffee 2.jpg')}
       style={styles.container}
       resizeMode="cover"
     >
@@ -106,8 +106,8 @@ const styles = StyleSheet.create({
     maxHeight: height * 0.4,
   },
   logo: {
-    width: 80,
-    height: 80,
+    width: 280,
+    height: 280,
     resizeMode: 'contain',
   },
   titleContainer: {
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: '700',
+    fontWeight: Fonts.weights.bold,
     fontFamily: Fonts.bold,
     color: CoffeeColors.WHITE,
     textAlign: 'center',
@@ -127,6 +127,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 18,
+    fontWeight: Fonts.weights.semiBold,
     fontFamily: Fonts.semiBold,
     color: CoffeeColors.CREAM,
     textAlign: 'center',
@@ -159,8 +160,8 @@ const styles = StyleSheet.create({
   buttonText: {
     color: CoffeeColors.WHITE,
     fontSize: 18,
-    fontWeight: '600',
-    fontFamily: Fonts.bold,
+    fontWeight: Fonts.weights.semiBold,
+    fontFamily: Fonts.semiBold,
     letterSpacing: 0.5,
   },
   buttonIcon: {

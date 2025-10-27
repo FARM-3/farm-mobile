@@ -62,7 +62,7 @@ export const PARISHES_BY_SUB_COUNTY = {
   'Nansana Division': ['Ochieng', 'Kazo', 'Nabweru North', 'Nabweru South', 'Nansana East', 'Nansana West'],
   'Kyengera Town Council': ['Buddo', 'Kasenge', 'Katereke', 'Kikajjo', 'Kitemu-Kisozi', 'Kyengera Town Board', 'Maya', 'Nabbingo', 'Nanziga', 'Nsangi']
 };
-export const GENDERS = ['Male', 'Female', 'Other'];
+export const GENDERS = ['Male', 'Female'];
 export const COFFEE_VARIETIES = ['Arabica', 'Robusta', 'Liberica'];
 export const LAND_OWNERSHIP = ['leased', 'communal', 'owned'];
 export const SEEDLING_SOURCES = ['nursery', 'own_cooperative', 'bought'];
@@ -72,6 +72,11 @@ export const COFFEE_TYPES = ['Arabica', 'Robusta', 'Liberica'];
 export const YES_NO_OPTIONS = ['Yes', 'No'];
 export const SPACING_OPTIONS = ['3 metres by 3 metres', '2.4 metres by 2.4 metres', '2 metres by 1 metres'];
 export const STANDARD_PRACTICES = ['Inter-cropping', 'Pruning', 'Mulching', 'Stumping', 'Agro-forestry', 'Fertilizing', 'Pest control'];
+
+// Seedling types (Robusta and Arabica varieties)
+const ROBUSTA_TYPES = Array.from({ length: 10 }, (_, i) => `KR-${String(i + 1).padStart(2, '0')}`);
+const ARABICA_TYPES = Array.from({ length: 5 }, (_, i) => `CWDR-${String(i + 1).padStart(2, '0')}`);
+export const SEEDLING_TYPES = [...ROBUSTA_TYPES, ...ARABICA_TYPES];
 
 // Optional: other small lists used by aggregation forms
 export const GRADES = ['A', 'B', 'C', 'D'];
@@ -85,6 +90,7 @@ export const PICKER_MAP = {
     coffee_variety: COFFEE_VARIETIES,
     land_ownership: LAND_OWNERSHIP,
     seedling_source: SEEDLING_SOURCES,
+    seedling_type: SEEDLING_TYPES,
     irrigation: IRRIGATION_OPTIONS,
     fertilizers: FERTILIZERS,
     coffee_type: COFFEE_TYPES,
