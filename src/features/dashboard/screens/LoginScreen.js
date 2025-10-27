@@ -25,7 +25,7 @@ const LoginColors = {
   LIGHT_BG: '#FEEFEA',
   BUTTON_BROWN: '#8B4513',
   LIGHT_BROWN: '#BCAAA4',
-  GRAY_TEXT: '#8D8D8D',
+  GRAY_TEXT: '#6B5B52', // Updated from '#8D8D8D' for better visibility
 };
 
 

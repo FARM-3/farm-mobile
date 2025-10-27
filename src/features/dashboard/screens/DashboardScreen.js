@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, LogBox } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, LogBox, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Suppress all console logs and warnings from appearing on the UI
-// Logs will still appear in the terminal for debugging
 LogBox.ignoreLogs([
   'VirtualizedLists should never be nested inside plain ScrollViews',
   '[ApiService]',
   'Network Error',
 ]);
-// Hide all yellow box warnings on screen (ignores all LogBox warnings)
 LogBox.ignoreAllLogs(true);
 
 import Fonts from '../../../theme/fonts';
@@ -28,6 +26,9 @@ import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
 const DARK_BROWN = CoffeeColors.DARK_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
+
+const HEADER_HEIGHT = 330; // Header + Weather card height
+const SCROLL_THRESHOLD = 50; // Minimum scroll distance to trigger hide/show
 
 const DashboardScreen = ({ navigation }) => {
   const [userName, setUserName] = useState('User');
@@ -49,6 +50,11 @@ const DashboardScreen = ({ navigation }) => {
   const [syncStatus, setSyncStatus] = useState({ pending: 0 });
   const [isSyncing, setIsSyncing] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  // Animation values for header collapse
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const lastScrollY = useRef(0);
+  const headerTranslateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -176,6 +182,37 @@ const DashboardScreen = ({ navigation }) => {
     setLogoutModalVisible(false);
   };
 
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: true,
+      listener: (event) => {
+        const currentScrollY = event.nativeEvent.contentOffset.y;
+        const diff = currentScrollY - lastScrollY.current;
+
+        // Only trigger animation if scroll distance exceeds threshold
+        if (Math.abs(diff) > SCROLL_THRESHOLD) {
+          if (diff > 0 && currentScrollY > HEADER_HEIGHT) {
+            // Scrolling down - hide header
+            Animated.timing(headerTranslateY, {
+              toValue: -HEADER_HEIGHT,
+              duration: 250,
+              useNativeDriver: true,
+            }).start();
+          } else if (diff < 0) {
+            // Scrolling up - show header
+            Animated.timing(headerTranslateY, {
+              toValue: 0,
+              duration: 250,
+              useNativeDriver: true,
+            }).start();
+          }
+          lastScrollY.current = currentScrollY;
+        }
+      },
+    }
+  );
+
   const quickActions = [
     {
       label: 'Record Harvest',
@@ -231,75 +268,89 @@ const DashboardScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header with Bottom Curve - Full Width */}
-      <LinearGradient
-        colors={[DARK_BROWN, '#7a3f1a', '#8B4513']}
-        style={styles.header}
+      {/* Animated Header Container */}
+      <Animated.View
+        style={[
+          styles.headerContainer,
+          {
+            transform: [{ translateY: headerTranslateY }],
+          },
+        ]}
       >
-        {/* Top Content */}
-        <View style={styles.headerTopContent}>
-          <View style={styles.headerGreeting}>
-            {/* Rugyeyo Farm with Logo */}
-            <View style={styles.rugyeyoContainer}>
-              <Image
-                source={require('../../../assets/rugyeyo_logo.png')}
-                style={styles.headerLogo}
-                resizeMode="contain"
-              />
-              <Text style={styles.rugyeyoText}>Rugyeyo Farm</Text>
-            </View>
+        {/* Header with Bottom Curve */}
+        <LinearGradient
+          colors={[DARK_BROWN, '#7a3f1a', '#8B4513']}
+          style={styles.header}
+        >
+          {/* Top Content */}
+          <View style={styles.headerTopContent}>
+            <View style={styles.headerGreeting}>
+              {/* Rugyeyo Farm with Logo */}
+              <View style={styles.rugyeyoContainer}>
+                <Image
+                  source={require('../../../assets/rugyeyo_logo.png')}
+                  style={styles.headerLogo}
+                  resizeMode="contain"
+                />
+                <Text style={styles.rugyeyoText}>Rugyeyo Farm</Text>
+              </View>
 
-            {/* Welcome back User */}
-            <Text style={styles.headerMainText}>
-              <Text style={styles.headerBold}>Hello, </Text>
-              <Text style={styles.headerLight}>{userName}</Text>
-            </Text>
+              {/* Welcome back User */}
+              <Text style={styles.headerMainText}>
+                <Text style={styles.headerBold}>Hello, </Text>
+                <Text style={styles.headerLight}>{userName}</Text>
+              </Text>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={handleSync}
+                disabled={isSyncing}
+              >
+                <Ionicons
+                  name={isSyncing ? "sync" : "cloud-upload-outline"}
+                  size={20}
+                  color="#fff"
+                />
+                {syncStatus.pending > 0 && (
+                  <View style={styles.syncBadge}>
+                    <Text style={styles.syncBadgeText}>{syncStatus.pending}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerButton} onPress={handleLogout}>
+                <Ionicons name="log-out-outline" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={handleSync}
-              disabled={isSyncing}
-            >
-              <Ionicons
-                name={isSyncing ? "sync" : "cloud-upload-outline"}
-                size={20}
-                color="#fff"
-              />
-              {syncStatus.pending > 0 && (
-                <View style={styles.syncBadge}>
-                  <Text style={styles.syncBadgeText}>{syncStatus.pending}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerButton} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={20} color="#fff" />
-            </TouchableOpacity>
+
+          {/* Subtitle */}
+          <Text style={styles.headerSubtitle}>Track your farm operations and performance</Text>
+        </LinearGradient>
+
+        {/* Weather Widget */}
+        <View style={styles.weatherCardContainer}>
+          <View style={styles.weatherCard}>
+            <View style={styles.weatherContent}>
+              <View>
+                <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
+                <Text style={styles.weatherTemp}>24°C</Text>
+                <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
+              </View>
+              <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
+                <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
+              </LinearGradient>
+            </View>
           </View>
         </View>
+      </Animated.View>
 
-        {/* Subtitle */}
-        <Text style={styles.headerSubtitle}>Track your farm operations and performance</Text>
-      </LinearGradient>
-
-      {/* Weather Widget - Outside Header for proper zIndex stacking */}
-      <View style={styles.weatherCardContainer}>
-        <View style={styles.weatherCard}>
-          <View style={styles.weatherContent}>
-            <View>
-              <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
-              <Text style={styles.weatherTemp}>24°C</Text>
-              <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
-            </View>
-            <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
-              <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
-            </LinearGradient>
-          </View>
-        </View>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollViewContent} showsVerticalScrollIndicator={false}>
-
+      <Animated.ScrollView
+        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 60 }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         {/* Stats Overview */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
@@ -427,7 +478,7 @@ const DashboardScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       <BottomNav activeScreen="Dashboard" />
 
@@ -459,6 +510,13 @@ const styles = StyleSheet.create({
     color: PRIMARY_BROWN,
     fontWeight: Fonts.weights.semiBold,
     fontFamily: Fonts.semiBold,
+  },
+  headerContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1000,
   },
   header: {
     paddingTop: 50,
@@ -562,15 +620,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   weatherCardContainer: {
-    position: 'absolute',
-    top: 250,
-    left: 20,
-    right: 20,
-    zIndex: 10,
+    paddingHorizontal: 20,
+    marginTop: -60,
   },
   scrollViewContent: {
     padding: 20,
-    paddingTop: 80,
     paddingBottom: 120,
   },
   weatherCard: {
