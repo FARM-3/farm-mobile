@@ -123,7 +123,6 @@ const harvestFieldDefinitions = [
         title: 'Quality & Payment',
         fields: [
             { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type' },
-            { key: 'moisture_content', label: 'Moisture Content (%)', keyboardType: 'numeric' },
             { key: 'amount_paid', label: 'Amount Paid', keyboardType: 'numeric' },
             { key: 'paid_by', label: 'Paid By', keyboardType: 'default' },
             { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
@@ -964,7 +963,6 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
                 { label: 'Coffee Type/Grade', value: harvest.grade || harvest.coffee_type },
                 { label: 'Cherry Color', value: harvest.cherry_color || harvest.cherry_colour },
                 { label: 'Stage', value: harvest.stage },
-                { label: 'Moisture Content', value: harvest.moisture_content ? `${harvest.moisture_content}%` : 'Not provided' },
             ]
         },
         {
@@ -1033,7 +1031,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', moisture_content: '', amount_paid: '', paid_by: '', number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', amount_paid: '', paid_by: '', number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1217,7 +1215,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', moisture_content: '', amount_paid: '', paid_by: '', number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', amount_paid: '', paid_by: '', number_of_bags: '',
         }));
         setFarmerStep(0);
         setHarvestStep(0);
@@ -1441,7 +1439,6 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             weight_on_delivery: Number(harvestForm.weight_on_delivery) || 0,
             amount_paid: Number(harvestForm.amount_paid) || 0,
             number_of_bags: Number(harvestForm.number_of_bags) || 0,
-            moisture_content: Number(harvestForm.moisture_content) || 0,
             weight_after_floating: Number(harvestForm.weight_after_floating) || 0,
             recorder_id: userId,
             timestamp: Date.now(),
@@ -1885,7 +1882,6 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 number_of_bags: String(record.number_of_bags || ''),
                 date_of_delivery: record.date_of_delivery || '',
                 coffee_type: record.grade || record.coffee_type || '',
-                moisture_content: String(record.moisture_content || ''),
                 amount_paid: String(record.amount_paid || ''),
                 paid_by: record.paid_by || record.who_paid || '',
                 harvest_id: record.id || record.harvest_id || '',
@@ -1985,7 +1981,6 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                     number_of_bags: draftRecord.number_of_bags || 0,
                                     date_of_delivery: draftRecord.date_of_delivery || '',
                                     coffee_type: draftRecord.coffee_type || draftRecord.grade || '',
-                                    moisture_content: draftRecord.moisture_content || '',
                                     amount_paid: draftRecord.amount_paid || '',
                                     paid_by: draftRecord.paid_by || '',
                                     weight_after_floating: draftRecord.weight_after_floating || '',
