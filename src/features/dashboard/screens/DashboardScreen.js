@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, LogBox } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Suppress all console logs and warnings from appearing on the UI
+// Logs will still appear in the terminal for debugging
+LogBox.ignoreLogs([
+  'VirtualizedLists should never be nested inside plain ScrollViews',
+  '[ApiService]',
+  'Network Error',
+]);
+// Hide all yellow box warnings on screen (ignores all LogBox warnings)
+LogBox.ignoreAllLogs(true);
 
 import Fonts from '../../../theme/fonts';
 import CoffeeColors from '../../../theme/colors';
@@ -11,11 +21,12 @@ import { fetchAllHarvestRecords } from '../../../services/harvestRecord';
 import AuthService from '../../../services/AuthService';
 import SyncService from '../../../services/SyncService';
 import { syncAllRecords, getUnsyncedRecords } from '../../../services/harvestRecord';
+import BottomNav from '../../../components/BottomNav';
+import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
 
 // Primary brown color and its shades
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
 const DARK_BROWN = CoffeeColors.DARK_BROWN;
-const LIGHT_BROWN = CoffeeColors.LIGHT_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
 
 const DashboardScreen = ({ navigation }) => {
@@ -37,6 +48,7 @@ const DashboardScreen = ({ navigation }) => {
 
   const [syncStatus, setSyncStatus] = useState({ pending: 0 });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -49,7 +61,8 @@ const DashboardScreen = ({ navigation }) => {
 
   const loadUserName = async () => {
     try {
-      const user = await AuthService.getCurrentUser();
+      const response = await AuthService.getCurrentUser();
+      const user = response.user || response;
       if (user && user.name) {
         setUserName(user.name);
       } else if (user && user.first_name) {
@@ -144,26 +157,23 @@ const DashboardScreen = ({ navigation }) => {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Yes',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AuthService.logout();
-              navigation.navigate('Login');
-            } catch (error) {
-              console.error('[Dashboard] Logout error:', error);
-              Alert.alert('Error', 'Failed to logout');
-            }
-          }
-        }
-      ]
-    );
+    setLogoutModalVisible(true);
+  };
+
+  const handleConfirmLogout = async () => {
+    setLogoutModalVisible(false);
+    try {
+      await AuthService.logout();
+      await AsyncStorage.removeItem('hasSeenWelcome');
+      navigation.navigate('Welcome');
+    } catch (error) {
+      console.error('[Dashboard] Logout error:', error);
+      Alert.alert('Error', 'Failed to logout');
+    }
+  };
+
+  const handleCancelLogout = () => {
+    setLogoutModalVisible(false);
   };
 
   const quickActions = [
@@ -206,7 +216,7 @@ const DashboardScreen = ({ navigation }) => {
               </View>
               <View>
                 <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
-                <Text style={styles.headerSubtitle}>Welcome back, {userName}</Text>
+                <Text style={styles.headerSubtitle}>Hello, {userName}</Text>
               </View>
             </View>
           </View>
@@ -241,7 +251,7 @@ const DashboardScreen = ({ navigation }) => {
 
             {/* Welcome back User */}
             <Text style={styles.headerMainText}>
-              <Text style={styles.headerBold}>Welcome back, </Text>
+              <Text style={styles.headerBold}>Hello, </Text>
               <Text style={styles.headerLight}>{userName}</Text>
             </Text>
           </View>
@@ -270,23 +280,23 @@ const DashboardScreen = ({ navigation }) => {
 
         {/* Subtitle */}
         <Text style={styles.headerSubtitle}>Track your farm operations and performance</Text>
+      </LinearGradient>
 
-        {/* Weather Widget - Inside Header */}
-        <View style={styles.weatherCardContainer}>
-          <View style={styles.weatherCard}>
-            <View style={styles.weatherContent}>
-              <View>
-                <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
-                <Text style={styles.weatherTemp}>24°C</Text>
-                <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
-              </View>
-              <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
-                <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
-              </LinearGradient>
+      {/* Weather Widget - Outside Header for proper zIndex stacking */}
+      <View style={styles.weatherCardContainer}>
+        <View style={styles.weatherCard}>
+          <View style={styles.weatherContent}>
+            <View>
+              <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
+              <Text style={styles.weatherTemp}>24°C</Text>
+              <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
             </View>
+            <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
+              <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
+            </LinearGradient>
           </View>
         </View>
-      </LinearGradient>
+      </View>
 
       <ScrollView contentContainerStyle={styles.scrollViewContent} showsVerticalScrollIndicator={false}>
 
@@ -419,28 +429,14 @@ const DashboardScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navButtonActive}>
-          <Ionicons name="analytics" size={24} color={PRIMARY_BROWN} />
-          <Text style={styles.navTextActive}>Dashboard</Text>
-        </TouchableOpacity>
+      <BottomNav activeScreen="Dashboard" />
 
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Aggregation')}>
-          <Ionicons name="people-circle" size={24} color={LIGHT_BROWN} />
-          <Text style={styles.navText}>Farmers</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Harvests')}>
-          <Ionicons name="basket" size={24} color={LIGHT_BROWN} />
-          <Text style={styles.navText}>Harvests</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('Processing')}>
-          <Ionicons name="cog" size={24} color={LIGHT_BROWN} />
-          <Text style={styles.navText}>Processing</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        visible={logoutModalVisible}
+        onConfirm={handleConfirmLogout}
+        onCancel={handleCancelLogout}
+      />
     </View>
   );
 };
@@ -449,6 +445,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#faf8f3',
+    position: 'relative',
   },
   loadingContainer: {
     flex: 1,
@@ -486,7 +483,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    gap: 12,
+    gap: 1,
   },
   headerLogo: {
     width: 100,
@@ -574,7 +571,7 @@ const styles = StyleSheet.create({
   scrollViewContent: {
     padding: 20,
     paddingTop: 80,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   weatherCard: {
     backgroundColor: '#fff',
@@ -769,54 +766,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
     marginVertical: 12,
-  },
-  bottomNav: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    paddingTop: 12,
-    shadowColor: DARK_BROWN,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
-    borderTopWidth: 1,
-    borderTopColor: CoffeeColors.VERY_LIGHT_BROWN,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  navButtonActive: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: '#ffe6e6',
-    marginHorizontal: 4,
-  },
-  navButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    marginHorizontal: 4,
-  },
-  navTextActive: {
-    fontSize: Fonts.sizes.tiny,
-    fontWeight: Fonts.weights.semiBold,
-    color: PRIMARY_BROWN,
-    marginTop: 4,
-    fontFamily: Fonts.semiBold,
-  },
-  navText: {
-    fontSize: Fonts.sizes.tiny,
-    fontWeight: Fonts.weights.semiBold,
-    color: CoffeeColors.GRAY_TEXT,
-    marginTop: 4,
-    fontFamily: Fonts.semiBold,
   },
 });
 

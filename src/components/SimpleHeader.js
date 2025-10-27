@@ -8,9 +8,9 @@ import Fonts from '../theme/fonts';
 /**
  * Simple White Header Component
  * Used for non-dashboard screens
- * Features: white background, back button, title only
+ * Features: white background, back button, title, sync icon
  */
-const SimpleHeader = ({ title = 'Screen', onBackPress }) => {
+const SimpleHeader = ({ title = 'Screen', onBackPress, unsyncedCount = 0, onSync }) => {
   const navigation = useNavigation();
 
   const handleBackPress = () => {
@@ -18,6 +18,12 @@ const SimpleHeader = ({ title = 'Screen', onBackPress }) => {
       onBackPress();
     } else {
       navigation.goBack();
+    }
+  };
+
+  const handleSync = () => {
+    if (onSync) {
+      onSync();
     }
   };
 
@@ -40,7 +46,18 @@ const SimpleHeader = ({ title = 'Screen', onBackPress }) => {
         <Text style={styles.headerTitle}>{title}</Text>
       </View>
 
-      <View style={styles.spacer} />
+      <TouchableOpacity
+        style={styles.syncButton}
+        onPress={handleSync}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons name="cloud-upload-outline" size={24} color={CoffeeColors.DARK_BROWN} />
+        {unsyncedCount > 0 && (
+          <View style={styles.syncBadge}>
+            <Text style={styles.syncBadgeText}>{unsyncedCount}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
     </View>
   );
 };
@@ -54,8 +71,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: CoffeeColors.VERY_LIGHT_BROWN,
+    borderBottomWidth: 0,
   },
   backButton: {
     padding: 4,
@@ -68,9 +84,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   logo: {
-    width: 32,
-    height: 32,
-    marginRight: 8,
+    width: 72,
+    height: 72,
+    marginRight: 12,
   },
   headerTitle: {
     fontSize: 16,
@@ -79,8 +95,26 @@ const styles = StyleSheet.create({
     color: CoffeeColors.DARK_BROWN,
     textAlign: 'center',
   },
-  spacer: {
-    width: 40,
+  syncButton: {
+    padding: 8,
+    position: 'relative',
+  },
+  syncBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#e74c3c',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  syncBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: Fonts.bold,
   },
 });
 

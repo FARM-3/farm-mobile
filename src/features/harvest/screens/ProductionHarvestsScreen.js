@@ -245,7 +245,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <SimpleHeader title="Production Harvests" />
+            <SimpleHeader title="Rugyeyo Harvests" />
 
             <View style={styles.container}>
                 {/* Sync Status Banner */}

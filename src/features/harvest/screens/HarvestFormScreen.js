@@ -282,7 +282,49 @@ export default function HarvestFormScreen({ navigation }) {
             setCurrentStep(prev => prev - 1);
         }
     };
-    
+
+    const handleSaveDraft = async () => {
+        if (isSaving) return;
+
+        setIsSaving(true);
+        try {
+            // Save current form state as draft to AsyncStorage
+            const harvestDraft = {
+                ...formData,
+                _isDraft: true,
+                _draftStep: currentStep,
+                _draftSavedAt: new Date().toISOString(),
+                id: formData.generatedId || `DRAFT-${Date.now()}`,
+            };
+
+            const storageKey = 'harvest_drafts';
+            const existingDrafts = await AsyncStorage.getItem(storageKey);
+            const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
+
+            // Check if draft with this ID already exists and update it, otherwise add new
+            const draftIndex = draftsArray.findIndex(d => d.id === harvestDraft.id);
+            if (draftIndex >= 0) {
+                draftsArray[draftIndex] = harvestDraft;
+            } else {
+                draftsArray.push(harvestDraft);
+            }
+
+            await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
+
+            Alert.alert(
+                "Draft Saved",
+                "Your harvest draft has been saved. You can continue filling it later.",
+                [{ text: "OK" }]
+            );
+
+            console.log('[HarvestForm] Draft saved:', harvestDraft);
+        } catch (error) {
+            console.error('[HarvestForm] Draft save failed:', error);
+            Alert.alert("Error", "Failed to save draft. Please try again.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const handleSyncNow = async (harvestData) => {
         try {
@@ -365,22 +407,16 @@ export default function HarvestFormScreen({ navigation }) {
             setFormData(initialFormState);
             setCurrentStep(0);
 
-            // Show sync options dialog
+            // Show success message
             Alert.alert(
-                "Data Saved Successfully!",
-                "Would you like to sync this record to the cloud now or sync later?",
+                "Saved Locally!",
+                "Your harvest record has been saved locally and is ready to sync.",
                 [
                     {
-                        text: "Sync Later",
-                        style: "cancel",
-                        onPress: () => handleSyncLater()
-                    },
-                    {
-                        text: "Sync Now",
-                        onPress: () => handleSyncNow(harvestData)
+                        text: "OK",
+                        onPress: () => navigation.navigate('Harvests')
                     }
-                ],
-                { cancelable: false }
+                ]
             );
 
         } catch (error) {
@@ -395,7 +431,7 @@ export default function HarvestFormScreen({ navigation }) {
     // A small placeholder view to navigate back to the summary screen
     const BackButton = () => (
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('Harvests')}>
-            <Text style={styles.secondaryBtnText}>Back to Production Harvests</Text>
+            <Text style={styles.secondaryBtnText}>Back to Rugyeyo Harvests</Text>
         </TouchableOpacity>
     );
 
@@ -407,16 +443,18 @@ export default function HarvestFormScreen({ navigation }) {
                 behavior={Platform.select({ ios: "padding", android: undefined })}
             >
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-                    <Text style={styles.mainTitle}>Production Harvest Details (Stage 1)</Text>
-                    
+                    {/* Title */}
+                    <Text style={styles.mainTitle}>Rugyeyo Harvest Details</Text>
+
                     {/* Stepper Indicator */}
                     <View style={stepStyles.indicatorContainer}>
+                        <View style={stepStyles.stepConnectorLine} />
                         {STEPS.map((step, index) => (
                             <View key={index} style={stepStyles.stepWrapper}>
-                                <View 
+                                <View
                                     style={[
-                                        stepStyles.stepCircle, 
-                                        { backgroundColor: index <= currentStep ? CoffeeColors.ACCENT : CoffeeColors.LIGHT_BROWN }
+                                        stepStyles.stepCircle,
+                                        { backgroundColor: index === currentStep ? CoffeeColors.ACCENT : (index < currentStep ? CoffeeColors.PRIMARY_BROWN : CoffeeColors.LIGHT_BROWN) }
                                     ]}
                                 >
                                     <Text style={stepStyles.stepText}>{index + 1}</Text>
@@ -442,33 +480,35 @@ export default function HarvestFormScreen({ navigation }) {
 
                     {/* Navigation Buttons */}
                     <View style={stepStyles.navigationContainer}>
+                        <TouchableOpacity style={[styles.navBtn, styles.draftBtn]} onPress={handleSaveDraft} disabled={isSaving}>
+                            <Text style={styles.draftBtnText}>Save Draft</Text>
+                        </TouchableOpacity>
+
                         {currentStep > 0 && (
-                            <TouchableOpacity style={[styles.navBtn, styles.backBtn]} onPress={handleBack} disabled={isSaving}>
-                                <Ionicons name="arrow-back-outline" size={20} color={CoffeeColors.DARK_BROWN} />
-                                <Text style={styles.backBtnText}>Back</Text>
+                            <TouchableOpacity style={[styles.navBtn, styles.prevBtn]} onPress={handleBack} disabled={isSaving}>
+                                <Ionicons name="chevron-back" size={20} color={CoffeeColors.PRIMARY_BROWN} />
+                                <Text style={styles.prevBtnText}>Prev</Text>
                             </TouchableOpacity>
                         )}
 
                         {currentStep < STEPS.length - 1 ? (
-                            <TouchableOpacity style={[styles.navBtn, styles.nextBtn, currentStep === 0 && { marginLeft: 'auto' }]} onPress={handleNext} disabled={isSaving}>
-                                <Text style={styles.nextBtnText}>Next Step</Text>
-                                <Ionicons name="arrow-forward-outline" size={20} color={CoffeeColors.CREAM} />
+                            <TouchableOpacity style={[styles.navBtn, styles.nextBtn]} onPress={handleNext} disabled={isSaving}>
+                                <Text style={styles.nextBtnText}>Next</Text>
+                                <Ionicons name="chevron-forward" size={20} color={CoffeeColors.CREAM} />
                             </TouchableOpacity>
                         ) : (
-                            <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit} disabled={isSaving}>
+                            <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={isSaving}>
                                 {isSaving ? (
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <ActivityIndicator color={CoffeeColors.CREAM} style={{ marginRight: 8 }} />
-                                        <Text style={styles.saveBtnText}>Submit Harvest</Text>
+                                        <Text style={styles.submitBtnText}>Saving...</Text>
                                     </View>
                                 ) : (
-                                    <Text style={styles.saveBtnText}>Submit Harvest</Text>
+                                    <Text style={styles.submitBtnText}>Submit</Text>
                                 )}
                             </TouchableOpacity>
                         )}
                     </View>
-                    
-                    <BackButton />
 
                     <View style={{ height: 100 }} />
                 </ScrollView>
@@ -601,7 +641,69 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         marginLeft: 8,
         fontSize: 16,
-    }
+    },
+    draftBtn: {
+        backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
+        borderWidth: 1,
+        borderColor: CoffeeColors.PRIMARY_BROWN,
+        flex: 1,
+        marginRight: 8,
+    },
+    draftBtnText: {
+        color: CoffeeColors.PRIMARY_BROWN,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
+        fontSize: 14,
+    },
+    prevBtn: {
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        flex: 1,
+        marginRight: 8,
+    },
+    prevBtnText: {
+        color: CoffeeColors.PRIMARY_BROWN,
+        fontWeight: '700',
+        fontFamily: Fonts.bold,
+        marginLeft: 8,
+        fontSize: 14,
+    },
+    nextBtn: {
+        backgroundColor: CoffeeColors.ACCENT,
+        flex: 1,
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    nextBtnText: {
+        color: CoffeeColors.CREAM,
+        fontWeight: '700',
+        fontFamily: Fonts.bold,
+        fontSize: 14,
+        marginRight: 8,
+    },
+    submitBtn: {
+        backgroundColor: CoffeeColors.ACCENT,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 10,
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    submitBtnText: {
+        color: CoffeeColors.CREAM,
+        fontWeight: '700',
+        fontFamily: Fonts.bold,
+        fontSize: 16,
+    },
 });
 
 const stepStyles = StyleSheet.create({
@@ -610,10 +712,21 @@ const stepStyles = StyleSheet.create({
         justifyContent: 'space-around', // Changed to space-around for only two steps
         marginBottom: 30,
         paddingHorizontal: 5,
+        position: 'relative',
+    },
+    stepConnectorLine: {
+        position: 'absolute',
+        top: 17,
+        left: '25%',
+        right: '25%',
+        height: 2,
+        backgroundColor: CoffeeColors.LIGHT_BROWN,
+        zIndex: 0,
     },
     stepWrapper: {
         alignItems: 'center',
         width: '45%', // Adjusted width for two steps
+        zIndex: 1,
     },
     stepCircle: {
         width: 35,

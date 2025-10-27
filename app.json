@@ -18,7 +18,10 @@
       "fallbackToCacheTimeout": 0
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to capture GPS coordinates for farmer records."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -34,7 +37,11 @@
         }
       ],
       "allowBackup": true,
-      "largeHeap": true
+      "largeHeap": true,
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./src/assets/favicon.png"

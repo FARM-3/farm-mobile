@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, SafeAreaView, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, SafeAreaView, View, ActivityIndicator, LogBox } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Font from 'expo-font';
+
+// Suppress all console logs and warnings from appearing on the UI globally
+// Logs will still appear in the terminal for debugging
+LogBox.ignoreLogs([
+  'VirtualizedLists should never be nested inside plain ScrollViews',
+  '[ApiService]',
+  'Network Error',
+]);
+// Hide all yellow box warnings on screen
+LogBox.ignoreAllLogs(true);
 
 // 1. Import Navigation components
 import { NavigationContainer } from '@react-navigation/native';
