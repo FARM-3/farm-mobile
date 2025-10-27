@@ -480,34 +480,54 @@ export default function HarvestFormScreen({ navigation }) {
 
                     {/* Navigation Buttons */}
                     <View style={stepStyles.navigationContainer}>
-                        <TouchableOpacity style={[styles.navBtn, styles.draftBtn]} onPress={handleSaveDraft} disabled={isSaving}>
-                            <Text style={styles.draftBtnText}>Save Draft</Text>
+                        <View style={stepStyles.stepNav}>
+                            {currentStep > 0 && (
+                                <TouchableOpacity style={styles.stepButton} onPress={handleBack} disabled={isSaving}>
+                                    <Ionicons name="chevron-back" size={20} color={CoffeeColors.PRIMARY_BROWN} style={styles.prevButtonIcon} />
+                                    <Text style={styles.stepButtonText}>Previous</Text>
+                                </TouchableOpacity>
+                            )}
+                            {currentStep < STEPS.length - 1 ? (
+                                <TouchableOpacity
+                                    style={styles.stepButton}
+                                    onPress={handleNext}
+                                    disabled={isSaving}
+                                >
+                                    {isSaving ? <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} /> : (
+                                        <>
+                                            <Text style={styles.stepButtonText}>Next</Text>
+                                            <Ionicons name="chevron-forward" size={20} color={CoffeeColors.PRIMARY_BROWN} style={styles.nextButtonIcon} />
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.submitButton}
+                                    onPress={handleSubmit}
+                                    disabled={isSaving}
+                                >
+                                    {isSaving ? <ActivityIndicator color={'#fff'} /> : (
+                                        <Text style={styles.submitButtonText}>Submit Harvest</Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* Save Draft Button - Available on all steps */}
+                        <TouchableOpacity
+                            style={styles.saveDraftButton}
+                            onPress={handleSaveDraft}
+                            disabled={isSaving}
+                        >
+                            {isSaving ? (
+                                <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
+                            ) : (
+                                <>
+                                    <Ionicons name="save" size={18} color={CoffeeColors.PRIMARY_BROWN} style={{ marginRight: 6 }} />
+                                    <Text style={styles.saveDraftButtonText}>Save Draft</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
-
-                        {currentStep > 0 && (
-                            <TouchableOpacity style={[styles.navBtn, styles.prevBtn]} onPress={handleBack} disabled={isSaving}>
-                                <Ionicons name="chevron-back" size={20} color={CoffeeColors.PRIMARY_BROWN} />
-                                <Text style={styles.prevBtnText}>Prev</Text>
-                            </TouchableOpacity>
-                        )}
-
-                        {currentStep < STEPS.length - 1 ? (
-                            <TouchableOpacity style={[styles.navBtn, styles.nextBtn]} onPress={handleNext} disabled={isSaving}>
-                                <Text style={styles.nextBtnText}>Next</Text>
-                                <Ionicons name="chevron-forward" size={20} color={CoffeeColors.CREAM} />
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={isSaving}>
-                                {isSaving ? (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <ActivityIndicator color={CoffeeColors.CREAM} style={{ marginRight: 8 }} />
-                                        <Text style={styles.submitBtnText}>Saving...</Text>
-                                    </View>
-                                ) : (
-                                    <Text style={styles.submitBtnText}>Submit</Text>
-                                )}
-                            </TouchableOpacity>
-                        )}
                     </View>
 
                     <View style={{ height: 100 }} />
@@ -608,101 +628,61 @@ const styles = StyleSheet.create({
         textDecorationLine: "underline",
         fontSize: 14,
     },
-    navBtn: {
-        padding: 12,
-        borderRadius: 10,
-        alignItems: "center",
+    stepButton: {
         flexDirection: 'row',
-    },
-    nextBtn: {
-        backgroundColor: CoffeeColors.ACCENT,
+        alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: CoffeeColors.DARK_BROWN,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        flex: 1,
+        backgroundColor: 'transparent',
+        borderWidth: 0,
     },
-    nextBtnText: {
-        color: CoffeeColors.CREAM,
-        fontWeight: '700',
+    stepButtonText: {
+        color: CoffeeColors.PRIMARY_BROWN,
+        fontWeight: 'bold',
+        fontFamily: Fonts.bold,
+        fontSize: 14,
+    },
+    prevButtonIcon: {
         marginRight: 8,
-        fontSize: 16,
     },
-    backBtn: {
-        backgroundColor: CoffeeColors.LIGHT_GRAY,
-        borderWidth: 1,
-        borderColor: CoffeeColors.MEDIUM_BROWN,
-        justifyContent: 'center',
-        marginRight: 10,
-    },
-    backBtnText: {
-        color: CoffeeColors.DARK_BROWN,
-        fontWeight: '700',
+    nextButtonIcon: {
         marginLeft: 8,
-        fontSize: 16,
     },
-    draftBtn: {
+    submitButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderRadius: 8,
+        flex: 1,
+        backgroundColor: CoffeeColors.PRIMARY_BROWN,
+        marginHorizontal: 5,
+    },
+    submitButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontFamily: Fonts.bold,
+    },
+    saveDraftButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
         backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
         borderWidth: 1,
         borderColor: CoffeeColors.PRIMARY_BROWN,
-        flex: 1,
-        marginRight: 8,
     },
-    draftBtnText: {
+    saveDraftButtonText: {
         color: CoffeeColors.PRIMARY_BROWN,
         fontWeight: '600',
         fontFamily: Fonts.semiBold,
         fontSize: 14,
-    },
-    prevBtn: {
-        backgroundColor: 'transparent',
-        borderWidth: 0,
-        flex: 1,
-        marginRight: 8,
-    },
-    prevBtnText: {
-        color: CoffeeColors.PRIMARY_BROWN,
-        fontWeight: '700',
-        fontFamily: Fonts.bold,
-        marginLeft: 8,
-        fontSize: 14,
-    },
-    nextBtn: {
-        backgroundColor: CoffeeColors.ACCENT,
-        flex: 1,
-        shadowColor: CoffeeColors.DARK_BROWN,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-    },
-    nextBtnText: {
-        color: CoffeeColors.CREAM,
-        fontWeight: '700',
-        fontFamily: Fonts.bold,
-        fontSize: 14,
-        marginRight: 8,
-    },
-    submitBtn: {
-        backgroundColor: CoffeeColors.ACCENT,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 10,
-        alignItems: 'center',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        shadowColor: CoffeeColors.DARK_BROWN,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-    },
-    submitBtnText: {
-        color: CoffeeColors.CREAM,
-        fontWeight: '700',
-        fontFamily: Fonts.bold,
-        fontSize: 16,
+        marginLeft: 6,
     },
 });
 
@@ -765,9 +745,14 @@ const stepStyles = StyleSheet.create({
         elevation: 2,
     },
     navigationContainer: {
+        width: '100%',
+        marginTop: 20,
+        paddingHorizontal: 5,
+        gap: 12,
+    },
+    stepNav: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        marginTop: 20,
     },
 });
 
