@@ -70,11 +70,6 @@ const COFFEE_VARIETIES = [
   { label: 'Liberica', value: 'liberica' },
 ];
 
-const ROBUSTA_SUBTYPES = [
-  { label: 'Select Subtype', value: '' },
-  ...Array.from({ length: 10 }, (_, i) => ({ label: `KR${i + 1}`, value: `KR${i + 1}` })),
-  ...Array.from({ length: 5 }, (_, i) => ({ label: `CWDR${i + 1}`, value: `CWDR${i + 1}` })),
-];
 
 const SEEDLING_SOURCES = [
   { label: 'Select Source', value: '' },
@@ -116,7 +111,6 @@ const initialFormState = {
   numTrees: '',
   ageTrees: '',
   typeCoffee: '',
-  robustaSubtype: '',
   datePlanted: new Date(),
   sourceSeedling: '',
   otherSourceSeedling: '',
@@ -137,19 +131,10 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
 
   const handleCoffeeTypeChange = (value) => {
     updateField('typeCoffee', value);
-    if (value === 'robusta') {
-      updateField('typeOfSeedling', formData.robustaSubtype ? `Robusta (${formData.robustaSubtype})` : '');
-    } else if (value === 'arabica') {
-      updateField('typeOfSeedling', 'Arabica');
-    } else if (value === 'liberica') {
-      updateField('typeOfSeedling', 'Liberica');
-    }
+    // Reset seedling type when coffee type changes
+    updateField('typeOfSeedling', '');
   };
 
-  const handleRobustaSubtypeChange = (value) => {
-    updateField('robustaSubtype', value);
-    updateField('typeOfSeedling', value ? `Robusta (${value})` : '');
-  };
 
   const onDateChange = (_event, selectedDate) => {
     setShowDatePicker(false);
@@ -196,23 +181,31 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
         </Picker>
       </View>
 
-      {formData.typeCoffee === 'robusta' && (
-        <>
-          <Text style={styles.label}>Robusta Subtype</Text>
-          <View style={styles.pickerContainer}>
-            <Picker selectedValue={formData.robustaSubtype} onValueChange={handleRobustaSubtypeChange}>
-              {ROBUSTA_SUBTYPES.map(opt => <Picker.Item key={opt.value} label={opt.label} value={opt.value} />)}
-            </Picker>
-          </View>
-        </>
-      )}
 
       <Text style={styles.label}>Type of Seedling</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: '#eee' }]}
-        value={formData.typeOfSeedling}
-        editable={false}
-      />
+      <View style={styles.pickerContainer}>
+        <Picker
+          selectedValue={formData.typeOfSeedling}
+          onValueChange={v => updateField('typeOfSeedling', v)}
+        >
+          <Picker.Item label="Select Seedling Type" value="" />
+          <Picker.Item label="KR1" value="KR1" />
+          <Picker.Item label="KR2" value="KR2" />
+          <Picker.Item label="KR3" value="KR3" />
+          <Picker.Item label="KR4" value="KR4" />
+          <Picker.Item label="KR5" value="KR5" />
+          <Picker.Item label="KR6" value="KR6" />
+          <Picker.Item label="KR7" value="KR7" />
+          <Picker.Item label="KR8" value="KR8" />
+          <Picker.Item label="KR9" value="KR9" />
+          <Picker.Item label="KR10" value="KR10" />
+          <Picker.Item label="CWDR1" value="CWDR1" />
+          <Picker.Item label="CWDR2" value="CWDR2" />
+          <Picker.Item label="CWDR3" value="CWDR3" />
+          <Picker.Item label="CWDR4" value="CWDR4" />
+          <Picker.Item label="CWDR5" value="CWDR5" />
+        </Picker>
+      </View>
 
       <Text style={styles.label}>Seedling Source *</Text>
       <View style={styles.pickerContainer}>
@@ -497,6 +490,19 @@ const BlockRegistrationStepper = ({ navigation }) => {
             console.warn('Generating block_id for legacy block');
             // Generate block_id for legacy blocks saved without it
             block.block_id = await generateBlockId();
+          }
+
+          // Check if block already exists before attempting to sync
+          try {
+            const checkResponse = await ApiService.get(`harvests/blocks/${block.block_id}/`);
+            if (checkResponse.status === 200) {
+              // Block already exists, remove from queue
+              console.log(`✓ Block ${block.block_id} already exists, removing from sync queue`);
+              syncedCount++;
+              continue;
+            }
+          } catch (checkError) {
+            // Block doesn't exist, proceed with creation
           }
 
           const response = await ApiService.post('harvests/blocks/', block);
