@@ -123,7 +123,8 @@ const harvestFieldDefinitions = [
         title: 'Quality & Payment',
         fields: [
             { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type' },
-            { key: 'amount_paid', label: 'Amount Paid', keyboardType: 'numeric' },
+            { key: 'price_per_kg', label: 'Price per Kg (UGX)', keyboardType: 'numeric', required: true },
+            { key: 'amount_paid', label: 'Amount Paid (UGX)', keyboardType: 'numeric', readOnly: true, calculated: true },
             { key: 'paid_by', label: 'Paid By', keyboardType: 'default' },
             { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
         ]
@@ -1031,7 +1032,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', amount_paid: '', paid_by: '', number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1215,7 +1216,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', amount_paid: '', paid_by: '', number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', number_of_bags: '',
         }));
         setFarmerStep(0);
         setHarvestStep(0);
@@ -1252,6 +1253,17 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         console.log(`[Harvest Form] Updating field: ${key}, value:`, value);
         setHarvestForm(p => {
             const newState = { ...p, [key]: value };
+
+            // Auto-calculate amount_paid when weight or price_per_kg changes
+            if (key === 'weight_on_delivery' || key === 'price_per_kg') {
+                const weight = Number(key === 'weight_on_delivery' ? value : newState.weight_on_delivery) || 0;
+                const pricePerKg = Number(key === 'price_per_kg' ? value : newState.price_per_kg) || 0;
+                const calculatedAmount = weight * pricePerKg;
+
+                newState.amount_paid = calculatedAmount > 0 ? calculatedAmount.toFixed(2) : '';
+                console.log(`[Harvest Form] Auto-calculated amount_paid: ${newState.amount_paid} (${weight} kg × ${pricePerKg} UGX/kg)`);
+            }
+
             console.log('[Harvest Form] New state after update:', newState);
             return newState;
         });
@@ -1420,9 +1432,9 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         console.log(`[handleHarvestSubmit] ========== SAVING HARVEST LOCALLY ==========`);
         console.log('[handleHarvestSubmit] Current form state:', harvestForm);
 
-        if (!harvestForm.farmer_uid || !harvestForm.weight_on_delivery || !userId) {
+        if (!harvestForm.farmer_uid || !harvestForm.weight_on_delivery || !harvestForm.price_per_kg || !userId) {
             console.error('[handleHarvestSubmit] Validation failed - missing required fields');
-            Alert.alert('Validation', 'Please fill Farmer UID, Weight and ensure you are logged in.');
+            Alert.alert('Validation', 'Please fill Farmer UID, Weight, Price per Kg and ensure you are logged in.');
             return;
         }
 
@@ -1437,6 +1449,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             ...harvestForm,
             id: recordId,
             weight_on_delivery: Number(harvestForm.weight_on_delivery) || 0,
+            price_per_kg: Number(harvestForm.price_per_kg) || 0,
             amount_paid: Number(harvestForm.amount_paid) || 0,
             number_of_bags: Number(harvestForm.number_of_bags) || 0,
             weight_after_floating: Number(harvestForm.weight_after_floating) || 0,
@@ -1677,6 +1690,16 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                             <Text style={styles.generateButtonSubtext}>(Use when on farm site)</Text>
                                         </Text>
                                     </TouchableOpacity>
+                                </View>
+                            );
+                        }
+
+                        // Show helper text for calculated amount_paid field
+                        if (field.calculated && field.key === 'amount_paid') {
+                            return (
+                                <View key={field.key}>
+                                    {inputElement}
+                                    <Text style={styles.helperText}>Auto-calculated: Weight × Price per Kg</Text>
                                 </View>
                             );
                         }
@@ -2273,6 +2296,14 @@ const styles = StyleSheet.create({
     readOnlyInput: {
         backgroundColor: LIGHT_GRAY_BG,
         color: TEXT_GRAY,
+    },
+    helperText: {
+        fontSize: 12,
+        color: TEXT_GRAY,
+        fontFamily: Fonts.regular,
+        fontStyle: 'italic',
+        marginTop: 4,
+        marginBottom: 10,
     },
     pickerContainer: {
         borderWidth: 1,

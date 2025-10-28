@@ -163,14 +163,24 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
             />
         )}
 
-        <Text style={styles.label}>Amount Paid (UGX)</Text>
+        <Text style={styles.label}>Price per Kg (UGX)</Text>
         <TextInput
             style={styles.input}
             keyboardType="numeric"
-            value={formData.amountPaid}
-            onChangeText={(t) => updateField('amountPaid', t.replace(",", "."))}
-            placeholder="e.g. 5000"
+            value={formData.pricePerKg}
+            onChangeText={(t) => updateField('pricePerKg', t.replace(",", "."))}
+            placeholder="e.g. 4000"
         />
+
+        <Text style={styles.label}>Amount Paid (UGX)</Text>
+        <TextInput
+            style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
+            keyboardType="numeric"
+            value={formData.amountPaid}
+            editable={false}
+            placeholder="Auto-calculated"
+        />
+        <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
 
         <Text style={styles.label}>Paid By</Text>
         <View style={styles.pickerWrap}>
@@ -196,7 +206,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
 // New steps structure based on the required fields
 const STEPS = [
     { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['workerName', 'blockId'] },
-    { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'date', 'amountPaid', 'paidBy'] },
+    { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'date', 'pricePerKg', 'paidBy'] },
 ];
 
 const initialFormState = {
@@ -205,7 +215,8 @@ const initialFormState = {
     blockId: BLOCK_DATA[0].id, // Integer PK from blocks table
     weight: "", // maps to weight_on_delivery
     date: new Date(), // maps to date_of_delivery
-    amountPaid: "", // maps to amount_paid
+    pricePerKg: "", // maps to price_per_kg
+    amountPaid: "", // maps to amount_paid (auto-calculated)
     paidBy: STAFF_DATA[0].id, // Integer PK from users table
 
     // System fields
@@ -221,11 +232,23 @@ export default function HarvestFormScreen({ navigation }) {
 
     // Update generated ID when date changes
     useEffect(() => {
-        setFormData(prev => ({ 
-            ...prev, 
-            generatedId: generateHarvestId(prev.date) 
+        setFormData(prev => ({
+            ...prev,
+            generatedId: generateHarvestId(prev.date)
         }));
     }, [formData.date]);
+
+    // Auto-calculate amount paid when weight or pricePerKg changes
+    useEffect(() => {
+        const weight = Number(formData.weight) || 0;
+        const pricePerKg = Number(formData.pricePerKg) || 0;
+        const calculatedAmount = weight * pricePerKg;
+
+        setFormData(prev => ({
+            ...prev,
+            amountPaid: calculatedAmount > 0 ? calculatedAmount.toFixed(2) : ""
+        }));
+    }, [formData.weight, formData.pricePerKg]);
 
     // Unified field updater
     const updateField = useCallback((key, value) => {
@@ -244,24 +267,24 @@ export default function HarvestFormScreen({ navigation }) {
 
     const validateStep = (stepIndex) => {
         const step = STEPS[stepIndex];
-        
+
         for (const field of step.requiredFields) {
             const value = formData[field];
             if (!value || (typeof value === 'string' && value.trim() === '')) {
                 return `Please fill in all required fields in Step ${stepIndex + 1}: ${step.title}.`;
             }
         }
-        
+
         // Custom validation
         if (stepIndex === 1) { // Delivery & Finance
             if (isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
                 return "Enter a valid weight (> 0 kg) on delivery.";
             }
-            if (formData.amountPaid === "" || isNaN(Number(formData.amountPaid)) || Number(formData.amountPaid) < 0) {
-                return "Enter a valid amount paid (>= 0 UGX).";
+            if (formData.pricePerKg === "" || isNaN(Number(formData.pricePerKg)) || Number(formData.pricePerKg) <= 0) {
+                return "Enter a valid price per kg (> 0 UGX).";
             }
         }
-        
+
         return null;
     };
 
@@ -387,6 +410,7 @@ export default function HarvestFormScreen({ navigation }) {
                 blockId: formData.blockId, // Integer PK
                 weight: Number(formData.weight),
                 date: formData.date,
+                pricePerKg: Number(formData.pricePerKg),
                 amountPaid: Number(formData.amountPaid),
                 paidBy: formData.paidBy, // Integer PK (don't trim)
                 id: formData.generatedId,
@@ -570,6 +594,13 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.semiBold,
         color: CoffeeColors.DARK_BROWN,
         fontSize: 16,
+    },
+    helperText: {
+        marginTop: 4,
+        fontSize: 12,
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontFamily: Fonts.regular,
+        fontStyle: 'italic',
     },
     input: {
         backgroundColor: CoffeeColors.WHITE, 

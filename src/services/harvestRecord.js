@@ -10,7 +10,7 @@ const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsy
 /**
  * Maps the UI payload (camelCase, internal flags) to the format expected by the backend API (snake_case, strings).
  *
- * API Schema POST: { "worker_name": "string", "block_id": "block01", "weight_on_delivery": "string", "date_of_delivery": "2025-10-15", "amount_paid": "string", "paid_by": "string" }
+ * API Schema POST: { "name": "string", "weight_on_delivery": integer, "date_of_delivery": "string", "price_per_kg": integer, "amount_paid": "string", "paid_by": "string" }
  *
  * @param {object} payload - The raw payload from the UI or the sync queue.
  * @returns {object} The API-ready payload.
@@ -35,18 +35,17 @@ const mapToApiPayload = (payload) => {
         apiPayload.date_of_delivery = payload.date.split('T')[0];
     }
 
-    // 2. Weight (UI: weight (Number) -> API: weight_on_delivery (decimal string with 2 decimal places))
-    apiPayload.weight_on_delivery = Number(payload.weight).toFixed(2);
+    // 2. Weight (UI: weight (Number) -> API: weight_on_delivery (integer))
+    apiPayload.weight_on_delivery = Math.round(Number(payload.weight));
 
-    // 3. Block (UI: blockId (string like "block01") -> API: block_id (string))
-    // Keep as string - API expects block ID strings like "block01", "block02", etc.
-    apiPayload.block_id = payload.blockId;
+    // 3. Worker Name (UI: workerName (string) -> API: name (string))
+    apiPayload.name = payload.workerName;
 
-    // 4. Worker Name (UI: workerName (string) -> API: worker_name (string))
-    apiPayload.worker_name = payload.workerName;
+    // 4. Price per Kg (UI: pricePerKg (Number) -> API: price_per_kg (integer))
+    apiPayload.price_per_kg = Math.round(Number(payload.pricePerKg));
 
-    // 5. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (decimal string with 2 decimal places))
-    apiPayload.amount_paid = Number(payload.amountPaid).toFixed(2);
+    // 5. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (string))
+    apiPayload.amount_paid = String(Number(payload.amountPaid).toFixed(2));
 
     // 6. Paid By (UI: paidBy (string like "RF001") -> API: paid_by (string))
     // Keep as string - API expects staff ID strings like "RF001", "RF002", etc.
@@ -62,8 +61,8 @@ const mapToApiPayload = (payload) => {
  */
 export const postHarvestRecord = async (uiPayload) => {
     const apiPayload = mapToApiPayload(uiPayload);
-    // Endpoint: harvests/harvests/
-    const endpoint = 'harvests/harvests/';
+    // Endpoint: aggregation/farmer-harvest/
+    const endpoint = 'aggregation/farmer-harvest/';
 
     // Debug logging for payload
     console.log('[postHarvestRecord] Original UI payload:', uiPayload);
@@ -93,8 +92,8 @@ export const postHarvestRecord = async (uiPayload) => {
  * Fetches a list of all harvest records from the API.
  */
 export const fetchAllHarvestRecords = async () => {
-    // Endpoint: harvests/harvests/
-    const endpoint = 'harvests/harvests/';
+    // Endpoint: aggregation/farmer-harvest/
+    const endpoint = 'aggregation/farmer-harvest/';
 
     try {
         const response = await ApiService.get(endpoint);
@@ -111,8 +110,8 @@ export const fetchAllHarvestRecords = async () => {
  * @param {number} id - The integer ID of the harvest record to fetch.
  */
 export const fetchHarvestRecordById = async (id) => {
-    // API uses the integer ID field as the path parameter: harvests/harvests/{id}/
-    const endpoint = `harvests/harvests/${id}/`;
+    // API uses the integer ID field as the path parameter: aggregation/farmer-harvest/{id}/
+    const endpoint = `aggregation/farmer-harvest/${id}/`;
 
     try {
         const response = await ApiService.get(endpoint);
