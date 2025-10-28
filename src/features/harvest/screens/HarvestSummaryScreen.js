@@ -13,7 +13,6 @@ import {
     ScrollView
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
-import { Picker } from "@react-native-picker/picker";
 // NOTE: These Expo imports will only work in an Expo environment
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -28,6 +27,7 @@ import {
 } from '../../../services/harvestRecord';
 // Import shared components
 import SimpleHeader from '../../../components/SimpleHeader';
+import CustomPicker from '../../../components/CustomPicker';
 import BottomNav from '../../../components/BottomNav';
 
 // --- Constants for Filters ---
@@ -346,15 +346,19 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
             {/* Filters */}
             <View style={styles.filtersContainer}>
-                <View style={styles.pickerWrap}>
-                    <Picker selectedValue={filterBlock} onValueChange={setFilterBlock}>
-                        {BLOCK_OPTIONS.map(b => <Picker.Item key={b} label={b} value={b} />)}
-                    </Picker>
+                <View style={{ flex: 1, marginRight: 10 }}>
+                    <CustomPicker
+                        selectedValue={filterBlock}
+                        onValueChange={setFilterBlock}
+                        items={BLOCK_OPTIONS}
+                    />
                 </View>
-                <View style={styles.pickerWrap}>
-                    <Picker selectedValue={filterStatus} onValueChange={setFilterStatus}>
-                        {SYNC_STATUS_OPTIONS.map(s => <Picker.Item key={s} label={s} value={s} />)}
-                    </Picker>
+                <View style={{ flex: 1 }}>
+                    <CustomPicker
+                        selectedValue={filterStatus}
+                        onValueChange={setFilterStatus}
+                        items={SYNC_STATUS_OPTIONS}
+                    />
                 </View>
             </View>
 

@@ -14,7 +14,6 @@ import {
     ScrollView
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
-import { Picker } from "@react-native-picker/picker";
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +27,7 @@ import {
 } from '../../../services/harvestRecord';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import CustomPicker from '../../../components/CustomPicker';
 
 const FILTER_BY_OPTIONS = ["All Records", "Synced Only", "Pending Only"];
 
@@ -312,15 +312,11 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
                         placeholderTextColor={CoffeeColors.GRAY_TEXT}
                     />
                     <View style={styles.filterByContainer}>
-                        <Picker
+                        <CustomPicker
                             selectedValue={filterBy}
                             onValueChange={setFilterBy}
-                            style={styles.filterByPicker}
-                        >
-                            {FILTER_BY_OPTIONS.map(option => (
-                                <Picker.Item key={option} label={option} value={option} />
-                            ))}
-                        </Picker>
+                            items={FILTER_BY_OPTIONS}
+                        />
                     </View>
                 </View>
 

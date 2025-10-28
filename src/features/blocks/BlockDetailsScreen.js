@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Picker } from "@react-native-picker/picker";
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +23,7 @@ import CoffeeColors from '../../theme/colors';
 import Fonts from '../../theme/fonts';
 import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
+import CustomPicker from '../../components/CustomPicker';
 import ApiService from '../../services/ApiService';
 
 const BLOCK_SYNC_QUEUE_KEY = "blocks_sync_queue";
@@ -330,12 +330,12 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
 
                 {/* Filter & Export Bar */}
                 <View style={styles.actionBar}>
-                    <View style={styles.pickerWrap}>
-                        <Picker selectedValue={filterBy} onValueChange={setFilterBy}>
-                            {FILTER_BY_OPTIONS.map(option => (
-                                <Picker.Item key={option} label={option} value={option} />
-                            ))}
-                        </Picker>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                        <CustomPicker
+                            selectedValue={filterBy}
+                            onValueChange={setFilterBy}
+                            items={FILTER_BY_OPTIONS}
+                        />
                     </View>
                     <TouchableOpacity
                         style={styles.exportButton}

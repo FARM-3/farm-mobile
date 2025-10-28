@@ -4,12 +4,12 @@ import {
   View, Text, TextInput, StyleSheet, ScrollView,
   Modal, TouchableOpacity, Alert, ActivityIndicator
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
+import CustomPicker from '../../components/CustomPicker';
 import CoffeeColors from '../../theme/colors';
 import Fonts from '../../theme/fonts';
 import ApiService from '../../services/ApiService';
@@ -189,22 +189,20 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
         />
       )}
 
-      <Text style={styles.label}>Coffee Type *</Text>
-      <View style={styles.pickerContainer}>
-        <Picker selectedValue={formData.typeCoffee} onValueChange={handleCoffeeTypeChange}>
-          {COFFEE_VARIETIES.map(opt => <Picker.Item key={opt.value} label={opt.label} value={opt.value} />)}
-        </Picker>
-      </View>
+      <CustomPicker
+        label="Coffee Type *"
+        selectedValue={formData.typeCoffee}
+        onValueChange={handleCoffeeTypeChange}
+        items={COFFEE_VARIETIES}
+      />
 
       {formData.typeCoffee === 'robusta' && (
-        <>
-          <Text style={styles.label}>Robusta Subtype</Text>
-          <View style={styles.pickerContainer}>
-            <Picker selectedValue={formData.robustaSubtype} onValueChange={handleRobustaSubtypeChange}>
-              {ROBUSTA_SUBTYPES.map(opt => <Picker.Item key={opt.value} label={opt.label} value={opt.value} />)}
-            </Picker>
-          </View>
-        </>
+        <CustomPicker
+          label="Robusta Subtype"
+          selectedValue={formData.robustaSubtype}
+          onValueChange={handleRobustaSubtypeChange}
+          items={ROBUSTA_SUBTYPES}
+        />
       )}
 
       <Text style={styles.label}>Type of Seedling</Text>
@@ -214,12 +212,12 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
         editable={false}
       />
 
-      <Text style={styles.label}>Seedling Source *</Text>
-      <View style={styles.pickerContainer}>
-        <Picker selectedValue={formData.sourceSeedling} onValueChange={v => updateField('sourceSeedling', v)}>
-          {SEEDLING_SOURCES.map(opt => <Picker.Item key={opt.value} label={opt.label} value={opt.value} />)}
-        </Picker>
-      </View>
+      <CustomPicker
+        label="Seedling Source *"
+        selectedValue={formData.sourceSeedling}
+        onValueChange={v => updateField('sourceSeedling', v)}
+        items={SEEDLING_SOURCES}
+      />
 
       {formData.sourceSeedling !== '' && formData.sourceSeedling !== 'localNursery' && (
         <>
@@ -289,20 +287,12 @@ const Step2_FertilizersPesticides = ({ formData, updateField }) => {
       </View>
 
       {formData.fertilizerType && FERTILIZER_OPTIONS[formData.fertilizerType] && (
-        <>
-          <Text style={styles.label}>Select Fertilizer</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.fertilizerList}
-              onValueChange={handleFertilizerSelection}
-            >
-              <Picker.Item label="Select fertilizer..." value="" />
-              {FERTILIZER_OPTIONS[formData.fertilizerType].map((option) => (
-                <Picker.Item key={option.value} label={option.label} value={option.value} />
-              ))}
-            </Picker>
-          </View>
-        </>
+        <CustomPicker
+          label="Select Fertilizer"
+          selectedValue={formData.fertilizerList}
+          onValueChange={handleFertilizerSelection}
+          items={FERTILIZER_OPTIONS[formData.fertilizerType] || []}
+        />
       )}
 
       {showOtherFertilizer && (

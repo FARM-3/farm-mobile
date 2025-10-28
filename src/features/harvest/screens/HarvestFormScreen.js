@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getUnsyncedRecords, postHarvestRecord, removeRecordFromQueue } from '../../../services/harvestRecord';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import CustomPicker from '../../../components/CustomPicker';
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
@@ -14,13 +15,12 @@ import {
     TextInput,
     StyleSheet,
     TouchableOpacity,
-    Alert, 
+    Alert,
     ScrollView,
     Platform,
     KeyboardAvoidingView,
     ActivityIndicator,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -106,21 +106,12 @@ const Step1_WorkerAndBlock = ({ formData, updateField }) => {
                 autoCapitalize="words"
             />
 
-            <Text style={styles.label}>Block</Text>
-            <View style={styles.pickerWrap}>
-                <Picker
-                    selectedValue={formData.blockId}
-                    onValueChange={handleBlockChange}
-                >
-                    {BLOCK_DATA.map((b) => (
-                        <Picker.Item
-                            key={b.id}
-                            label={b.name}
-                            value={b.id}
-                        />
-                    ))}
-                </Picker>
-            </View>
+            <CustomPicker
+                label="Block"
+                selectedValue={formData.blockId}
+                onValueChange={handleBlockChange}
+                items={BLOCK_DATA}
+            />
 
             <Text style={styles.label}>Harvest ID (Local)</Text>
             <View style={[styles.input, { justifyContent: "center" }]}>
@@ -182,21 +173,12 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
         />
         <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
 
-        <Text style={styles.label}>Paid By</Text>
-        <View style={styles.pickerWrap}>
-            <Picker
-                selectedValue={formData.paidBy}
-                onValueChange={(selectedId) => updateField('paidBy', selectedId)}
-            >
-                {STAFF_DATA.map((w) => (
-                    <Picker.Item
-                        key={w.id}
-                        label={w.name}
-                        value={w.id}
-                    />
-                ))}
-            </Picker>
-        </View>
+        <CustomPicker
+            label="Paid By"
+            selectedValue={formData.paidBy}
+            onValueChange={(selectedId) => updateField('paidBy', selectedId)}
+            items={STAFF_DATA}
+        />
     </View>
 );
 
