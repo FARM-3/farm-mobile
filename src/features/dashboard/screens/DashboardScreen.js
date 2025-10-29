@@ -235,7 +235,7 @@ const DashboardScreen = ({ navigation }) => {
       params: { initialTab: 'farmers' }
     },
     {
-      label: 'Add Block',
+      label: 'Blocks',
       sublabel: 'Field data',
       color: PRIMARY_BROWN,
       screen: 'BlockRegistration'

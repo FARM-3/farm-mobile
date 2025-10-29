@@ -70,11 +70,6 @@ const COFFEE_VARIETIES = [
   { label: 'Liberica', value: 'liberica' },
 ];
 
-const ROBUSTA_SUBTYPES = [
-  { label: 'Select Subtype', value: '' },
-  ...Array.from({ length: 10 }, (_, i) => ({ label: `KR${i + 1}`, value: `KR${i + 1}` })),
-  ...Array.from({ length: 5 }, (_, i) => ({ label: `CWDR${i + 1}`, value: `CWDR${i + 1}` })),
-];
 
 const SEEDLING_SOURCES = [
   { label: 'Select Source', value: '' },
@@ -116,7 +111,6 @@ const initialFormState = {
   numTrees: '',
   ageTrees: '',
   typeCoffee: '',
-  robustaSubtype: '',
   datePlanted: new Date(),
   sourceSeedling: '',
   otherSourceSeedling: '',
@@ -137,19 +131,10 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
 
   const handleCoffeeTypeChange = (value) => {
     updateField('typeCoffee', value);
-    if (value === 'robusta') {
-      updateField('typeOfSeedling', formData.robustaSubtype ? `Robusta (${formData.robustaSubtype})` : '');
-    } else if (value === 'arabica') {
-      updateField('typeOfSeedling', 'Arabica');
-    } else if (value === 'liberica') {
-      updateField('typeOfSeedling', 'Liberica');
-    }
+    // Reset seedling type when coffee type changes
+    updateField('typeOfSeedling', '');
   };
 
-  const handleRobustaSubtypeChange = (value) => {
-    updateField('robustaSubtype', value);
-    updateField('typeOfSeedling', value ? `Robusta (${value})` : '');
-  };
 
   const onDateChange = (_event, selectedDate) => {
     setShowDatePicker(false);
@@ -489,6 +474,19 @@ const BlockRegistrationStepper = ({ navigation }) => {
             block.block_id = await generateBlockId();
           }
 
+          // Check if block already exists before attempting to sync
+          try {
+            const checkResponse = await ApiService.get(`harvests/blocks/${block.block_id}/`);
+            if (checkResponse.status === 200) {
+              // Block already exists, remove from queue
+              console.log(`✓ Block ${block.block_id} already exists, removing from sync queue`);
+              syncedCount++;
+              continue;
+            }
+          } catch (checkError) {
+            // Block doesn't exist, proceed with creation
+          }
+
           const response = await ApiService.post('harvests/blocks/', block);
           if (response.status === 201 || response.status === 200) {
             syncedCount++;
@@ -609,68 +607,45 @@ const BlockRegistrationStepper = ({ navigation }) => {
 
       // ALWAYS save offline first
       await saveBlockOffline(payload);
-      setIsLoading(false);
 
-      // Show sync prompt
-      Alert.alert(
-        'Block Saved Locally',
-        'Block saved successfully! Would you like to sync to the cloud now?',
-        [
-          {
-            text: 'Sync Later',
-            style: 'cancel',
-            onPress: () => {
-              setGeneratedBlockId(blockId);
-              setSuccessMessage('Block saved locally. Sync to cloud later from the Block Summary screen.');
-              setShowSuccessModal(true);
-            }
-          },
-          {
-            text: 'Sync Now',
-            onPress: async () => {
-              // Check connectivity
-              const netState = await NetInfo.fetch();
-              if (!netState.isConnected) {
-                Alert.alert('No Connection', 'Cannot sync without internet. Block saved locally.');
-                setGeneratedBlockId(blockId);
-                setSuccessMessage('Block saved locally. No internet connection.');
-                setShowSuccessModal(true);
-                return;
-              }
+      // Check connectivity and attempt to sync immediately
+      const netState = await NetInfo.fetch();
+      if (!netState.isConnected) {
+        setGeneratedBlockId(blockId);
+        setSuccessMessage('Block saved locally. No internet connection - will sync when online.');
+        setShowSuccessModal(true);
+        setIsLoading(false);
+        return;
+      }
 
-              // Attempt to sync using ApiService (includes authentication)
-              setIsLoading(true);
-              try {
-                const response = await ApiService.post('harvests/blocks/', payload);
+      // Attempt to sync using ApiService (includes authentication)
+      try {
+        const response = await ApiService.post('harvests/blocks/', payload);
 
-                // Success - response.data contains the result
-                const syncedBlockId = response.data.block_id || blockId;
+        // Success - response.data contains the result
+        const syncedBlockId = response.data.block_id || blockId;
 
-                // Remove from offline queue since it synced successfully
-                const pending = await AsyncStorage.getItem('blocks_sync_queue');
-                const pendingBlocks = pending ? JSON.parse(pending) : [];
-                const updatedQueue = pendingBlocks.filter(b =>
-                  b.block_id !== payload.block_id
-                );
-                await AsyncStorage.setItem('blocks_sync_queue', JSON.stringify(updatedQueue));
+        // Remove from offline queue since it synced successfully
+        const pending = await AsyncStorage.getItem('blocks_sync_queue');
+        const pendingBlocks = pending ? JSON.parse(pending) : [];
+        const updatedQueue = pendingBlocks.filter(b =>
+          b.block_id !== payload.block_id
+        );
+        await AsyncStorage.setItem('blocks_sync_queue', JSON.stringify(updatedQueue));
 
-                setGeneratedBlockId(syncedBlockId);
-                setSuccessMessage(`Block successfully synced to cloud! Block ID: ${syncedBlockId}`);
-                setShowSuccessModal(true);
-              } catch (err) {
-                console.error('Sync error:', err);
-                const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
-                Alert.alert('Sync Failed', `Failed to sync to cloud: ${errorMsg}. Block saved locally and will sync later.`);
-                setGeneratedBlockId(blockId);
-                setSuccessMessage('Block saved locally. Sync failed, will retry later.');
-                setShowSuccessModal(true);
-              } finally {
-                setIsLoading(false);
-              }
-            }
-          }
-        ]
-      );
+        setGeneratedBlockId(syncedBlockId);
+        setSuccessMessage(`Block submitted successfully! Block ID: ${syncedBlockId}`);
+        setShowSuccessModal(true);
+      } catch (err) {
+        console.error('Sync error:', err);
+        const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
+        Alert.alert('Sync Failed', `Failed to sync to cloud: ${errorMsg}. Block saved locally and will sync later.`);
+        setGeneratedBlockId(blockId);
+        setSuccessMessage('Block saved locally. Sync failed, will retry later.');
+        setShowSuccessModal(true);
+      } finally {
+        setIsLoading(false);
+      }
     } catch (err) {
       console.error('Submit error:', err);
       Alert.alert('Error', 'Failed to save block. Please try again.');
