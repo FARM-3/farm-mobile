@@ -161,24 +161,54 @@ const BlockSummary = ({ route = {}, navigation }) => {
   }, [route?.params?.shouldRefresh, loadData]);
 
   const handleEdit = (item) => {
-    Alert.alert(
-      'Edit Block',
-      'Edit functionality will be implemented soon.',
-      [{ text: 'OK' }]
-    );
+    // Navigate to block registration form with pre-filled data for editing
+    navigation.navigate('BlockRegistration', {
+      editMode: true,
+      blockData: item
+    });
   };
 
   const handleDelete = (item) => {
     Alert.alert(
       'Delete Block Record',
-      `Are you sure you want to delete block ${item.block_id}?`,
+      `Are you sure you want to delete block ${item.block_id}? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            Alert.alert('Delete', 'Delete functionality will be implemented with API integration');
+            try {
+              // If it's a synced block, try to delete from API first
+              if (item.isSynced) {
+                const netState = await NetInfo.fetch();
+                if (netState.isConnected && netState.isInternetReachable) {
+                  try {
+                    await ApiService.delete(`harvests/blocks/${item.block_id}/`);
+                  } catch (apiError) {
+                    console.error('API delete failed:', apiError);
+                    Alert.alert('Warning', 'Could not delete from cloud, but will remove from local records.');
+                  }
+                }
+              }
+
+              // Remove from local storage if it's a pending block
+              if (!item.isSynced) {
+                const pending = await AsyncStorage.getItem(BLOCK_SYNC_QUEUE_KEY);
+                if (pending) {
+                  const pendingBlocks = JSON.parse(pending);
+                  const updatedQueue = pendingBlocks.filter(b => b.block_id !== item.block_id);
+                  await AsyncStorage.setItem(BLOCK_SYNC_QUEUE_KEY, JSON.stringify(updatedQueue));
+                }
+              }
+
+              // Refresh the data
+              await loadData();
+              Alert.alert('Success', `Block ${item.block_id} has been deleted.`);
+            } catch (error) {
+              console.error('Delete error:', error);
+              Alert.alert('Error', 'Failed to delete block. Please try again.');
+            }
           }
         }
       ]

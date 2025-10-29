@@ -70,6 +70,11 @@ const COFFEE_VARIETIES = [
   { label: 'Liberica', value: 'liberica' },
 ];
 
+const ROBUSTA_SUBTYPES = [
+  { label: 'Select Subtype', value: '' },
+  ...Array.from({ length: 10 }, (_, i) => ({ label: `KR${i + 1}`, value: `KR${i + 1}` })),
+  ...Array.from({ length: 5 }, (_, i) => ({ label: `CWDR${i + 1}`, value: `CWDR${i + 1}` })),
+];
 
 const SEEDLING_SOURCES = [
   { label: 'Select Source', value: '' },
@@ -135,6 +140,11 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
     updateField('typeOfSeedling', '');
   };
 
+  const handleRobustaSubtypeChange = (value) => {
+    updateField('robustaSubtype', value);
+    updateField('typeOfSeedling', value ? `Robusta (${value})` : '');
+  };
+
 
   const onDateChange = (_event, selectedDate) => {
     setShowDatePicker(false);
@@ -190,11 +200,28 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
         />
       )}
 
-      <Text style={styles.label}>Type of Seedling</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: '#eee' }]}
-        value={formData.typeOfSeedling}
-        editable={false}
+      <CustomPicker
+        label="Type of Seedling"
+        selectedValue={formData.typeOfSeedling}
+        onValueChange={(value) => updateField('typeOfSeedling', value)}
+        items={[
+          { label: 'Select Seedling Type', value: '' },
+          { label: 'KR1', value: 'KR1' },
+          { label: 'KR2', value: 'KR2' },
+          { label: 'KR3', value: 'KR3' },
+          { label: 'KR4', value: 'KR4' },
+          { label: 'KR5', value: 'KR5' },
+          { label: 'KR6', value: 'KR6' },
+          { label: 'KR7', value: 'KR7' },
+          { label: 'KR8', value: 'KR8' },
+          { label: 'KR9', value: 'KR9' },
+          { label: 'KR10', value: 'KR10' },
+          { label: 'CWDR1', value: 'CWDR1' },
+          { label: 'CWDR2', value: 'CWDR2' },
+          { label: 'CWDR3', value: 'CWDR3' },
+          { label: 'CWDR4', value: 'CWDR4' },
+          { label: 'CWDR5', value: 'CWDR5' },
+        ]}
       />
 
       <CustomPicker
@@ -392,13 +419,14 @@ const STEPS = [
 ];
 
 // === MAIN COMPONENT ===
-const BlockRegistrationStepper = ({ navigation }) => {
+const BlockRegistrationStepper = ({ navigation, route }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState(initialFormState);
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [generatedBlockId, setGeneratedBlockId] = useState('');
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const updateField = useCallback((key, valueOrFn) => {
     setFormData(prev => ({
@@ -406,6 +434,39 @@ const BlockRegistrationStepper = ({ navigation }) => {
       [key]: typeof valueOrFn === 'function' ? valueOrFn(prev[key]) : valueOrFn
     }));
   }, []);
+
+  // Handle edit mode initialization
+  useEffect(() => {
+    if (route?.params?.editMode && route?.params?.blockData) {
+      setIsEditMode(true);
+      const blockData = route.params.blockData;
+
+      // Pre-fill form with existing block data
+      setFormData({
+        numTrees: blockData.trees?.toString() || '',
+        ageTrees: blockData.age_of_seedling?.toString() || '',
+        typeCoffee: blockData.type || '',
+        datePlanted: blockData.date ? new Date(blockData.date) : new Date(),
+        sourceSeedling: blockData.source || '',
+        otherSourceSeedling: '',
+        typeOfSeedling: blockData.type_of_seedling || '',
+        fertilizerType: blockData.fertilizers || '',
+        fertilizerList: blockData.fertilizer_names || '',
+        otherFertilizer: '',
+        usePesticides: blockData.use_pesticides || 'no',
+        pesticidesList: Array.isArray(blockData.pesticides_list)
+          ? blockData.pesticides_list
+          : (blockData.pesticides_list ? blockData.pesticides_list.split(', ') : []),
+        otherPesticide: '',
+        standardPractices: Array.isArray(blockData.standard_practices)
+          ? blockData.standard_practices
+          : (blockData.standard_practices ? blockData.standard_practices.split(', ') : []),
+        otherStandardPractice: ''
+      });
+
+      setGeneratedBlockId(blockData.block_id || '');
+    }
+  }, [route?.params]);
 
   // OFFLINE SYNC FUNCTIONS (omitted for brevity, assume they are correct)
 
@@ -587,8 +648,8 @@ const BlockRegistrationStepper = ({ navigation }) => {
       const standardPracticesValue = formData.standardPractices.join(', ') +
         (formData.otherStandardPractice && formData.standardPractices.includes('other') ? `, ${formData.otherStandardPractice}` : '');
 
-      // Generate a unique sequential block_id for this submission
-      const blockId = await generateBlockId();
+      // Use existing block_id for edit mode, generate new one for new blocks
+      const blockId = isEditMode ? generatedBlockId : await generateBlockId();
 
       const payload = {
         block_id: blockId,
@@ -634,7 +695,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
         await AsyncStorage.setItem('blocks_sync_queue', JSON.stringify(updatedQueue));
 
         setGeneratedBlockId(syncedBlockId);
-        setSuccessMessage(`Block submitted successfully! Block ID: ${syncedBlockId}`);
+        setSuccessMessage(`Block ${isEditMode ? 'updated' : 'submitted'} successfully! Block ID: ${syncedBlockId}`);
         setShowSuccessModal(true);
       } catch (err) {
         console.error('Sync error:', err);
@@ -658,6 +719,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
     // Reset form after successful submission/offline save
     setFormData(initialFormState);
     setCurrentStep(0);
+    setIsEditMode(false);
   };
   
   const handleGoToSummary = () => {
@@ -678,7 +740,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-      <SimpleHeader title="Block Registration" />
+      <SimpleHeader title={isEditMode ? "Edit Block" : "Block Registration"} />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <TouchableOpacity onPress={handleViewSummary} style={styles.navLink}>
           <Text style={styles.navLinkText}>View Block Summary 📋</Text>
@@ -728,7 +790,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
               disabled={isLoading}
             >
               <Text style={styles.submitButtonText}>
-                {isLoading ? 'Submitting...' : 'Submit Block'}
+                {isLoading ? 'Submitting...' : (isEditMode ? 'Update Block' : 'Submit Block')}
               </Text>
             </TouchableOpacity>
           )}
