@@ -51,13 +51,59 @@ function formatDateForDisplay(d) {
     return `${day}-${mon}-${year}`;
 }
 
-function generateHarvestId(date) {
-    // format: PA + DDMMYY + H (example: PA120825H)
-    const d = date;
-    const dd = String(d.getDate()).padStart(2, "0");
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const yy = String(d.getFullYear()).slice(-2);
-    return `PA${dd}${mm}${yy}H`;
+/**
+ * Get the next sequential harvest ID suffix (A00, A01, ... A99, B00, ... Z99)
+ * Stores counter in localStorage to persist across sessions
+ * @returns {string} The suffix like "A00", "A01", "B00", etc.
+ */
+const getNextHarvestSequentialSuffix = () => {
+    try {
+        let counter = 0;
+
+        // Try to retrieve from localStorage
+        if (typeof localStorage !== 'undefined') {
+            const stored = localStorage.getItem('harvestFormIdCounter');
+            counter = stored ? parseInt(stored, 10) : 0;
+        }
+
+        // Increment counter for next use
+        const nextCounter = counter + 1;
+
+        // Store for next time
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('harvestFormIdCounter', String(nextCounter));
+        }
+
+        // Convert counter to Letter+Numbers format (A00 to Z99)
+        const letterIndex = Math.floor(counter / 100) % 26;
+        const numberPart = counter % 100;
+
+        const letter = String.fromCharCode(65 + letterIndex);
+        const numbers = String(numberPart).padStart(2, '0');
+
+        return `${letter}${numbers}`;
+    } catch (error) {
+        console.warn('Error getting harvest sequential suffix, using fallback:', error);
+        return 'A00';
+    }
+};
+
+function generateHarvestId(workerName = '', date = new Date()) {
+    // Ensure workerName is a string
+    const nameStr = String(workerName || '');
+
+    // Get first two letters of worker name (not initials)
+    const cleanName = nameStr.trim().toUpperCase().replace(/[^A-Z]/g, '');
+    const firstTwoLetters = cleanName.substring(0, 2).padEnd(2, 'X');
+
+    // Get date in DDMM format
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+
+    // Get next sequential suffix (A00 to Z99)
+    const suffix = getNextHarvestSequentialSuffix();
+
+    return `${firstTwoLetters}${dd}${mm}R${suffix}`;
 }
 
 // --- STATIC OPTIONS (Aligned with API schema) ---
@@ -85,7 +131,7 @@ const STAFF_DATA = [
 
 // --- STEP COMPONENTS ---
 
-const Step1_WorkerAndBlock = ({ formData, updateField }) => {
+const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
 
     // Handler to update block ID when a block is selected
     const handleBlockChange = (selectedId) => {
@@ -106,6 +152,24 @@ const Step1_WorkerAndBlock = ({ formData, updateField }) => {
                 autoCapitalize="words"
             />
 
+            <Text style={styles.label}>Date of Delivery</Text>
+            <TouchableOpacity style={styles.dateButton} onPress={() => updateField('showDatePicker', true)} accessibilityLabel="Select date">
+                <Ionicons name="calendar-outline" size={20} color={CoffeeColors.DARK_BROWN} />
+                <Text style={{ marginLeft: 10, fontSize: 16, color: CoffeeColors.DARK_BROWN }}>
+                    {formatDateForDisplay(formData.date)}
+                </Text>
+            </TouchableOpacity>
+
+            {formData.showDatePicker && (
+                <DateTimePicker
+                    value={formData.date}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={onDateChange}
+                    maximumDate={new Date()}
+                />
+            )}
+
             <CustomPicker
                 label="Block"
                 selectedValue={formData.blockId}
@@ -123,7 +187,7 @@ const Step1_WorkerAndBlock = ({ formData, updateField }) => {
     );
 };
 
-const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
+const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
     <View style={stepStyles.stepContainer}>
         <Text style={styles.heading}>2. Delivery & Finance</Text>
 
@@ -135,24 +199,6 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
             onChangeText={(t) => updateField('weight', t.replace(",", "."))}
             placeholder="e.g. 12.5"
         />
-
-        <Text style={styles.label}>Date of Delivery</Text>
-        <TouchableOpacity style={styles.dateButton} onPress={() => updateField('showDatePicker', true)} accessibilityLabel="Select date">
-            <Ionicons name="calendar-outline" size={20} color={CoffeeColors.DARK_BROWN} />
-            <Text style={{ marginLeft: 10, fontSize: 16, color: CoffeeColors.DARK_BROWN }}>
-                {formatDateForDisplay(formData.date)}
-            </Text>
-        </TouchableOpacity>
-
-        {formData.showDatePicker && (
-            <DateTimePicker
-                value={formData.date}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                onChange={onDateChange}
-                maximumDate={new Date()}
-            />
-        )}
 
         <Text style={styles.label}>Price per Kg (UGX)</Text>
         <TextInput
@@ -187,8 +233,8 @@ const Step2_DeliveryAndFinance = ({ formData, updateField, onDateChange }) => (
 
 // New steps structure based on the required fields
 const STEPS = [
-    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['workerName', 'blockId'] },
-    { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'date', 'pricePerKg', 'paidBy'] },
+    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['workerName', 'date', 'blockId'] },
+    { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'pricePerKg', 'paidBy'] },
 ];
 
 const initialFormState = {
@@ -210,15 +256,15 @@ const initialFormState = {
 export default function HarvestFormScreen({ navigation }) {
     const [formData, setFormData] = useState(initialFormState);
     const [currentStep, setCurrentStep] = useState(0);
-    const [isSaving, setIsSaving] = useState(false); 
+    const [isSaving, setIsSaving] = useState(false);
 
-    // Update generated ID when date changes
+    // Update generated ID when worker name or date changes
     useEffect(() => {
         setFormData(prev => ({
             ...prev,
-            generatedId: generateHarvestId(prev.date)
+            generatedId: generateHarvestId(prev.workerName, prev.date)
         }));
-    }, [formData.date]);
+    }, [formData.workerName, formData.date]);
 
     // Auto-calculate amount paid when weight or pricePerKg changes
     useEffect(() => {
@@ -258,6 +304,9 @@ export default function HarvestFormScreen({ navigation }) {
         }
 
         // Custom validation
+        if (stepIndex === 0) { // Worker & Block (now includes date)
+            // Date validation is already handled by required fields check
+        }
         if (stepIndex === 1) { // Delivery & Finance
             if (isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
                 return "Enter a valid weight (> 0 kg) on delivery.";
@@ -319,7 +368,17 @@ export default function HarvestFormScreen({ navigation }) {
             Alert.alert(
                 "Draft Saved",
                 "Your harvest draft has been saved. You can continue filling it later.",
-                [{ text: "OK" }]
+                [
+                    {
+                        text: "Continue Editing",
+                        style: "default"
+                    },
+                    {
+                        text: "View Records",
+                        style: "default",
+                        onPress: () => navigation.navigate('Harvests')
+                    }
+                ]
             );
 
             console.log('[HarvestForm] Draft saved:', harvestDraft);
@@ -536,6 +595,15 @@ export default function HarvestFormScreen({ navigation }) {
                         </TouchableOpacity>
                     </View>
 
+                    {/* View Harvest Records Button - Available on all steps */}
+                    <TouchableOpacity
+                        style={styles.viewRecordsButton}
+                        onPress={() => navigation.navigate('Harvests')}
+                    >
+                        <Ionicons name="list" size={18} color={CoffeeColors.PRIMARY_BROWN} style={{ marginRight: 6 }} />
+                        <Text style={styles.viewRecordsButtonText}>View Harvest Records</Text>
+                    </TouchableOpacity>
+
                     <View style={{ height: 100 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -691,6 +759,25 @@ const styles = StyleSheet.create({
         borderColor: CoffeeColors.PRIMARY_BROWN,
     },
     saveDraftButtonText: {
+        color: CoffeeColors.PRIMARY_BROWN,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
+        fontSize: 14,
+        marginLeft: 6,
+    },
+    viewRecordsButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
+        borderWidth: 1,
+        borderColor: CoffeeColors.PRIMARY_BROWN,
+        marginTop: 10,
+    },
+    viewRecordsButtonText: {
         color: CoffeeColors.PRIMARY_BROWN,
         fontWeight: '600',
         fontFamily: Fonts.semiBold,

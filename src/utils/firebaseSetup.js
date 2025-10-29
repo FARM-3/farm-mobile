@@ -45,6 +45,44 @@ const getNextSequentialSuffix = () => {
 };
 
 /**
+ * Get the next sequential harvest ID suffix (A00, A01, ... Z99)
+ * Stores counter in localStorage to persist across sessions
+ * @returns {string} The suffix like "A00", "A01", "Z99", etc.
+ */
+const getNextHarvestSequentialSuffix = () => {
+    try {
+        let counter = 0;
+
+        // Try to retrieve from localStorage
+        if (typeof localStorage !== 'undefined') {
+            const stored = localStorage.getItem('harvestIdCounter');
+            counter = stored ? parseInt(stored, 10) : 0;
+        }
+
+        // Increment counter for next use
+        const nextCounter = counter + 1;
+
+        // Store for next time
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('harvestIdCounter', String(nextCounter));
+        }
+
+        // Convert counter to Letter+Numbers format (A00 to Z99)
+        const letterIndex = Math.floor(counter / 100) % 26; // Which letter (0-25)
+        const numberPart = counter % 100; // Which number (0-99)
+
+        const letter = String.fromCharCode(65 + letterIndex); // A-Z
+        const numbers = String(numberPart).padStart(2, '0'); // 00-99
+
+        return `${letter}${numbers}`;
+    } catch (error) {
+        console.warn('Error getting harvest sequential suffix, using fallback:', error);
+        // Fallback if localStorage fails
+        return 'A00';
+    }
+};
+
+/**
  * Utility to generate a unique Farmer ID based on farmer's name and date.
  * Format: [First Initial][Last Initial][DDMM][Letter][Number][Number]
  * Examples: JK0127A00, JK0127A01, JK0127A02
@@ -71,21 +109,34 @@ export const generateFarmerId = (firstName, lastName) => {
 
 /**
  * Utility to generate a unique Harvest ID (Production Aggregation)
- * Format: PA[DDMM][Sequential Letter][Sequential Number]
+ * Format: [Farmer Initials][DDMM][A][Sequential Number] where sequential number increases globally
+ * Examples: KM2906AA00, MJ3006AA02, etc.
+ * @param {string} farmerName - Full farmer name (first last)
+ * @param {string} dateOfDelivery - Date in YYYY-MM-DD format
  * @returns {string} The unique Harvest ID.
  */
-export const generateHarvestId = () => {
-    const now = new Date();
-    const dd = String(now.getDate()).padStart(2, '0');
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
+export const generateHarvestId = (farmerName = '', dateOfDelivery = '') => {
+    // Get farmer initials from first and last name
+    const nameParts = farmerName.trim().split(/\s+/);
+    const firstInitial = nameParts[0]?.charAt(0)?.toUpperCase() || 'X';
+    const lastInitial = nameParts[1]?.charAt(0)?.toUpperCase() || 'X';
 
-    // Get sequential suffix (A00 to Z99)
-    const timestamp = now.getTime();
-    const sequenceNumber = Math.floor((timestamp % 26000) / 1000);
-    const letter = String.fromCharCode(65 + sequenceNumber); // A-Z
-    const counter = (timestamp % 1000).toString().slice(-2).padStart(2, '0');
+    // Get date from dateOfDelivery or current date
+    let dateObj;
+    if (dateOfDelivery) {
+        dateObj = new Date(dateOfDelivery);
+    } else {
+        dateObj = new Date();
+    }
 
-    return `PA${dd}${mm}${letter}${counter}`;
+    // Format as DDMM
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+
+    // Get next sequential suffix (A00 to Z99)
+    const suffix = getNextHarvestSequentialSuffix();
+
+    return `${firstInitial}${lastInitial}${dd}${mm}A${suffix}`;
 };
 
 /**
@@ -400,6 +451,27 @@ export const deleteHarvest = async (harvestId) => {
         return response.data;
     } catch (error) {
         console.error('[firebaseSetup] Error deleting harvest:');
+        if (error.response) {
+            console.error('Status:', error.response.status);
+            console.error('Response data:', error.response.data);
+        }
+        throw error;
+    }
+};
+
+/**
+ * Deletes a block record from the Django API.
+ * Uses JWT authentication automatically via ApiService
+ * @param {string} blockId - The block's ID
+ */
+export const deleteBlock = async (blockId) => {
+    try {
+        console.log('[firebaseSetup] Deleting block:', blockId);
+        const response = await ApiService.delete(`harvests/blocks/${blockId}/`);
+        console.log('[firebaseSetup] Block deleted successfully');
+        return response.data;
+    } catch (error) {
+        console.error('[firebaseSetup] Error deleting block:');
         if (error.response) {
             console.error('Status:', error.response.status);
             console.error('Response data:', error.response.data);

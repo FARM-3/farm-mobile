@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput, FlatList
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,7 +13,9 @@ import CoffeeColors from '../../theme/colors';
 import Fonts from '../../theme/fonts';
 import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
+import CustomAlert from '../../components/CustomAlert';
 import ApiService from '../../services/ApiService';
+import { deleteBlock } from '../../utils/firebaseSetup';
 
 const BLOCK_SYNC_QUEUE_KEY = "blocks_sync_queue";
 
@@ -23,6 +25,13 @@ const BlockSummary = ({ route = {}, navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
   const [searchTerm, setSearchTerm] = useState('');
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+    buttons: [],
+  });
 
   // --- OFFLINE SYNC UTILITIES ---
 
@@ -139,25 +148,68 @@ const BlockSummary = ({ route = {}, navigation }) => {
     }
   }, [route?.params?.shouldRefresh, loadData]);
 
+  const showAlert = (title, message, type = 'info', buttons = null) => {
+    const defaultButtons = [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }];
+    setAlert({
+      visible: true,
+      title,
+      message,
+      type,
+      buttons: buttons || defaultButtons,
+    });
+  };
+
   const handleEdit = (item) => {
-    Alert.alert(
+    showAlert(
       'Edit Block',
       'Edit functionality will be implemented soon.',
-      [{ text: 'OK' }]
+      'info',
+      [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }]
     );
   };
 
   const handleDelete = (item) => {
-    Alert.alert(
+    showAlert(
       'Delete Block Record',
       `Are you sure you want to delete block ${item.block_id}?`,
+      'warning',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', onPress: () => setAlert(prev => ({ ...prev, visible: false })) },
         {
           text: 'Delete',
-          style: 'destructive',
           onPress: async () => {
-            Alert.alert('Delete', 'Delete functionality will be implemented with API integration');
+            setAlert(prev => ({ ...prev, visible: false }));
+            try {
+              setIsLoading(true);
+
+              // If block is synced (has been uploaded to server), delete from API
+              if (item.isSynced) {
+                await deleteBlock(item.block_id);
+                console.log('[BlockSummary] Block deleted from server successfully');
+              } else {
+                // If block is local/draft, remove from local storage
+                const unsynced = await getUnsyncedBlocks();
+                const updatedRecords = unsynced.records.filter(r => r.block_id !== item.block_id);
+                await AsyncStorage.setItem(BLOCK_SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
+                console.log('[BlockSummary] Block deleted from local storage successfully');
+              }
+
+              // Reload data to reflect deletion
+              await loadData();
+              showAlert('Success', `Block ${item.block_id} deleted successfully`, 'success', [
+                { text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }
+              ]);
+            } catch (error) {
+              console.error('[BlockSummary] Error deleting block:', error);
+              showAlert(
+                'Delete Failed',
+                error.response?.data?.detail || error.message || 'Failed to delete block. Please try again.',
+                'error',
+                [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }]
+              );
+            } finally {
+              setIsLoading(false);
+            }
           }
         }
       ]
@@ -297,6 +349,15 @@ const BlockSummary = ({ route = {}, navigation }) => {
       </View>
 
       <BottomNav activeScreen="Blocks" />
+
+      {/* Custom Alert Modal */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+        buttons={alert.buttons}
+      />
     </View>
   );
 };

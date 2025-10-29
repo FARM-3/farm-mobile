@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet, ScrollView,
-  Modal, TouchableOpacity, Alert, ActivityIndicator
+  Modal, TouchableOpacity, ActivityIndicator
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +10,7 @@ import NetInfo from '@react-native-community/netinfo';
 import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
 import CustomPicker from '../../components/CustomPicker';
+import CustomAlert from '../../components/CustomAlert';
 import CoffeeColors from '../../theme/colors';
 import Fonts from '../../theme/fonts';
 import ApiService from '../../services/ApiService';
@@ -414,6 +415,13 @@ const BlockRegistrationStepper = ({ navigation }) => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [generatedBlockId, setGeneratedBlockId] = useState('');
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+    buttons: []
+  });
 
   const updateField = useCallback((key, valueOrFn) => {
     setFormData(prev => ({
@@ -421,6 +429,18 @@ const BlockRegistrationStepper = ({ navigation }) => {
       [key]: typeof valueOrFn === 'function' ? valueOrFn(prev[key]) : valueOrFn
     }));
   }, []);
+
+  // Helper function to show alert
+  const showAlert = (title, message, type = 'info', buttons = null) => {
+    const defaultButtons = [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }];
+    setAlert({
+      visible: true,
+      title,
+      message,
+      type,
+      buttons: buttons || defaultButtons,
+    });
+  };
 
   // OFFLINE SYNC FUNCTIONS (omitted for brevity, assume they are correct)
 
@@ -450,7 +470,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
         if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
         return `${field} is required`;
       });
-      Alert.alert('Validation Error', errorMessages.join('\n'));
+      showAlert('Validation Error', errorMessages.join('\n'), 'error');
     }
   };
 
@@ -509,7 +529,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
       console.log(`Block synchronization complete. Synced ${syncedCount} of ${pendingBlocks.length} blocks.`);
 
       if (syncedCount > 0) {
-        Alert.alert('Sync Complete', `${syncedCount} block(s) synced successfully!${failedBlocks.length > 0 ? ` ${failedBlocks.length} failed.` : ''}`);
+        showAlert('Sync Complete', `${syncedCount} block(s) synced successfully!${failedBlocks.length > 0 ? ` ${failedBlocks.length} failed.` : ''}`, 'success');
       }
     } catch (err) {
       console.error('Sync error:', err);
@@ -567,7 +587,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
         if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
         return `${field} is required`;
       });
-      Alert.alert('Validation Error', errorMessages.join('\n'));
+      showAlert('Validation Error', errorMessages.join('\n'), 'error');
       return;
     }
 
@@ -612,14 +632,16 @@ const BlockRegistrationStepper = ({ navigation }) => {
       setIsLoading(false);
 
       // Show sync prompt
-      Alert.alert(
+      showAlert(
         'Block Saved Locally',
         'Block saved successfully! Would you like to sync to the cloud now?',
+        'info',
         [
           {
             text: 'Sync Later',
             style: 'cancel',
             onPress: () => {
+              setAlert(prev => ({ ...prev, visible: false }));
               setGeneratedBlockId(blockId);
               setSuccessMessage('Block saved locally. Sync to cloud later from the Block Summary screen.');
               setShowSuccessModal(true);
@@ -628,10 +650,11 @@ const BlockRegistrationStepper = ({ navigation }) => {
           {
             text: 'Sync Now',
             onPress: async () => {
+              setAlert(prev => ({ ...prev, visible: false }));
               // Check connectivity
               const netState = await NetInfo.fetch();
               if (!netState.isConnected) {
-                Alert.alert('No Connection', 'Cannot sync without internet. Block saved locally.');
+                showAlert('No Connection', 'Cannot sync without internet. Block saved locally.', 'warning');
                 setGeneratedBlockId(blockId);
                 setSuccessMessage('Block saved locally. No internet connection.');
                 setShowSuccessModal(true);
@@ -660,7 +683,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
               } catch (err) {
                 console.error('Sync error:', err);
                 const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
-                Alert.alert('Sync Failed', `Failed to sync to cloud: ${errorMsg}. Block saved locally and will sync later.`);
+                showAlert('Sync Failed', `Failed to sync to cloud: ${errorMsg}. Block saved locally and will sync later.`, 'error');
                 setGeneratedBlockId(blockId);
                 setSuccessMessage('Block saved locally. Sync failed, will retry later.');
                 setShowSuccessModal(true);
@@ -673,7 +696,7 @@ const BlockRegistrationStepper = ({ navigation }) => {
       );
     } catch (err) {
       console.error('Submit error:', err);
-      Alert.alert('Error', 'Failed to save block. Please try again.');
+      showAlert('Error', 'Failed to save block. Please try again.', 'error');
       setIsLoading(false);
     }
   };
@@ -761,6 +784,15 @@ const BlockRegistrationStepper = ({ navigation }) => {
       </ScrollView>
 
       <BottomNav activeScreen="Blocks" onNavigate={(screen) => navigation.navigate(screen)} />
+
+      {/* Custom Alert Modal */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+        buttons={alert.buttons}
+      />
     </View>
   );
 };

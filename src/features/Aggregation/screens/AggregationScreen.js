@@ -579,6 +579,19 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
             if (a.timestamp && b.timestamp) {
                 return b.timestamp - a.timestamp;
             }
+            // For harvests, try to sort by date_of_delivery (newest first)
+            if (a.date_of_delivery && b.date_of_delivery) {
+                return new Date(b.date_of_delivery) - new Date(a.date_of_delivery);
+            }
+            // For farmers, try to sort by created_at or started_farming (newest first)
+            if (isFarmer) {
+                if (a.created_at && b.created_at) {
+                    return new Date(b.created_at) - new Date(a.created_at);
+                }
+                if (a.started_farming && b.started_farming) {
+                    return new Date(b.started_farming) - new Date(a.started_farming);
+                }
+            }
             // Fallback: sort by ID (assuming higher ID = newer)
             if (a.id && b.id) {
                 return String(b.id).localeCompare(String(a.id));
@@ -1051,6 +1064,9 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     // State for unsynced records count
     const [unsyncedCount, setUnsyncedCount] = useState(0);
 
+    // State for sync status message
+    const [syncStatus, setSyncStatus] = useState('');
+
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
         if (route?.params?.activeTab || route?.params?.viewMode) {
@@ -1195,15 +1211,16 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         }
     }, [farmerStep, activeTab, farmerForm.first_name, farmerForm.last_name]);
 
-    // Generate Harvest ID when user moves to step 1 (step 2 in UI)
+    // Generate Harvest ID when farmer name and date are available
     useEffect(() => {
-        if (harvestStep === 1 && !harvestForm.harvest_id && activeTab === 'harvests') {
+        if (activeTab === 'harvests' && harvestForm.farmer_name && harvestForm.date_of_delivery && !harvestForm.harvest_id) {
+            const harvestId = generateHarvestId(harvestForm.farmer_name, harvestForm.date_of_delivery);
             setHarvestForm(p => ({
                 ...p,
-                harvest_id: generateHarvestId()
+                harvest_id: harvestId
             }));
         }
-    }, [harvestStep, activeTab]);
+    }, [harvestForm.farmer_name, harvestForm.date_of_delivery, activeTab, harvestForm.harvest_id]);
 
     const resetForms = () => {
         // Reset boolean fields to false and string fields to ''

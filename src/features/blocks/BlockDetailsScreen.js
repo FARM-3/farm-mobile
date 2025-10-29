@@ -8,7 +8,6 @@ import {
     FlatList,
     TouchableOpacity,
     StyleSheet,
-    Alert,
     ActivityIndicator,
     TextInput,
     ScrollView,
@@ -24,6 +23,7 @@ import Fonts from '../../theme/fonts';
 import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
 import CustomPicker from '../../components/CustomPicker';
+import CustomAlert from '../../components/CustomAlert';
 import ApiService from '../../services/ApiService';
 
 const BLOCK_SYNC_QUEUE_KEY = "blocks_sync_queue";
@@ -39,9 +39,30 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterBy, setFilterBy] = useState(FILTER_BY_OPTIONS[0]);
 
+    // Alert State
+    const [alert, setAlert] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: []
+    });
+
     // Ref for synchronized scrolling
     const headerScrollRef = useRef(null);
     const rowScrollRefs = useRef([]);
+
+    // Helper function to show alert
+    const showAlert = (title, message, type = 'info', buttons = null) => {
+        const defaultButtons = [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }];
+        setAlert({
+            visible: true,
+            title,
+            message,
+            type,
+            buttons: buttons || defaultButtons,
+        });
+    };
 
     // --- OFFLINE SYNC UTILITIES ---
 
@@ -207,7 +228,7 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
 
     const exportToCSV = async () => {
         if (filteredData.length === 0) {
-            Alert.alert("Export Failed", "There is no data to export.");
+            showAlert("Export Failed", "There is no data to export.", "error");
             return;
         }
         try {
@@ -219,13 +240,13 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
             });
 
             if (!(await Sharing.isAvailableAsync())) {
-                Alert.alert('Error', 'Sharing is not available on this device');
+                showAlert('Error', 'Sharing is not available on this device', 'error');
                 return;
             }
 
             await Sharing.shareAsync(fileUri);
         } catch (error) {
-            Alert.alert('Export Failed', error.message);
+            showAlert('Export Failed', error.message, 'error');
         }
     };
 
@@ -394,6 +415,15 @@ export default function BlockDetailsScreen({ route = {}, navigation }) {
             </View>
 
             <BottomNav activeScreen="Blocks" />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alert.visible}
+                title={alert.title}
+                message={alert.message}
+                type={alert.type}
+                buttons={alert.buttons}
+            />
         </View>
     );
 }

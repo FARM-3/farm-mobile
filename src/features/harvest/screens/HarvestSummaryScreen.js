@@ -1,4 +1,4 @@
-// src/features/harvest/screens/HarvestSummaryScreen.js
+e// src/features/harvest/screens/HarvestSummaryScreen.js
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -39,6 +39,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     const [filteredData, setFilteredData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
+    const [unsyncedCount, setUnsyncedCount] = useState(0);
 
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
@@ -117,8 +118,24 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         
         let finalRecords = [...localRecords, ...uniqueRemoteRecords];
         
-        // Sorting by date (newest first)
-        finalRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Sorting by date (newest first), then by timestamp if dates are equal
+        finalRecords.sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            const dateDiff = dateB - dateA;
+
+            // If dates are different, sort by date
+            if (dateDiff !== 0) return dateDiff;
+
+            // If dates are the same, sort by timestamp (newest first)
+            const timeA = a.timestamp || 0;
+            const timeB = b.timestamp || 0;
+            return timeB - timeA;
+        });
+
+        // Count unsynced records
+        const pendingRecords = finalRecords.filter(r => !r.isSynced);
+        setUnsyncedCount(pendingRecords.length);
 
         setAllRecords(finalRecords);
         setIsLoading(false);
@@ -165,6 +182,20 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         });
         return unsubscribe;
     }, [navigation, loadAndSyncData]);
+
+    const handleSyncPress = async () => {
+        if (unsyncedCount > 0) {
+            // If there are unsynced records, sync them
+            await loadAndSyncData();
+        } else {
+            // If no unsynced records, show a message
+            Alert.alert(
+                "No Records to Sync",
+                "All harvest records are already synced to the cloud.",
+                [{ text: "OK" }]
+            );
+        }
+    };
 
 
     // --- Export Functionality
@@ -316,7 +347,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <SimpleHeader title="Rugyeyo Harvests" />
+            <SimpleHeader title="Rugyeyo Harvests" unsyncedCount={unsyncedCount} onSync={handleSyncPress} />
             <View style={styles.container}>
 
                 {/* Add New Harvest Button */}
