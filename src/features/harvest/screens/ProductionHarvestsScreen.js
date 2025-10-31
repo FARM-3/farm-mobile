@@ -89,8 +89,29 @@ export default function ProductionHarvestsScreen({ navigation }) {
 
         let finalRecords = [...localRecords, ...uniqueRemoteRecords];
 
-        // Sort by date (newest first)
-        finalRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Sort by date (newest first), with additional sorting criteria
+        finalRecords.sort((a, b) => {
+            // Try to sort by date first
+            if (a.date && b.date) {
+                return new Date(b.date) - new Date(a.date);
+            }
+            // Try to sort by timestamp if available
+            if (a.timestamp && b.timestamp) {
+                return b.timestamp - a.timestamp;
+            }
+            // Try to sort by created_at or updated_at
+            if (a.created_at && b.created_at) {
+                return new Date(b.created_at) - new Date(a.created_at);
+            }
+            if (a.updated_at && b.updated_at) {
+                return new Date(b.updated_at) - new Date(a.updated_at);
+            }
+            // Fallback: sort by ID (assuming higher ID = newer)
+            if (a.id && b.id) {
+                return String(b.id).localeCompare(String(a.id));
+            }
+            return 0;
+        });
 
         setAllRecords(finalRecords);
         setIsLoading(false);

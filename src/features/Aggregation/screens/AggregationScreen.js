@@ -580,18 +580,16 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
             if (a.timestamp && b.timestamp) {
                 return b.timestamp - a.timestamp;
             }
-            // For harvests, try to sort by date_of_delivery (newest first)
+            // Try to sort by date_of_delivery for harvests (newest first)
             if (a.date_of_delivery && b.date_of_delivery) {
                 return new Date(b.date_of_delivery) - new Date(a.date_of_delivery);
             }
-            // For farmers, try to sort by created_at or started_farming (newest first)
-            if (isFarmer) {
-                if (a.created_at && b.created_at) {
-                    return new Date(b.created_at) - new Date(a.created_at);
-                }
-                if (a.started_farming && b.started_farming) {
-                    return new Date(b.started_farming) - new Date(a.started_farming);
-                }
+            // Try to sort by created_at or updated_at
+            if (a.created_at && b.created_at) {
+                return new Date(b.created_at) - new Date(a.created_at);
+            }
+            if (a.updated_at && b.updated_at) {
+                return new Date(b.updated_at) - new Date(a.updated_at);
             }
             // Fallback: sort by ID (assuming higher ID = newer)
             if (a.id && b.id) {

@@ -104,8 +104,29 @@ const BlockSummary = ({ route = {}, navigation }) => {
 
     let finalRecords = [...localRecords, ...uniqueRemoteRecords];
 
-    // Sort by date (newest first)
-    finalRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Sort by date (newest first), with additional sorting criteria
+    finalRecords.sort((a, b) => {
+        // Try to sort by date first
+        if (a.date && b.date) {
+            return new Date(b.date) - new Date(a.date);
+        }
+        // Try to sort by timestamp if available
+        if (a.timestamp && b.timestamp) {
+            return b.timestamp - a.timestamp;
+        }
+        // Try to sort by created_at or updated_at
+        if (a.created_at && b.created_at) {
+            return new Date(b.created_at) - new Date(a.created_at);
+        }
+        if (a.updated_at && b.updated_at) {
+            return new Date(b.updated_at) - new Date(a.updated_at);
+        }
+        // Fallback: sort by ID (assuming higher ID = newer)
+        if (a.id && b.id) {
+            return String(b.id).localeCompare(String(a.id));
+        }
+        return 0;
+    });
 
     setAllRecords(finalRecords);
     setIsLoading(false);
@@ -160,55 +181,52 @@ const BlockSummary = ({ route = {}, navigation }) => {
   };
 
   const handleEdit = (item) => {
-    showAlert(
-      'Edit Block',
-      'Edit functionality will be implemented soon.',
-      'info',
-      [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }]
-    );
+    // Navigate to block registration form with pre-filled data for editing
+    navigation.navigate('BlockRegistration', {
+      editMode: true,
+      blockData: item
+    });
   };
 
   const handleDelete = (item) => {
     showAlert(
       'Delete Block Record',
-      `Are you sure you want to delete block ${item.block_id}?`,
-      'warning',
+      `Are you sure you want to delete block ${item.block_id}? This action cannot be undone.`,
       [
         { text: 'Cancel', onPress: () => setAlert(prev => ({ ...prev, visible: false })) },
         {
           text: 'Delete',
           onPress: async () => {
-            setAlert(prev => ({ ...prev, visible: false }));
             try {
-              setIsLoading(true);
-
-              // If block is synced (has been uploaded to server), delete from API
+              // If it's a synced block, try to delete from API first
               if (item.isSynced) {
-                await deleteBlock(item.block_id);
-                console.log('[BlockSummary] Block deleted from server successfully');
-              } else {
-                // If block is local/draft, remove from local storage
-                const unsynced = await getUnsyncedBlocks();
-                const updatedRecords = unsynced.records.filter(r => r.block_id !== item.block_id);
-                await AsyncStorage.setItem(BLOCK_SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
-                console.log('[BlockSummary] Block deleted from local storage successfully');
+                const netState = await NetInfo.fetch();
+                if (netState.isConnected && netState.isInternetReachable) {
+                  try {
+                    await ApiService.delete(`harvests/blocks/${item.block_id}/`);
+                  } catch (apiError) {
+                    console.error('API delete failed:', apiError);
+                    Alert.alert('Warning', 'Could not delete from cloud, but will remove from local records.');
+                  }
+                }
               }
 
-              // Reload data to reflect deletion
+              // Remove from local storage if it's a pending block
+              if (!item.isSynced) {
+                const pending = await AsyncStorage.getItem(BLOCK_SYNC_QUEUE_KEY);
+                if (pending) {
+                  const pendingBlocks = JSON.parse(pending);
+                  const updatedQueue = pendingBlocks.filter(b => b.block_id !== item.block_id);
+                  await AsyncStorage.setItem(BLOCK_SYNC_QUEUE_KEY, JSON.stringify(updatedQueue));
+                }
+              }
+
+              // Refresh the data
               await loadData();
-              showAlert('Success', `Block ${item.block_id} deleted successfully`, 'success', [
-                { text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }
-              ]);
+              Alert.alert('Success', `Block ${item.block_id} has been deleted.`);
             } catch (error) {
-              console.error('[BlockSummary] Error deleting block:', error);
-              showAlert(
-                'Delete Failed',
-                error.response?.data?.detail || error.message || 'Failed to delete block. Please try again.',
-                'error',
-                [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }]
-              );
-            } finally {
-              setIsLoading(false);
+              console.error('Delete error:', error);
+              Alert.alert('Error', 'Failed to delete block. Please try again.');
             }
           }
         }
