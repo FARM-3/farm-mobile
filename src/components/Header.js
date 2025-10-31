@@ -99,21 +99,30 @@ const Header = ({ title = 'Rugyeyo Farm', navigation: propNavigation, onNavigate
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('[Header] Starting logout process...');
+
+              // Clear all authentication tokens and data
               await AuthService.logout();
+              console.log('[Header] Tokens cleared');
+
               // Clear the hasSeenWelcome flag so user sees Welcome screen again
               await AsyncStorage.removeItem('hasSeenWelcome');
-              console.log('[Header] Logout successful, cleared hasSeenWelcome flag');
+              console.log('[Header] Welcome flag removed');
 
-              // Navigate to Welcome screen
-              if (onNavigate) {
+              // Reset navigation stack to Welcome screen
+              // This prevents back button from accessing authenticated screens
+              if (navigation) {
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Welcome' }],
+                });
+                console.log('[Header] Navigation reset to Welcome screen');
+              } else if (onNavigate) {
                 onNavigate('Welcome');
-              } else if (navigation) {
-                // First navigate to Welcome
-                navigation.navigate('Welcome');
               }
             } catch (error) {
               console.error('[Header] Logout error:', error);
-              Alert.alert('Error', 'Failed to logout');
+              Alert.alert('Error', 'Failed to logout. Please try again.');
             }
           }
         }

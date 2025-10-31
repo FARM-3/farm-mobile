@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from "react";
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUnsyncedRecords, postHarvestRecord, removeRecordFromQueue } from '../../../services/harvestRecord';
+import { getUnsyncedRecords, postHarvestRecord, removeRecordFromQueue, updateHarvestRecord } from '../../../services/harvestRecord';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomPicker from '../../../components/CustomPicker';
+import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
@@ -117,15 +118,8 @@ const BLOCK_DATA = [
     { id: "block06", name: "Block 06" },
 ];
 
-// Staff IDs - these are auto-generated strings like "RF001", "RF002"
-// You need to fetch these from /api/staff/ endpoint or add them manually
-const STAFF_DATA = [
-    { id: "RF001", name: "Grace" },
-    { id: "RF002", name: "Kevin" },
-    { id: "RF003", name: "Edna" },
-    { id: "RF004", name: "John" },
-    { id: "RF005", name: "Mary" },
-];
+// Staff data is now fetched dynamically from the API via SearchableStaffPicker
+// No longer using hardcoded data
 
 
 
@@ -219,11 +213,11 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
         />
         <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
 
-        <CustomPicker
+        <SearchableStaffPicker
             label="Paid By"
-            selectedValue={formData.paidBy}
-            onValueChange={(selectedId) => updateField('paidBy', selectedId)}
-            items={STAFF_DATA}
+            selectedStaffId={formData.paidBy}
+            onStaffSelect={(staff) => updateField('paidBy', staff.id)}
+            selectedStaff={formData.selectedStaff}
         />
     </View>
 );
@@ -245,7 +239,8 @@ const initialFormState = {
     date: new Date(), // maps to date_of_delivery
     pricePerKg: "", // maps to price_per_kg
     amountPaid: "", // maps to amount_paid (auto-calculated)
-    paidBy: STAFF_DATA[0].id, // Integer PK from users table
+    paidBy: "", // Staff ID - will be set by SearchableStaffPicker
+    selectedStaff: null, // Full staff object from SearchableStaffPicker
 
     // System fields
     showDatePicker: false,
@@ -253,10 +248,40 @@ const initialFormState = {
 };
 
 
-export default function HarvestFormScreen({ navigation }) {
+export default function HarvestFormScreen({ navigation, route = {} }) {
     const [formData, setFormData] = useState(initialFormState);
     const [currentStep, setCurrentStep] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editRecordId, setEditRecordId] = useState(null);
+
+    // Initialize form with edit data if provided
+    useEffect(() => {
+        if (route.params?.editData) {
+            const editData = route.params.editData;
+            setIsEditMode(true);
+            setEditRecordId(editData.id);
+
+            // Populate form with edit data
+            const dateStr = editData.date || editData.dateReadable || new Date().toISOString();
+            const dateObj = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+
+            setFormData(prev => ({
+                ...prev,
+                workerName: editData.name || editData.workerName || '',
+                blockId: editData.block || editData.blockId || BLOCK_DATA[0].id,
+                weight: String(editData.weight || ''),
+                date: dateObj,
+                pricePerKg: String(editData.pricePerKg || ''),
+                amountPaid: String(editData.amountPaid || ''),
+                paidBy: editData.paidBy || '',
+                selectedStaff: null, // Will be populated by SearchableStaffPicker
+                generatedId: editData.id || prev.generatedId,
+            }));
+
+            console.log('[HarvestForm] Edit mode initialized with data:', editData);
+        }
+    }, [route.params?.editData]);
 
     // Update generated ID when worker name or date changes
     useEffect(() => {
@@ -444,7 +469,6 @@ export default function HarvestFormScreen({ navigation }) {
         setIsSaving(true);
 
         try {
-            // CRITICAL: Save to local database FIRST (offline-first pattern)
             const harvestData = {
                 // Fields aligned with API schema
                 workerName: formData.workerName.trim(),
@@ -461,31 +485,69 @@ export default function HarvestFormScreen({ navigation }) {
                 dateReadable: formatDateForApi(formData.date),
             };
 
-            // Save to local storage for offline sync
-            const { records: currentRecords } = await getUnsyncedRecords();
-            const updatedRecords = [...currentRecords, harvestData];
-            await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
+            if (isEditMode && editRecordId) {
+                // UPDATE MODE: Call the API to update the record
+                console.log('[HarvestForm] Updating harvest record:', editRecordId);
 
-            console.log('[HarvestForm] Saved to local storage:', harvestData);
+                // Show loading
+                Alert.alert('Updating', 'Saving changes...', [], { cancelable: false });
 
-            // Reset form
-            setFormData(initialFormState);
-            setCurrentStep(0);
+                const response = await updateHarvestRecord(editRecordId, harvestData);
 
-            // Show success message
-            Alert.alert(
-                "Saved Locally!",
-                "Your harvest record has been saved locally and is ready to sync.",
-                [
-                    {
-                        text: "OK",
-                        onPress: () => navigation.navigate('Harvests')
-                    }
-                ]
-            );
+                // Close loading alert
+                Alert.alert('', '', [{ text: 'OK' }]);
+
+                if (response.success) {
+                    Alert.alert(
+                        "Updated!",
+                        "Your harvest record has been updated successfully.",
+                        [
+                            {
+                                text: "OK",
+                                onPress: () => {
+                                    setFormData(initialFormState);
+                                    setCurrentStep(0);
+                                    setIsEditMode(false);
+                                    navigation.navigate('Harvests');
+                                }
+                            }
+                        ]
+                    );
+                } else {
+                    Alert.alert(
+                        "Update Failed",
+                        `Failed to update record. Status: ${response.status}. ${response.remoteData?.detail || ''}`
+                    );
+                    setIsSaving(false);
+                }
+            } else {
+                // CREATE MODE: Save to local storage for offline sync
+                const { records: currentRecords } = await getUnsyncedRecords();
+                const updatedRecords = [...currentRecords, harvestData];
+                await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
+
+                console.log('[HarvestForm] Saved to local storage - Full record:', JSON.stringify(harvestData, null, 2));
+                console.log('[HarvestForm] paidBy value check - type:', typeof harvestData.paidBy, 'value:', harvestData.paidBy);
+
+                // Reset form
+                setFormData(initialFormState);
+                setCurrentStep(0);
+
+                // Show success message
+                Alert.alert(
+                    "Saved Locally!",
+                    "Your harvest record has been saved locally and is ready to sync.",
+                    [
+                        {
+                            text: "OK",
+                            onPress: () => navigation.navigate('Harvests')
+                        }
+                    ]
+                );
+            }
 
         } catch (error) {
-            console.error('[HarvestForm] Local save failed:', error);
+            console.error('[HarvestForm] Save failed:', error);
             Alert.alert("Error", "Failed to save harvest. Please try again.");
             setIsSaving(false);
         }
@@ -502,14 +564,14 @@ export default function HarvestFormScreen({ navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <SimpleHeader title="New Harvest Entry" />
+            <SimpleHeader title={isEditMode ? "Edit Harvest Entry" : "New Harvest Entry"} />
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.select({ ios: "padding", android: undefined })}
             >
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
                     {/* Title */}
-                    <Text style={styles.mainTitle}>Rugyeyo Harvest Details</Text>
+                    <Text style={styles.mainTitle}>{isEditMode ? "Edit Harvest Details" : "Rugyeyo Harvest Details"}</Text>
 
                     {/* Stepper Indicator */}
                     <View style={stepStyles.indicatorContainer}>

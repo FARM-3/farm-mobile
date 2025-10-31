@@ -22,6 +22,7 @@ import Fonts from '../../../theme/fonts';
 import CoffeeColors from '../../../theme/colors';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
@@ -125,7 +126,7 @@ const harvestFieldDefinitions = [
             { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type' },
             { key: 'price_per_kg', label: 'Price per Kg (UGX)', keyboardType: 'numeric', required: true },
             { key: 'amount_paid', label: 'Amount Paid (UGX)', keyboardType: 'numeric', readOnly: true, calculated: true },
-            { key: 'paid_by', label: 'Paid By', keyboardType: 'default' },
+            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff' },
             { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
         ]
     }
@@ -1045,7 +1046,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1233,7 +1234,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
         }));
         setFarmerStep(0);
         setHarvestStep(0);
@@ -1664,6 +1665,23 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             );
                         }
 
+                        // Special handling for paid_by searchable staff picker in harvest form
+                        if (field.key === 'paid_by' && field.type === 'searchable-staff' && !isFarmer) {
+                            return (
+                                <SearchableStaffPicker
+                                    key={field.key}
+                                    label={`${field.label}${field.required ? ' *' : ''}`}
+                                    selectedStaffId={formData.paid_by}
+                                    onStaffSelect={(staff) => {
+                                        // Update both the ID and the staff object
+                                        updateForm('paid_by', staff.id);
+                                        updateForm('selectedStaff', staff);
+                                    }}
+                                    selectedStaff={formData.selectedStaff}
+                                />
+                            );
+                        }
+
                         // Default to CustomInput
                         const handleTextChange = (v) => {
                             let processedValue = v;
@@ -1924,6 +1942,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 coffee_type: record.grade || record.coffee_type || '',
                 amount_paid: String(record.amount_paid || ''),
                 paid_by: record.paid_by || record.who_paid || '',
+                selectedStaff: null, // Will be set by SearchableStaffPicker
                 harvest_id: record.id || record.harvest_id || '',
 
                 // Store additional fields for update

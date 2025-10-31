@@ -23,7 +23,8 @@ import Fonts from '../../../theme/fonts';
 import {
     fetchAllHarvestRecords,
     getUnsyncedRecords,
-    syncAllRecords
+    syncAllRecords,
+    deleteHarvestRecord
 } from '../../../services/harvestRecord';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
@@ -201,7 +202,29 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
-                        Alert.alert('Delete', 'Delete functionality will be implemented with API integration');
+                        try {
+                            // Show loading indicator
+                            Alert.alert('Deleting', 'Removing harvest record...', [], { cancelable: false });
+
+                            // Call delete API
+                            const result = await deleteHarvestRecord(item.id);
+
+                            // Close loading alert
+                            Alert.alert('', '', [{ text: 'OK' }]);
+
+                            if (result.success) {
+                                // Refresh the data
+                                await loadAndSyncData();
+                                Alert.alert('Success', 'Harvest record deleted successfully');
+                            } else {
+                                Alert.alert(
+                                    'Delete Failed',
+                                    `Failed to delete record. Status: ${result.status}. ${result.remoteData?.detail || ''}`
+                                );
+                            }
+                        } catch (error) {
+                            Alert.alert('Error', `An error occurred while deleting: ${error.message}`);
+                        }
                     }
                 }
             ]

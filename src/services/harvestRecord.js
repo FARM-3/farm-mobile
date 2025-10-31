@@ -123,6 +123,62 @@ export const fetchHarvestRecordById = async (id) => {
     }
 };
 
+/**
+ * Handles the DELETE request to remove a harvest record.
+ * @param {number} id - The integer ID of the harvest record to delete.
+ */
+export const deleteHarvestRecord = async (id) => {
+    const endpoint = `aggregation/farmer-harvest/${id}/`;
+
+    try {
+        const response = await ApiService.delete(endpoint);
+        return { success: true, status: response.status, remoteData: response.data };
+    } catch (error) {
+        const status = error.response ? error.response.status : 0;
+        const remoteData = error.response ? error.response.data : (error.message || 'Network Error');
+
+        console.error('[deleteHarvestRecord] Error details:', {
+            status,
+            remoteData,
+            endpoint,
+            id
+        });
+
+        return { success: false, status: status, remoteData: remoteData };
+    }
+};
+
+/**
+ * Handles the PUT request to update an existing harvest record.
+ * @param {number} id - The integer ID of the harvest record to update.
+ * @param {object} uiPayload - The UI payload containing updated harvest data.
+ */
+export const updateHarvestRecord = async (id, uiPayload) => {
+    const apiPayload = mapToApiPayload(uiPayload);
+    const endpoint = `aggregation/farmer-harvest/${id}/`;
+
+    console.log('[updateHarvestRecord] Original UI payload:', uiPayload);
+    console.log('[updateHarvestRecord] Mapped API payload:', apiPayload);
+
+    try {
+        const response = await ApiService.put(endpoint, apiPayload);
+        return { success: true, status: response.status, remoteData: response.data };
+    } catch (error) {
+        const status = error.response ? error.response.status : 0;
+        const remoteData = error.response ? error.response.data : (error.message || 'Network Error');
+
+        console.error('[updateHarvestRecord] Error details:', {
+            status,
+            remoteData,
+            endpoint,
+            apiPayload,
+            id
+        });
+
+        return { success: false, status: status, remoteData: remoteData };
+    }
+};
+
 
 // --- OFFLINE SYNC UTILITIES (NEW) ---
 
@@ -168,42 +224,76 @@ export const removeRecordFromQueue = async (localId) => {
 export const syncAllRecords = async () => {
     const { success, records } = await getUnsyncedRecords();
     if (!success || records.length === 0) {
-        return { syncedCount: 0, totalCount: 0 };
+        console.log('[syncAllRecords] No records to sync');
+        return { syncedCount: 0, totalCount: 0, failedRecords: [] };
     }
 
     let syncedCount = 0;
     const totalCount = records.length;
+    const failedRecords = [];
 
-    console.log(`Attempting to sync ${totalCount} local records...`);
-    console.log('[syncAllRecords] Records in queue:', records);
+    console.log(`[syncAllRecords] Attempting to sync ${totalCount} local records...`);
+    console.log('[syncAllRecords] Records in queue:', JSON.stringify(records, null, 2));
 
     // Use a deep copy to iterate over, in case the queue is modified during iteration
     for (const record of records) {
-        console.log(`[syncAllRecords] Processing record ${record.id}:`, record);
+        console.log(`[syncAllRecords] Processing record ${record.id}:`, JSON.stringify(record, null, 2));
 
-        // Validate paid_by field before attempting sync - API now expects any string
-        if (!record.paidBy || typeof record.paidBy !== 'string' || record.paidBy.trim() === '') {
-            console.warn(`[syncAllRecords] Skipping record ${record.id}: Invalid paid_by field "${record.paidBy}". Must be a non-empty string`);
+        // Validate required fields before attempting sync
+        const validationErrors = [];
+
+        if (!record.paidBy) {
+            validationErrors.push(`paidBy is missing or null`);
+        } else if (typeof record.paidBy !== 'string') {
+            validationErrors.push(`paidBy is not a string (type: ${typeof record.paidBy})`);
+        } else if (record.paidBy.trim() === '') {
+            validationErrors.push(`paidBy is an empty string`);
+        }
+
+        if (!record.workerName) {
+            validationErrors.push(`workerName is missing`);
+        }
+
+        if (!record.date) {
+            validationErrors.push(`date is missing`);
+        }
+
+        if (!record.weight && record.weight !== 0) {
+            validationErrors.push(`weight is missing`);
+        }
+
+        if (validationErrors.length > 0) {
+            console.warn(`[syncAllRecords] Skipping record ${record.id}: ${validationErrors.join(', ')}`);
+            failedRecords.push({ id: record.id, reason: validationErrors.join(', ') });
             continue;
         }
 
         // We pass the local record object which mapToApiPayload will correctly transform.
+        console.log(`[syncAllRecords] Attempting to POST record ${record.id} to API...`);
         const response = await postHarvestRecord(record);
 
         if (response.success) {
             // If successful, remove the record from the local queue
+            console.log(`[syncAllRecords] Successfully synced record ${record.id}, removing from queue...`);
             await removeRecordFromQueue(record.id);
             syncedCount++;
         } else {
             // Failed (either offline or API issue). We log it and leave it in the queue
             // for the next sync attempt.
-            console.warn(`Sync failed for record ${record.id}: Status ${response.status}`, response.remoteData);
+            console.error(`[syncAllRecords] Sync failed for record ${record.id}: Status ${response.status}`, {
+                errorMessage: response.remoteData,
+                record: record
+            });
+            failedRecords.push({ id: record.id, status: response.status, error: response.remoteData });
         }
     }
 
-    console.log(`Synchronization complete. Synced ${syncedCount} of ${totalCount} records.`);
+    console.log(`[syncAllRecords] Synchronization complete. Synced ${syncedCount} of ${totalCount} records.`);
+    if (failedRecords.length > 0) {
+        console.log(`[syncAllRecords] Failed records:`, JSON.stringify(failedRecords, null, 2));
+    }
 
-    return { syncedCount, totalCount };
+    return { syncedCount, totalCount, failedRecords };
 };
 
 

@@ -169,12 +169,26 @@ const DashboardScreen = ({ navigation }) => {
   const handleConfirmLogout = async () => {
     setLogoutModalVisible(false);
     try {
+      console.log('[Dashboard] Starting logout process...');
+
+      // Clear all authentication tokens and data
       await AuthService.logout();
+      console.log('[Dashboard] Tokens cleared');
+
+      // Remove welcome screen flag
       await AsyncStorage.removeItem('hasSeenWelcome');
-      navigation.navigate('Welcome');
+      console.log('[Dashboard] Welcome flag removed');
+
+      // Reset navigation stack to Welcome screen
+      // This prevents back button from accessing authenticated screens
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Welcome' }],
+      });
+      console.log('[Dashboard] Navigation reset to Welcome screen');
     } catch (error) {
       console.error('[Dashboard] Logout error:', error);
-      Alert.alert('Error', 'Failed to logout');
+      Alert.alert('Error', 'Failed to logout. Please try again.');
     }
   };
 

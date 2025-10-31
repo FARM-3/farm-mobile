@@ -23,7 +23,8 @@ import Fonts from '../../../theme/fonts';
 import {
     fetchAllHarvestRecords,
     getUnsyncedRecords,
-    syncAllRecords
+    syncAllRecords,
+    deleteHarvestRecord
 } from '../../../services/harvestRecord';
 // Import shared components
 import SimpleHeader from '../../../components/SimpleHeader';
@@ -64,11 +65,23 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
         if (isConnected) {
             setSyncStatus("Online: Initiating data synchronization.");
-            
+
             // 2. Attempting Sync
             const syncResult = await syncAllRecords();
+            console.log('[HarvestSummary] Sync result:', syncResult);
+
             if (syncResult.totalCount > 0) {
-                setSyncStatus(`Sync complete! ${syncResult.syncedCount} of ${syncResult.totalCount} records uploaded.`);
+                if (syncResult.syncedCount === syncResult.totalCount) {
+                    // All records synced successfully
+                    setSyncStatus(`✓ Success! All ${syncResult.syncedCount} records uploaded to cloud.`);
+                } else if (syncResult.syncedCount > 0) {
+                    // Partial success
+                    const failedCount = syncResult.totalCount - syncResult.syncedCount;
+                    setSyncStatus(`Partial: ${syncResult.syncedCount} uploaded, ${failedCount} failed. Check logs for details.`);
+                } else {
+                    // All failed
+                    setSyncStatus(`Failed: Could not sync ${syncResult.totalCount} records. Check connectivity and try again.`);
+                }
             } else {
                 setSyncStatus("Online: No pending records to sync.");
             }
@@ -266,8 +279,29 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
-                        // TODO: Implement delete functionality with API call
-                        Alert.alert('Delete', 'Delete functionality will be implemented with API integration');
+                        try {
+                            // Show loading indicator
+                            Alert.alert('Deleting', 'Removing harvest record...', [], { cancelable: false });
+
+                            // Call delete API
+                            const result = await deleteHarvestRecord(item.id);
+
+                            // Close loading alert
+                            Alert.alert('', '', [{ text: 'OK' }]);
+
+                            if (result.success) {
+                                // Refresh the data
+                                await loadAndSyncData();
+                                Alert.alert('Success', 'Harvest record deleted successfully');
+                            } else {
+                                Alert.alert(
+                                    'Delete Failed',
+                                    `Failed to delete record. Status: ${result.status}. ${result.remoteData?.detail || ''}`
+                                );
+                            }
+                        } catch (error) {
+                            Alert.alert('Error', `An error occurred while deleting: ${error.message}`);
+                        }
                     }
                 }
             ]
