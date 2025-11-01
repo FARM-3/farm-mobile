@@ -79,13 +79,21 @@ const SearchableStaffPicker = ({
             console.log('[SearchableStaffPicker] Loading staff data...');
             const result = await fetchAllStaff(true); // Use cache
 
+            console.log('[SearchableStaffPicker] API Response:', {
+                success: result.success,
+                staffCount: result.staff?.length,
+                hasError: !!result.error,
+                error: result.error,
+                fromCache: result.fromCache
+            });
+
             if (result.success && result.staff.length > 0) {
                 setStaffList(result.staff);
                 setFilteredStaff(result.staff);
                 console.log(`[SearchableStaffPicker] Loaded ${result.staff.length} staff members`);
             } else {
-                setError('No staff members found');
-                console.warn('[SearchableStaffPicker] No staff data received');
+                setError(result.error || 'No staff members found');
+                console.warn('[SearchableStaffPicker] No staff data received:', result);
             }
         } catch (err) {
             setError('Failed to load staff members');
@@ -230,7 +238,10 @@ const SearchableStaffPicker = ({
             {/* Button to open modal */}
             <TouchableOpacity
                 style={styles.pickerButton}
-                onPress={() => setModalVisible(true)}
+                onPress={() => {
+                    console.log('[SearchableStaffPicker] Opening modal, staff list size:', staffList.length);
+                    setModalVisible(true);
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
                 <View style={styles.buttonContent}>

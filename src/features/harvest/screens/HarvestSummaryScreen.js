@@ -382,7 +382,9 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
             <SimpleHeader title="Rugyeyo Harvests" unsyncedCount={unsyncedCount} onSync={handleSyncPress} />
-            <View style={styles.container}>
+            {/* Main scrollable content container */}
+            <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <View style={styles.container}>
 
                 {/* Add New Harvest Button */}
                 <TouchableOpacity
@@ -463,9 +465,11 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                 renderItem={renderRow}
                 keyExtractor={(item, index) => item.id?.toString() || index.toString()}
                 ListEmptyComponent={<Text style={styles.emptyText}>No harvest records found matching your filters.</Text>}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 0 }}
             />
+                </View>
             </View>
+            {/* BottomNav now part of layout, not floating */}
             <BottomNav activeScreen="Harvests" />
         </View>
     );

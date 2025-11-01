@@ -565,6 +565,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
             <SimpleHeader title={isEditMode ? "Edit Harvest Entry" : "New Harvest Entry"} />
+            <View style={{ flex: 1 }}>
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.select({ ios: "padding", android: undefined })}
@@ -669,6 +670,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                     <View style={{ height: 100 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
+            </View>
             <BottomNav activeScreen="Harvests" onNavigate={(screen) => navigation.navigate(screen)} />
         </View>
     );

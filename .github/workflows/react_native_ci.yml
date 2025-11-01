@@ -1,0 +1,38 @@
+
+
+name: React Native CI - Test & Lint
+
+on:
+  push:
+    branches: [ "main" ] # Runs when code is merged/pushed to main
+  pull_request:
+    branches: [ "main" ] # Runs when a Pull Request targets main
+
+jobs:
+  test_and_lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        # Use an LTS version of Node that is compatible with your project
+        node-version: '18' 
+        # Caching speeds up dependency installation
+        cache: 'npm' # Correctly set to 'npm'
+
+    - name: Install Dependencies (using npm ci)
+      # This step uses 'npm ci' which is faster and locks to package-lock.json
+      # Using --legacy-peer-deps due to React version peer dependency conflicts
+      run: npm ci --legacy-peer-deps
+
+    - name: Run ESLint (Linting)
+      # Assuming you have a 'lint' script in your package.json
+      run: npm run lint
+
+    - name: Run Unit Tests (Jest)
+      # Assuming you have a 'test' script in your package.json
+      run: npm run test -- --ci

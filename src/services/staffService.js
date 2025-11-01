@@ -53,9 +53,11 @@ export const fetchAllStaff = async (useCache = true) => {
         }
 
         console.log('[staffService] Fetching staff from API...');
-        const endpoint = 'users/'; // Endpoint to fetch all users/staff
+        const endpoint = 'staff/'; // Correct endpoint for fetching all staff members
 
+        console.log('[staffService] Making API call to endpoint:', endpoint);
         const response = await ApiService.get(endpoint);
+        console.log('[staffService] API response received:', { status: response.status, dataType: typeof response.data, isArray: Array.isArray(response.data), dataKeys: response.data ? Object.keys(response.data) : null });
 
         let staffList = [];
 
@@ -76,8 +78,8 @@ export const fetchAllStaff = async (useCache = true) => {
 
         // Transform API staff data to internal format
         const formattedStaff = staffList.map((staff, index) => ({
-            id: staff.id || staff.pk || staff._id || `staff_${index}`,
-            displayName: formatStaffName(staff),
+            id: staff.staff_id || staff.id || staff.pk || staff._id || `staff_${index}`,
+            displayName: staff.full_name || formatStaffName(staff),
             firstName: staff.first_name || staff.firstName || '',
             lastName: staff.last_name || staff.lastName || '',
             email: staff.email || '',
@@ -88,6 +90,9 @@ export const fetchAllStaff = async (useCache = true) => {
         }));
 
         console.log(`[staffService] Fetched ${formattedStaff.length} staff members`);
+        if (formattedStaff.length > 0) {
+            console.log('[staffService] Sample staff member:', formattedStaff[0]);
+        }
 
         // Cache the results
         if (useCache) {
@@ -99,7 +104,7 @@ export const fetchAllStaff = async (useCache = true) => {
         console.error('[staffService] Error fetching staff:', {
             status: error.response?.status,
             message: error.message,
-            endpoint: 'users/'
+            endpoint: 'staff/'
         });
 
         // Fallback to cache if API fails

@@ -23,6 +23,7 @@ import CoffeeColors from '../../../theme/colors';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
+import CustomAlert from '../../../components/CustomAlert';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
@@ -1066,6 +1067,9 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     // State for sync status message
     const [syncStatus, setSyncStatus] = useState('');
 
+    // State for custom alert modal
+    const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
+
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
         if (route?.params?.activeTab || route?.params?.viewMode) {
@@ -1154,36 +1158,118 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             const farmerDrafts = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
             const harvestDrafts = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
 
-            // Sync farmer drafts
+            console.log('[handleSyncRecords] Starting sync...');
+            console.log('[handleSyncRecords] Farmer drafts to sync:', farmerDrafts.length);
+            console.log('[handleSyncRecords] Harvest drafts to sync:', harvestDrafts.length);
+
+            let successfullysynced = 0;
+            let failedSync = 0;
+            const failedDrafts = [];
+
+            // Sync farmer drafts - track which ones succeed
+            const syncedFarmerIds = [];
             for (const draft of farmerDrafts) {
                 try {
+                    console.log(`[handleSyncRecords] Syncing farmer: ${draft.id}`);
                     await submitFarmer(draft);
+                    syncedFarmerIds.push(draft.id);
+                    successfullysynced++;
+                    console.log(`[handleSyncRecords] ✓ Farmer synced: ${draft.id}`);
                 } catch (e) {
-                    console.error('[handleSyncRecords] Error syncing farmer:', e);
+                    failedSync++;
+                    failedDrafts.push({ type: 'farmer', id: draft.id, error: e.message });
+                    console.error('[handleSyncRecords] ✗ Error syncing farmer:', draft.id, e.message);
                 }
             }
 
-            // Sync harvest drafts
+            // Sync harvest drafts - track which ones succeed
+            const syncedHarvestIds = [];
             for (const draft of harvestDrafts) {
                 try {
+                    console.log(`[handleSyncRecords] Syncing harvest: ${draft.id}`);
                     await submitHarvest(draft);
+                    syncedHarvestIds.push(draft.id);
+                    successfullysynced++;
+                    console.log(`[handleSyncRecords] ✓ Harvest synced: ${draft.id}`);
                 } catch (e) {
-                    console.error('[handleSyncRecords] Error syncing harvest:', e);
+                    failedSync++;
+                    failedDrafts.push({ type: 'harvest', id: draft.id, error: e.message });
+                    console.error('[handleSyncRecords] ✗ Error syncing harvest:', draft.id, e.message);
                 }
             }
 
-            // Clear drafts after successful sync
-            await AsyncStorage.removeItem('farmer_drafts');
-            await AsyncStorage.removeItem('harvest_drafts');
+            // Only remove drafts that were successfully synced
+            console.log(`[handleSyncRecords] Successfully synced: ${successfullysynced}, Failed: ${failedSync}`);
+
+            if (syncedFarmerIds.length > 0) {
+                const remainingFarmerDrafts = farmerDrafts.filter(d => !syncedFarmerIds.includes(d.id));
+                if (remainingFarmerDrafts.length > 0) {
+                    await AsyncStorage.setItem('farmer_drafts', JSON.stringify(remainingFarmerDrafts));
+                } else {
+                    await AsyncStorage.removeItem('farmer_drafts');
+                }
+            }
+
+            if (syncedHarvestIds.length > 0) {
+                const remainingHarvestDrafts = harvestDrafts.filter(d => !syncedHarvestIds.includes(d.id));
+                if (remainingHarvestDrafts.length > 0) {
+                    await AsyncStorage.setItem('harvest_drafts', JSON.stringify(remainingHarvestDrafts));
+                } else {
+                    await AsyncStorage.removeItem('harvest_drafts');
+                }
+            }
 
             // Reload records and update count
             await loadRecords();
             await countUnsyncedRecords();
 
-            Alert.alert('Success', 'All records synced successfully!');
+            // Show alert based on sync results
+            if (failedSync === 0) {
+                // All synced successfully
+                setAlertConfig({
+                    visible: true,
+                    title: '✓ Sync Successful',
+                    message: `${successfullysynced} record${successfullysynced !== 1 ? 's have' : ' has'} been synced to the cloud successfully!`,
+                    type: 'success',
+                    buttons: [
+                        { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+                    ]
+                });
+            } else if (successfullysynced > 0) {
+                // Some synced, some failed
+                setAlertConfig({
+                    visible: true,
+                    title: '⚠ Partial Sync',
+                    message: `Successfully synced ${successfullysynced} record${successfullysynced !== 1 ? 's' : ''}, but ${failedSync} record${failedSync !== 1 ? 's' : ''} failed. The failed records remain in your pending list.`,
+                    type: 'warning',
+                    buttons: [
+                        { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+                    ]
+                });
+            } else {
+                // All failed
+                setAlertConfig({
+                    visible: true,
+                    title: 'Sync Failed',
+                    message: 'All records failed to sync. Please check your internet connection and try again. Your records are still saved locally.',
+                    type: 'error',
+                    buttons: [
+                        { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+                    ]
+                });
+            }
         } catch (error) {
-            console.error('[handleSyncRecords] Sync failed:', error);
-            Alert.alert('Error', 'Failed to sync records. Please try again.');
+            console.error('[handleSyncRecords] Sync error:', error);
+            // Show custom error alert
+            setAlertConfig({
+                visible: true,
+                title: 'Sync Error',
+                message: 'An unexpected error occurred during sync. Please try again.',
+                type: 'error',
+                buttons: [
+                    { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+                ]
+            });
         }
     };
 
@@ -1526,6 +1612,12 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         const setFormData = isFarmer ? updateFarmerForm : updateHarvestForm; // FIXED: Use proper update functions for both forms
         const currentStepFields = steps[currentStep];
 
+        // Debug log
+        if (!isFarmer && currentStep === 1) {
+            console.log('[AggregationScreen] Rendering harvest form step 2 (Quality & Payment)');
+            console.log('[AggregationScreen] Fields in step:', currentStepFields.fields.map(f => ({ key: f.key, type: f.type })));
+        }
+
         const updateForm = (key, value) => {
             setFormData(key, value);
         };
@@ -1665,6 +1757,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
                         // Special handling for paid_by searchable staff picker in harvest form
                         if (field.key === 'paid_by' && field.type === 'searchable-staff' && !isFarmer) {
+                            console.log('[AggregationScreen] Rendering SearchableStaffPicker for paid_by field');
                             return (
                                 <SearchableStaffPicker
                                     key={field.key}
@@ -2157,6 +2250,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 onSync={handleSyncRecords}
             />
 
+            {/* Main content container - BottomNav will sit below this */}
+            <View style={{ flex: 1 }}>
             {/* FIXED: KeyboardAvoidingView wraps entire scrollable content - optimized for Android */}
             <KeyboardAvoidingView
                 style={styles.container}
@@ -2165,7 +2260,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             >
                 <ScrollView
                     style={{ flex: 1 }}
-                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
+                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
                     keyboardShouldPersistTaps="always"
                     showsVerticalScrollIndicator={true}
                     nestedScrollEnabled={true}
@@ -2235,7 +2330,19 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 />
             )}
 
+            </View>
+
+            {/* BottomNav now part of layout, not floating */}
             <BottomNav onNavigate={onNavigate} active="Aggregation" />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 };
@@ -2257,7 +2364,6 @@ const styles = StyleSheet.create({
     },
     contentWrapper: {
         flex: 1, // FIXED: Takes remaining space after tabs/header
-        paddingBottom: 100, // Make room for BottomNav
     },
     contentContainer: {
         flexGrow: 1,

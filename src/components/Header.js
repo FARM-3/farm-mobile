@@ -7,6 +7,7 @@ import CoffeeColors from '../theme/colors';
 import AuthService from '../services/AuthService';
 import SyncService from '../services/SyncService';
 import { syncAllRecords, getUnsyncedRecords } from '../services/harvestRecord';
+import CustomAlert from './CustomAlert';
 
 /**
  * Unified Header Component
@@ -19,6 +20,7 @@ const Header = ({ title = 'Rugyeyo Farm', navigation: propNavigation, onNavigate
   const navigation = propNavigation || hookNavigation;
   const [syncStatus, setSyncStatus] = React.useState({ pending: 0 });
   const [isSyncing, setIsSyncing] = React.useState(false);
+  const [alertConfig, setAlertConfig] = React.useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
 
   // Check if we're on a harvest-related screen
   const isHarvestScreen = route?.name === 'Harvests' || route?.name === 'HarvestDetails' || route?.name === 'HarvestForm';
@@ -45,44 +47,85 @@ const Header = ({ title = 'Rugyeyo Farm', navigation: propNavigation, onNavigate
     }
   };
 
+  const showAlert = (title, message, type = 'info', buttons = []) => {
+    const defaultButtons = buttons.length > 0 ? buttons : [
+      { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+    ];
+
+    setAlertConfig({
+      visible: true,
+      title,
+      message,
+      type,
+      buttons: defaultButtons,
+    });
+  };
+
   const handleSync = async () => {
     setIsSyncing(true);
     try {
       let result;
 
       if (isHarvestScreen) {
-        // Sync harvest records (silent sync, no success message)
+        // Sync harvest records
         result = await syncAllRecords();
 
-        // Only show alerts for failures or partial syncs
+        // Show alerts based on sync result
         if (result.totalCount === 0) {
-          Alert.alert('Nothing to Sync', 'All harvest records are already synced.');
+          showAlert(
+            'Nothing to Sync',
+            'All harvest records are already synced.',
+            'info'
+          );
+        } else if (result.syncedCount === result.totalCount) {
+          // All records synced successfully
+          showAlert(
+            '✓ Sync Successful',
+            `All ${result.syncedCount} records have been uploaded to the cloud successfully!`,
+            'success'
+          );
         } else if (result.syncedCount > 0 && result.syncedCount < result.totalCount) {
-          Alert.alert(
+          // Partial success
+          const failedCount = result.totalCount - result.syncedCount;
+          showAlert(
             'Partial Sync',
-            `Synced ${result.syncedCount} of ${result.totalCount} records. Some records failed to sync.`
+            `Successfully synced ${result.syncedCount} of ${result.totalCount} records.\n\n${failedCount} record${failedCount > 1 ? 's' : ''} failed to sync. Please check your internet connection and try again.`,
+            'warning'
           );
         } else if (result.syncedCount === 0 && result.totalCount > 0) {
-          Alert.alert(
+          // All failed
+          showAlert(
             'Sync Failed',
-            'Could not sync records. Please check your internet connection and try again.'
+            `Could not sync ${result.totalCount} record${result.totalCount > 1 ? 's' : ''}. Please check your internet connection and try again.`,
+            'error'
           );
         }
-        // No message on complete success
       } else {
         // Use general sync service for other screens
         result = await SyncService.syncAll();
 
         if (result.success) {
-          Alert.alert('Sync Complete', result.message);
+          showAlert(
+            '✓ Sync Complete',
+            result.message || 'All records have been synced successfully!',
+            'success'
+          );
         } else {
-          Alert.alert('Sync Incomplete', result.message);
+          showAlert(
+            'Sync Incomplete',
+            result.message || 'Some records could not be synced. Please try again.',
+            'warning'
+          );
         }
       }
 
       await loadSyncStatus();
     } catch (error) {
-      Alert.alert('Sync Failed', error.message || 'Failed to sync data');
+      showAlert(
+        'Sync Failed',
+        error.message || 'Failed to sync data. Please try again.',
+        'error'
+      );
     } finally {
       setIsSyncing(false);
     }
@@ -172,6 +215,15 @@ const Header = ({ title = 'Rugyeyo Farm', navigation: propNavigation, onNavigate
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Custom Alert Modal */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        buttons={alertConfig.buttons}
+      />
     </View>
   );
 };
