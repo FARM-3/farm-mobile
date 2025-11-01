@@ -16,6 +16,11 @@ export default [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true
+        }
+      },
       globals: {
         // React Native globals
         __DEV__: 'readonly',
@@ -31,12 +36,17 @@ export default [
         test: 'readonly',
         expect: 'readonly',
         beforeEach: 'readonly',
-        afterEach: 'readonly'
+        afterEach: 'readonly',
+        // Jest globals
+        jest: 'readonly'
       }
     },
     rules: {
       'no-unused-vars': 'warn',
-      'no-console': 'off'
+      'no-console': 'off',
+      'no-undef': 'off',
+      'no-useless-catch': 'warn',
+      'no-constant-binary-expression': 'warn'
     }
   }
 ];
