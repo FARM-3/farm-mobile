@@ -8,7 +8,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "clear-cache": "watchman watch-del-all && rm -rf $TMPDIR/metro-* && rm -rf $TMPDIR/haste-* && rm -rf node_modules && npm install"
+    "clear-cache": "watchman watch-del-all && rm -rf $TMPDIR/metro-* && rm -rf $TMPDIR/haste-* && rm -rf node_modules && npm install",
+    "lint": "eslint .",
+    "test": "jest"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -38,7 +40,11 @@
   },
   "private": true,
   "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
+    "eslint": "^9.39.0",
+    "jest": "^30.2.0",
     "typescript": "^5.9.3"
   }
 }
