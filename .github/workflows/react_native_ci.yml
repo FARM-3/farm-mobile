@@ -4,9 +4,9 @@ name: React Native CI - Test & Lint
 
 on:
   push:
-    branches: [ "main" ] # Runs when code is merged/pushed to main
+    branches: [ "master" ] # Runs when code is merged/pushed to master
   pull_request:
-    branches: [ "main" ] # Runs when a Pull Request targets main
+    branches: [ "master" ] # Runs when a Pull Request targets master
 
 jobs:
   test_and_lint:
