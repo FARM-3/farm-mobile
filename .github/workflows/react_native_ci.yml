@@ -4,9 +4,9 @@ name: React Native CI - Test & Lint
 
 on:
   push:
-    branches: [ "master" ] # Runs when code is merged/pushed to master
+    branches: [ "main" ] # Runs when code is merged/pushed to main
   pull_request:
-    branches: [ "master" ] # Runs when a Pull Request targets master
+    branches: [ "main" ] # Runs when a Pull Request targets main
 
 jobs:
   test_and_lint:
@@ -26,7 +26,8 @@ jobs:
 
     - name: Install Dependencies (using npm ci)
       # This step uses 'npm ci' which is faster and locks to package-lock.json
-      run: npm ci
+      # Using --legacy-peer-deps due to React version peer dependency conflicts
+      run: npm ci --legacy-peer-deps
 
     - name: Run ESLint (Linting)
       # Assuming you have a 'lint' script in your package.json
