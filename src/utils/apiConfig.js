@@ -15,7 +15,7 @@
 
 // Get API URL from environment variable
 // Fallback to production URL if not set
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api-3181.onrender.com/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://142.93.94.236:8000/api';
 
 // Log current API URL on app start (helpful for debugging)
 console.log('[API Config] Using API URL:', API_BASE_URL);

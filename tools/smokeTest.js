@@ -1,18 +1,19 @@
-const https = require('https');
+const http = require('http');
 
-const API_HOST = 'api-3181.onrender.com';
+const API_HOST = '142.93.94.236';
 const API_BASE = '/api';
 
 function getFarmers() {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: API_HOST,
+      port: 8000,
   path: `${API_BASE}/aggregation/farmer/`,
       method: 'GET',
       headers: { 'Accept': 'application/json' }
     };
 
-    const req = https.request(options, (res) => {
+    const req = http.request(options, (res) => {
       let body = '';
       res.on('data', (d) => body += d);
       res.on('end', () => {
@@ -30,12 +31,13 @@ function postHarvest(payload) {
     const data = JSON.stringify(payload);
     const options = {
       hostname: API_HOST,
+      port: 8000,
   path: `${API_BASE}/aggregation/farmer-harvest/`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
     };
 
-    const req = https.request(options, (res) => {
+    const req = http.request(options, (res) => {
       let body = '';
       res.on('data', (d) => body += d);
       res.on('end', () => resolve({ status: res.statusCode, body }));

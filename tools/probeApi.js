@@ -1,12 +1,13 @@
-const https = require('https');
+const http = require('http');
 
-const HOST = 'api-3181.onrender.com';
+const HOST = '142.93.94.236';
+const PORT = 8000;
 const PATHS = ['/', '/api/', '/api/schema/', '/api/aggregation/Farmer/', '/api/aggregation/Farmer', '/api/aggregation/FarmerHarvest/', '/api/aggregation/FarmerHarvest'];
 
 function probe(path) {
   return new Promise((resolve, reject) => {
-    const options = { hostname: HOST, path, method: 'GET', headers: { Accept: 'application/json' } };
-    const req = https.request(options, (res) => {
+    const options = { hostname: HOST, port: PORT, path, method: 'GET', headers: { Accept: 'application/json' } };
+    const req = http.request(options, (res) => {
       let body = '';
       res.on('data', (d) => body += d);
       res.on('end', () => resolve({ path, status: res.statusCode, body }));

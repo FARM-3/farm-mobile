@@ -1,9 +1,9 @@
-const https = require('https');
+const http = require('http');
 
 function probe(method, path) {
   return new Promise((resolve, reject) => {
-    const options = { hostname: 'api-3181.onrender.com', path: `/api${path}`, method };
-    const req = https.request(options, (res) => {
+    const options = { hostname: '142.93.94.236', port: 8000, path: `/api${path}`, method };
+    const req = http.request(options, (res) => {
       let body = '';
       res.on('data', (d) => body += d);
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));

@@ -1135,7 +1135,7 @@ export default BlockRegistrationStepper;
 //     };
 
 //     try {
-//       const response = await fetch('https://api-3181.onrender.com/api/blocks/', {
+//       const response = await fetch('http://142.93.94.236:8000/api/blocks/', {
 //         method: 'POST',
 //         headers: {
 //           'Content-Type': 'application/json',
@@ -1733,7 +1733,7 @@ export default BlockRegistrationStepper;
 //       const pending = await AsyncStorage.getItem('pendingBlocks');
 //       const pendingBlocks = pending ? JSON.parse(pending) : [];
 //       for (const block of pendingBlocks) {
-//         await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
+//         await fetch('http://142.93.94.236:8000/api/blocks/blocks/', {
 //           method: 'POST',
 //           headers: { 'Content-Type': 'application/json' },
 //           body: JSON.stringify(block)
@@ -1769,7 +1769,7 @@ export default BlockRegistrationStepper;
 
 //       const netState = await NetInfo.fetch();
 //       if (netState.isConnected) {
-//         await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
+//         await fetch('http://142.93.94.236:8000/api/blocks/blocks/', {
 //           method: 'POST',
 //           headers: { 'Content-Type': 'application/json' },
 //           body: JSON.stringify(payload)

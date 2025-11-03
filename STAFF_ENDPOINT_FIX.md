@@ -233,7 +233,7 @@ export const fetchAllStaff = async (useCache = true) => {
 
 2. **In Postman:**
    - Method: `GET`
-   - URL: `https://api-3181.onrender.com/api/[ENDPOINT]/` (replace [ENDPOINT])
+   - URL: `http://142.93.94.236:8000/api/[ENDPOINT]/` (replace [ENDPOINT])
    - Header: `Authorization: Bearer [YOUR_ACCESS_TOKEN]`
    - Click Send
 
