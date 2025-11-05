@@ -135,14 +135,14 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
 
     return (
         <View style={stepStyles.stepContainer}>
-            <Text style={styles.heading}>1. Worker & Block Details</Text>
+            <Text style={styles.heading}>1. Rugyeyo Staff & Block Details</Text>
 
-            <Text style={styles.label}>Worker Name</Text>
+            <Text style={styles.label}>Rugyeyo Staff</Text>
             <TextInput
                 style={styles.input}
-                value={formData.workerName}
-                onChangeText={(t) => updateField('workerName', t)}
-                placeholder="Name of worker/deliverer"
+                value={formData.RugyeyoStaff}
+                onChangeText={(t) => updateField('RugyeyoStaff', t)}
+                placeholder="Name of staff"
                 autoCapitalize="words"
             />
 
