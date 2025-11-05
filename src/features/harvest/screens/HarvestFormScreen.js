@@ -227,13 +227,13 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
 
 // New steps structure based on the required fields
 const STEPS = [
-    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['workerName', 'date', 'blockId'] },
+    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['RugyeyoStaff', 'date', 'blockId'] },
     { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'pricePerKg', 'paidBy'] },
 ];
 
 const initialFormState = {
     // Harvest Details
-    workerName: "", // maps to Worker_name
+    RugyeyoStaff: "", // maps to Worker_name
     blockId: BLOCK_DATA[0].id, // Integer PK from blocks table
     weight: "", // maps to weight_on_delivery
     date: new Date(), // maps to date_of_delivery
@@ -287,9 +287,9 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     useEffect(() => {
         setFormData(prev => ({
             ...prev,
-            generatedId: generateHarvestId(prev.workerName, prev.date)
+            generatedId: generateHarvestId(prev.RugyeyoStaff, prev.date)
         }));
-    }, [formData.workerName, formData.date]);
+    }, [formData.RugyeyoStaff, formData.date]);
 
     // Auto-calculate amount paid when weight or pricePerKg changes
     useEffect(() => {
@@ -471,7 +471,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
         try {
             const harvestData = {
                 // Fields aligned with API schema
-                workerName: formData.workerName.trim(),
+                RugyeyoStaff: (formData.RugyeyoStaff || '').trim(),
                 blockId: formData.blockId, // Integer PK
                 weight: Number(formData.weight),
                 date: formData.date,

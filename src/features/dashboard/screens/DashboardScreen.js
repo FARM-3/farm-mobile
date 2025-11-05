@@ -230,12 +230,12 @@ const DashboardScreen = ({ navigation }) => {
   const quickActions = [
     {
       label: 'Record Harvest',
-      sublabel: 'Own production',
+      sublabel: 'Rugyeyo Harvest',
       color: PRIMARY_BROWN,
       screen: 'HarvestForm',
     },
     {
-      label: 'Buy Coffee',
+      label: 'Bought Coffee',
       sublabel: 'From farmers',
       color: PRIMARY_BROWN,
       screen: 'Aggregation',
@@ -397,7 +397,7 @@ const DashboardScreen = ({ navigation }) => {
           <View style={styles.statCard}>
             <View style={styles.statContent}>
               <View style={styles.statTextContainer}>
-                <Text style={styles.statLabel}>Active Blocks</Text>
+                <Text style={styles.statLabel}>Tasks</Text>
                 <Text style={styles.statValue}>{stats.blocks}</Text>
                 <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>8.5 hectares</Text>
               </View>
@@ -558,18 +558,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    gap: 1,
+    gap: 8,
   },
   headerLogo: {
-    width: 100,
-    height: 100,
+    width: 80,
+    height: 80,
   },
   rugyeyoText: {
-    fontSize: Fonts.sizes.massive,
+    fontSize: Fonts.sizes.extraLarge,
     fontWeight: Fonts.weights.bold,
     fontFamily: Fonts.bold,
     color: '#fff',
-    maxWidth: '70%',
+    flexShrink: 0,
   },
   headerGreeting: {
     flex: 1,

@@ -116,7 +116,6 @@ const harvestFieldDefinitions = [
         fields: [
             { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
             { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
-            { key: 'number_of_bags', label: 'Number of Bags', keyboardType: 'numeric' },
             { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
         ]
     },
@@ -2484,7 +2483,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     return (
         <View style={styles.screen}>
             <SimpleHeader
-                title="Aggregation Records"
+                title="External Harvest Records"
                 onBackPress={handleBackPress}
                 unsyncedCount={unsyncedCount}
                 onSync={handleSyncRecords}
