@@ -1,4 +1,4 @@
-// src/features/harvest/screens/HarvestSummaryScreen.js
+e// src/features/harvest/screens/HarvestSummaryScreen.js
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -23,7 +23,8 @@ import Fonts from '../../../theme/fonts';
 import {
     fetchAllHarvestRecords,
     getUnsyncedRecords,
-    syncAllRecords
+    syncAllRecords,
+    deleteHarvestRecord
 } from '../../../services/harvestRecord';
 // Import shared components
 import SimpleHeader from '../../../components/SimpleHeader';
@@ -39,6 +40,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     const [filteredData, setFilteredData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
+    const [unsyncedCount, setUnsyncedCount] = useState(0);
 
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
@@ -63,11 +65,23 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
         if (isConnected) {
             setSyncStatus("Online: Initiating data synchronization.");
-            
+
             // 2. Attempting Sync
             const syncResult = await syncAllRecords();
+            console.log('[HarvestSummary] Sync result:', syncResult);
+
             if (syncResult.totalCount > 0) {
-                setSyncStatus(`Sync complete! ${syncResult.syncedCount} of ${syncResult.totalCount} records uploaded.`);
+                if (syncResult.syncedCount === syncResult.totalCount) {
+                    // All records synced successfully
+                    setSyncStatus(`✓ Success! All ${syncResult.syncedCount} records uploaded to cloud.`);
+                } else if (syncResult.syncedCount > 0) {
+                    // Partial success
+                    const failedCount = syncResult.totalCount - syncResult.syncedCount;
+                    setSyncStatus(`Partial: ${syncResult.syncedCount} uploaded, ${failedCount} failed. Check logs for details.`);
+                } else {
+                    // All failed
+                    setSyncStatus(`Failed: Could not sync ${syncResult.totalCount} records. Check connectivity and try again.`);
+                }
             } else {
                 setSyncStatus("Online: No pending records to sync.");
             }
@@ -117,8 +131,24 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         
         let finalRecords = [...localRecords, ...uniqueRemoteRecords];
         
-        // Sorting by date (newest first)
-        finalRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Sorting by date (newest first), then by timestamp if dates are equal
+        finalRecords.sort((a, b) => {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            const dateDiff = dateB - dateA;
+
+            // If dates are different, sort by date
+            if (dateDiff !== 0) return dateDiff;
+
+            // If dates are the same, sort by timestamp (newest first)
+            const timeA = a.timestamp || 0;
+            const timeB = b.timestamp || 0;
+            return timeB - timeA;
+        });
+
+        // Count unsynced records
+        const pendingRecords = finalRecords.filter(r => !r.isSynced);
+        setUnsyncedCount(pendingRecords.length);
 
         setAllRecords(finalRecords);
         setIsLoading(false);
@@ -165,6 +195,20 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         });
         return unsubscribe;
     }, [navigation, loadAndSyncData]);
+
+    const handleSyncPress = async () => {
+        if (unsyncedCount > 0) {
+            // If there are unsynced records, sync them
+            await loadAndSyncData();
+        } else {
+            // If no unsynced records, show a message
+            Alert.alert(
+                "No Records to Sync",
+                "All harvest records are already synced to the cloud.",
+                [{ text: "OK" }]
+            );
+        }
+    };
 
 
     // --- Export Functionality
@@ -235,8 +279,29 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
-                        // TODO: Implement delete functionality with API call
-                        Alert.alert('Delete', 'Delete functionality will be implemented with API integration');
+                        try {
+                            // Show loading indicator
+                            Alert.alert('Deleting', 'Removing harvest record...', [], { cancelable: false });
+
+                            // Call delete API
+                            const result = await deleteHarvestRecord(item.id);
+
+                            // Close loading alert
+                            Alert.alert('', '', [{ text: 'OK' }]);
+
+                            if (result.success) {
+                                // Refresh the data
+                                await loadAndSyncData();
+                                Alert.alert('Success', 'Harvest record deleted successfully');
+                            } else {
+                                Alert.alert(
+                                    'Delete Failed',
+                                    `Failed to delete record. Status: ${result.status}. ${result.remoteData?.detail || ''}`
+                                );
+                            }
+                        } catch (error) {
+                            Alert.alert('Error', `An error occurred while deleting: ${error.message}`);
+                        }
                     }
                 }
             ]
@@ -316,8 +381,10 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <SimpleHeader title="Rugyeyo Harvests" />
-            <View style={styles.container}>
+            <SimpleHeader title="Rugyeyo Harvests" unsyncedCount={unsyncedCount} onSync={handleSyncPress} />
+            {/* Main scrollable content container */}
+            <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <View style={styles.container}>
 
                 {/* Add New Harvest Button */}
                 <TouchableOpacity
@@ -398,9 +465,11 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                 renderItem={renderRow}
                 keyExtractor={(item, index) => item.id?.toString() || index.toString()}
                 ListEmptyComponent={<Text style={styles.emptyText}>No harvest records found matching your filters.</Text>}
-                contentContainerStyle={{ paddingBottom: 100 }}
+                contentContainerStyle={{ paddingBottom: 0 }}
             />
+                </View>
             </View>
+            {/* BottomNav now part of layout, not floating */}
             <BottomNav activeScreen="Harvests" />
         </View>
     );

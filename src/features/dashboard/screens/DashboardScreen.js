@@ -169,12 +169,26 @@ const DashboardScreen = ({ navigation }) => {
   const handleConfirmLogout = async () => {
     setLogoutModalVisible(false);
     try {
+      console.log('[Dashboard] Starting logout process...');
+
+      // Clear all authentication tokens and data
       await AuthService.logout();
+      console.log('[Dashboard] Tokens cleared');
+
+      // Remove welcome screen flag
       await AsyncStorage.removeItem('hasSeenWelcome');
-      navigation.navigate('Welcome');
+      console.log('[Dashboard] Welcome flag removed');
+
+      // Reset navigation stack to Welcome screen
+      // This prevents back button from accessing authenticated screens
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Welcome' }],
+      });
+      console.log('[Dashboard] Navigation reset to Welcome screen');
     } catch (error) {
       console.error('[Dashboard] Logout error:', error);
-      Alert.alert('Error', 'Failed to logout');
+      Alert.alert('Error', 'Failed to logout. Please try again.');
     }
   };
 
@@ -238,7 +252,7 @@ const DashboardScreen = ({ navigation }) => {
       label: 'Blocks',
       sublabel: 'Field data',
       color: PRIMARY_BROWN,
-      screen: 'BlockRegistration'
+      screen: 'BlockSummary'
     }
   ];
 
@@ -267,7 +281,8 @@ const DashboardScreen = ({ navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: '#faf8f3' }}>
+      <View style={styles.container}>
       {/* Animated Header Container */}
       <Animated.View
         style={[
@@ -346,7 +361,7 @@ const DashboardScreen = ({ navigation }) => {
       </Animated.View>
 
       <Animated.ScrollView
-        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 60 }]}
+        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 60, paddingBottom: 20 }]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -479,7 +494,9 @@ const DashboardScreen = ({ navigation }) => {
           </View>
         </View>
       </Animated.ScrollView>
+      </View>
 
+      {/* BottomNav now part of layout, not floating */}
       <BottomNav activeScreen="Dashboard" />
 
       {/* Logout Confirmation Modal */}

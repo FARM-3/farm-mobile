@@ -268,6 +268,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
             <SimpleHeader title="Rugyeyo Harvests" />
 
+            <View style={{ flex: 1 }}>
             <View style={styles.container}>
                 {/* Sync Status Banner */}
                 <View style={styles.syncBanner}>
@@ -331,8 +332,9 @@ export default function ProductionHarvestsScreen({ navigation }) {
                             )}
                         </View>
                     }
-                    contentContainerStyle={{ paddingBottom: 100 }}
+                    contentContainerStyle={{ paddingBottom: 20 }}
                 />
+            </View>
             </View>
 
             <BottomNav activeScreen="Harvests" />

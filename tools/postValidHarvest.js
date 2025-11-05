@@ -1,6 +1,7 @@
-const https = require('https');
+const http = require('http');
 
-const HOST = 'api-3181.onrender.com';
+const HOST = '142.93.94.236';
+const PORT = 8000;
 const PATH = '/api/aggregation/farmer-harvest/';
 
 const payload = {
@@ -21,6 +22,7 @@ const payload = {
 const data = JSON.stringify(payload);
 const options = {
   hostname: HOST,
+  port: PORT,
   path: PATH,
   method: 'POST',
   headers: {
@@ -29,7 +31,7 @@ const options = {
   }
 };
 
-const req = https.request(options, (res) => {
+const req = http.request(options, (res) => {
   let body = '';
   res.on('data', d => body += d);
   res.on('end', () => {

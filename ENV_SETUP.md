@@ -15,16 +15,16 @@ cp .env.example .env
 
 Or manually create `.env` in the project root with:
 ```
-EXPO_PUBLIC_API_BASE_URL=https://api-3181.onrender.com/api
+EXPO_PUBLIC_API_BASE_URL=http://142.93.94.236:8000/api
 ```
 
 ### 2. Configure API URL
 
 Edit `.env` file and set your desired API URL:
 
-**Production:**
+**Production (DigitalOcean):**
 ```
-EXPO_PUBLIC_API_BASE_URL=https://api-3181.onrender.com/api
+EXPO_PUBLIC_API_BASE_URL=http://142.93.94.236:8000/api
 ```
 
 **Local Development (Backend running on localhost):**
@@ -144,14 +144,14 @@ The Expo dev server shows your IP in the terminal when you run `npm start`
 1. Edit `.env`: `EXPO_PUBLIC_API_BASE_URL=http://localhost:8000/api`
 2. Run: `npm start`
 
-### Switching to Production:
-1. Edit `.env`: `EXPO_PUBLIC_API_BASE_URL=https://api-3181.onrender.com/api`
+### Switching to Production (DigitalOcean):
+1. Edit `.env`: `EXPO_PUBLIC_API_BASE_URL=http://142.93.94.236:8000/api`
 2. Run: `npm start`
 
 ### Check Current API URL:
 Look for console log when app starts:
 ```
-[API Config] Using API URL: https://api-3181.onrender.com/api
+[API Config] Using API URL: http://142.93.94.236:8000/api
 ```
 
 ---

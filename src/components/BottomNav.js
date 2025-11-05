@@ -17,7 +17,7 @@ const BottomNav = ({ activeScreen, active }) => {
   const currentScreen = activeScreen || active || route.name;
 
   return (
-    <View style={[styles.bottomNavContainer, { bottom: -20 + insets.bottom }]} pointerEvents="box-none">
+    <View style={styles.bottomNavContainer} pointerEvents="box-none">
       <View style={[styles.bottomNavBar, { paddingBottom: insets.bottom || 20 }]}>
         <TouchableOpacity
           style={[styles.navItem, currentScreen === 'Dashboard' && styles.navItemActive]}
@@ -77,10 +77,11 @@ const BottomNav = ({ activeScreen, active }) => {
 
 const styles = StyleSheet.create({
   bottomNavContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 999,
+    // Changed from 'absolute' to default (static) positioning
+    // This makes BottomNav take up space in the normal layout flow
+    // and stay at the bottom of the screen permanently
+    width: '100%',
+    backgroundColor: '#fff',
   },
   bottomNavBar: {
     flexDirection: 'row',

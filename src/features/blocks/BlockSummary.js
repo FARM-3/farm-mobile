@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput, FlatList
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,7 +13,9 @@ import CoffeeColors from '../../theme/colors';
 import Fonts from '../../theme/fonts';
 import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
+import CustomAlert from '../../components/CustomAlert';
 import ApiService from '../../services/ApiService';
+import { deleteBlock } from '../../utils/firebaseSetup';
 
 const BLOCK_SYNC_QUEUE_KEY = "blocks_sync_queue";
 
@@ -23,6 +25,13 @@ const BlockSummary = ({ route = {}, navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
   const [searchTerm, setSearchTerm] = useState('');
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+    buttons: [],
+  });
 
   // --- OFFLINE SYNC UTILITIES ---
 
@@ -160,6 +169,17 @@ const BlockSummary = ({ route = {}, navigation }) => {
     }
   }, [route?.params?.shouldRefresh, loadData]);
 
+  const showAlert = (title, message, type = 'info', buttons = null) => {
+    const defaultButtons = [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }];
+    setAlert({
+      visible: true,
+      title,
+      message,
+      type,
+      buttons: buttons || defaultButtons,
+    });
+  };
+
   const handleEdit = (item) => {
     // Navigate to block registration form with pre-filled data for editing
     navigation.navigate('BlockRegistration', {
@@ -169,14 +189,13 @@ const BlockSummary = ({ route = {}, navigation }) => {
   };
 
   const handleDelete = (item) => {
-    Alert.alert(
+    showAlert(
       'Delete Block Record',
       `Are you sure you want to delete block ${item.block_id}? This action cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', onPress: () => setAlert(prev => ({ ...prev, visible: false })) },
         {
           text: 'Delete',
-          style: 'destructive',
           onPress: async () => {
             try {
               // If it's a synced block, try to delete from API first
@@ -348,6 +367,15 @@ const BlockSummary = ({ route = {}, navigation }) => {
       </View>
 
       <BottomNav activeScreen="Blocks" />
+
+      {/* Custom Alert Modal */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+        buttons={alert.buttons}
+      />
     </View>
   );
 };

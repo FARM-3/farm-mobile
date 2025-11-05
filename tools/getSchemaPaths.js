@@ -1,13 +1,14 @@
-const https = require('https');
+const http = require('http');
 
 const options = {
-  hostname: 'api-3181.onrender.com',
+  hostname: '142.93.94.236',
+  port: 8000,
   path: '/api/schema/',
   method: 'GET',
   headers: { Accept: 'application/json' }
 };
 
-const req = https.request(options, (res) => {
+const req = http.request(options, (res) => {
   let body = '';
   res.on('data', (d) => body += d);
   res.on('end', () => {

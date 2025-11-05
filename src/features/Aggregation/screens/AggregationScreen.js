@@ -22,6 +22,8 @@ import Fonts from '../../../theme/fonts';
 import CoffeeColors from '../../../theme/colors';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
+import CustomAlert from '../../../components/CustomAlert';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
@@ -125,7 +127,7 @@ const harvestFieldDefinitions = [
             { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type' },
             { key: 'price_per_kg', label: 'Price per Kg (UGX)', keyboardType: 'numeric', required: true },
             { key: 'amount_paid', label: 'Amount Paid (UGX)', keyboardType: 'numeric', readOnly: true, calculated: true },
-            { key: 'paid_by', label: 'Paid By', keyboardType: 'default' },
+            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff' },
             { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
         ]
     }
@@ -566,6 +568,64 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
 // --- NEW/REPLACED Table Component: Searchable Data List ---
 const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, isFarmer, farmersList = [] }) => {
     const [searchText, setSearchText] = useState('');
+    const [showSuggestions, setShowSuggestions] = useState(false);
+
+    // Generate autocomplete suggestions based on search text
+    const suggestions = useMemo(() => {
+        if (!searchText || searchText.trim() === '') {
+            return [];
+        }
+
+        const safeRecords = Array.isArray(records) ? records : [];
+        const lowerSearch = searchText.toLowerCase().trim();
+        const suggestionSet = new Set();
+        const suggestionList = [];
+
+        safeRecords.forEach(record => {
+            if (isFarmer) {
+                // For farmers: suggest names and contact
+                const firstName = record.first_name ? record.first_name.toLowerCase() : '';
+                const lastName = record.last_name ? record.last_name.toLowerCase() : '';
+                const fullName = `${record.first_name || ''} ${record.last_name || ''}`.trim();
+                const contact = record.contact ? record.contact.toLowerCase() : '';
+
+                // Check for matches
+                if (firstName.includes(lowerSearch) || lastName.includes(lowerSearch) || contact.includes(lowerSearch)) {
+                    if (fullName && !suggestionSet.has(fullName)) {
+                        suggestionSet.add(fullName);
+                        suggestionList.push({
+                            name: fullName,
+                            subtitle: contact || record.farmer_id || record.id,
+                            record
+                        });
+                    }
+                }
+            } else {
+                // For harvests: suggest farmer names
+                const farmerUID = record.name || record.farmer_uid;
+                const farmer = Array.isArray(farmersList) ? farmersList.find(f =>
+                    String(f.farmer_id) === String(farmerUID) ||
+                    String(f.uid) === String(farmerUID) ||
+                    String(f.id) === String(farmerUID)
+                ) : null;
+
+                if (farmer) {
+                    const farmerName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim();
+                    const farmerNameLower = farmerName.toLowerCase();
+                    if (farmerNameLower.includes(lowerSearch) && !suggestionSet.has(farmerName)) {
+                        suggestionSet.add(farmerName);
+                        suggestionList.push({
+                            name: farmerName,
+                            subtitle: `Harvest: ${record.date_of_delivery || 'N/A'}`,
+                            record
+                        });
+                    }
+                }
+            }
+        });
+
+        return suggestionList.slice(0, 5); // Limit to 5 suggestions
+    }, [searchText, records, isFarmer, farmersList]);
 
     // Filtering logic based on search text across all listed fields
     // FIXED: Ensure records is always an array to prevent .filter() errors
@@ -752,21 +812,61 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
             <View style={styles.tableHeaderSection}>
                 <Text style={styles.tableTitle}>{title}</Text>
 
-                {/* Search field with icon button */}
-                <View style={styles.searchContainer}>
-                    <View style={{ flex: 1 }}>
-                        <CustomInput
-                            placeholder="Search by name, ID, or contact..."
-                            value={searchText}
-                            onChangeText={setSearchText}
-                        />
+                {/* Search field with autocomplete suggestions */}
+                <View style={{ position: 'relative', zIndex: 100 }}>
+                    <View style={styles.searchContainer}>
+                        <View style={{ flex: 1 }}>
+                            <CustomInput
+                                placeholder="Search by name, ID, or contact..."
+                                value={searchText}
+                                onChangeText={(text) => {
+                                    setSearchText(text);
+                                    setShowSuggestions(text.trim().length > 0 && suggestions.length > 0);
+                                }}
+                                onFocus={() => {
+                                    setShowSuggestions(searchText.trim().length > 0 && suggestions.length > 0);
+                                }}
+                                onBlur={() => {
+                                    // Delay hiding to allow selection
+                                    setTimeout(() => setShowSuggestions(false), 200);
+                                }}
+                            />
+                        </View>
+                        <TouchableOpacity
+                            style={styles.searchButton}
+                            onPress={() => {/* Search is automatic via useMemo */}}
+                        >
+                            <Ionicons name="search" size={22} color={'#fff'} />
+                        </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                        style={styles.searchButton}
-                        onPress={() => {/* Search is automatic via useMemo */}}
-                    >
-                        <Ionicons name="search" size={22} color={'#fff'} />
-                    </TouchableOpacity>
+
+                    {/* Autocomplete suggestions dropdown */}
+                    {showSuggestions && suggestions.length > 0 && (
+                        <View style={[styles.suggestionsDropdown, { maxHeight: 250 }]}>
+                            <FlatList
+                                data={suggestions}
+                                keyExtractor={(item, index) => `${item.name}-${index}`}
+                                scrollEnabled={suggestions.length > 4}
+                                nestedScrollEnabled={true}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        style={styles.suggestionItem}
+                                        onPress={() => {
+                                            setSearchText(item.name);
+                                            setShowSuggestions(false);
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.suggestionName}>{item.name}</Text>
+                                            <Text style={styles.suggestionSubtitle}>{item.subtitle}</Text>
+                                        </View>
+                                        <Ionicons name="arrow-forward" size={16} color={PRIMARY_BROWN} />
+                                    </TouchableOpacity>
+                                )}
+                            />
+                        </View>
+                    )}
                 </View>
 
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
@@ -1043,7 +1143,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1061,6 +1161,12 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
     // State for unsynced records count
     const [unsyncedCount, setUnsyncedCount] = useState(0);
+
+    // State for sync status message
+    const [syncStatus, setSyncStatus] = useState('');
+
+    // State for custom alert modal
+    const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
 
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
@@ -1150,36 +1256,118 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             const farmerDrafts = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
             const harvestDrafts = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
 
-            // Sync farmer drafts
+            console.log('[handleSyncRecords] Starting sync...');
+            console.log('[handleSyncRecords] Farmer drafts to sync:', farmerDrafts.length);
+            console.log('[handleSyncRecords] Harvest drafts to sync:', harvestDrafts.length);
+
+            let successfullysynced = 0;
+            let failedSync = 0;
+            const failedDrafts = [];
+
+            // Sync farmer drafts - track which ones succeed
+            const syncedFarmerIds = [];
             for (const draft of farmerDrafts) {
                 try {
+                    console.log(`[handleSyncRecords] Syncing farmer: ${draft.id}`);
                     await submitFarmer(draft);
+                    syncedFarmerIds.push(draft.id);
+                    successfullysynced++;
+                    console.log(`[handleSyncRecords] ✓ Farmer synced: ${draft.id}`);
                 } catch (e) {
-                    console.error('[handleSyncRecords] Error syncing farmer:', e);
+                    failedSync++;
+                    failedDrafts.push({ type: 'farmer', id: draft.id, error: e.message });
+                    console.error('[handleSyncRecords] ✗ Error syncing farmer:', draft.id, e.message);
                 }
             }
 
-            // Sync harvest drafts
+            // Sync harvest drafts - track which ones succeed
+            const syncedHarvestIds = [];
             for (const draft of harvestDrafts) {
                 try {
+                    console.log(`[handleSyncRecords] Syncing harvest: ${draft.id}`);
                     await submitHarvest(draft);
+                    syncedHarvestIds.push(draft.id);
+                    successfullysynced++;
+                    console.log(`[handleSyncRecords] ✓ Harvest synced: ${draft.id}`);
                 } catch (e) {
-                    console.error('[handleSyncRecords] Error syncing harvest:', e);
+                    failedSync++;
+                    failedDrafts.push({ type: 'harvest', id: draft.id, error: e.message });
+                    console.error('[handleSyncRecords] ✗ Error syncing harvest:', draft.id, e.message);
                 }
             }
 
-            // Clear drafts after successful sync
-            await AsyncStorage.removeItem('farmer_drafts');
-            await AsyncStorage.removeItem('harvest_drafts');
+            // Only remove drafts that were successfully synced
+            console.log(`[handleSyncRecords] Successfully synced: ${successfullysynced}, Failed: ${failedSync}`);
+
+            if (syncedFarmerIds.length > 0) {
+                const remainingFarmerDrafts = farmerDrafts.filter(d => !syncedFarmerIds.includes(d.id));
+                if (remainingFarmerDrafts.length > 0) {
+                    await AsyncStorage.setItem('farmer_drafts', JSON.stringify(remainingFarmerDrafts));
+                } else {
+                    await AsyncStorage.removeItem('farmer_drafts');
+                }
+            }
+
+            if (syncedHarvestIds.length > 0) {
+                const remainingHarvestDrafts = harvestDrafts.filter(d => !syncedHarvestIds.includes(d.id));
+                if (remainingHarvestDrafts.length > 0) {
+                    await AsyncStorage.setItem('harvest_drafts', JSON.stringify(remainingHarvestDrafts));
+                } else {
+                    await AsyncStorage.removeItem('harvest_drafts');
+                }
+            }
 
             // Reload records and update count
             await loadRecords();
             await countUnsyncedRecords();
 
-            Alert.alert('Success', 'All records synced successfully!');
+            // Show alert based on sync results
+            if (failedSync === 0) {
+                // All synced successfully
+                setAlertConfig({
+                    visible: true,
+                    title: '✓ Sync Successful',
+                    message: `${successfullysynced} record${successfullysynced !== 1 ? 's have' : ' has'} been synced to the cloud successfully!`,
+                    type: 'success',
+                    buttons: [
+                        { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+                    ]
+                });
+            } else if (successfullysynced > 0) {
+                // Some synced, some failed
+                setAlertConfig({
+                    visible: true,
+                    title: '⚠ Partial Sync',
+                    message: `Successfully synced ${successfullysynced} record${successfullysynced !== 1 ? 's' : ''}, but ${failedSync} record${failedSync !== 1 ? 's' : ''} failed. The failed records remain in your pending list.`,
+                    type: 'warning',
+                    buttons: [
+                        { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+                    ]
+                });
+            } else {
+                // All failed
+                setAlertConfig({
+                    visible: true,
+                    title: 'Sync Failed',
+                    message: 'All records failed to sync. Please check your internet connection and try again. Your records are still saved locally.',
+                    type: 'error',
+                    buttons: [
+                        { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+                    ]
+                });
+            }
         } catch (error) {
-            console.error('[handleSyncRecords] Sync failed:', error);
-            Alert.alert('Error', 'Failed to sync records. Please try again.');
+            console.error('[handleSyncRecords] Sync error:', error);
+            // Show custom error alert
+            setAlertConfig({
+                visible: true,
+                title: 'Sync Error',
+                message: 'An unexpected error occurred during sync. Please try again.',
+                type: 'error',
+                buttons: [
+                    { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
+                ]
+            });
         }
     };
 
@@ -1206,15 +1394,16 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         }
     }, [farmerStep, activeTab, farmerForm.first_name, farmerForm.last_name]);
 
-    // Generate Harvest ID when user moves to step 1 (step 2 in UI)
+    // Generate Harvest ID when farmer name and date are available
     useEffect(() => {
-        if (harvestStep === 1 && !harvestForm.harvest_id && activeTab === 'harvests') {
+        if (activeTab === 'harvests' && harvestForm.farmer_name && harvestForm.date_of_delivery && !harvestForm.harvest_id) {
+            const harvestId = generateHarvestId(harvestForm.farmer_name, harvestForm.date_of_delivery);
             setHarvestForm(p => ({
                 ...p,
-                harvest_id: generateHarvestId()
+                harvest_id: harvestId
             }));
         }
-    }, [harvestStep, activeTab]);
+    }, [harvestForm.farmer_name, harvestForm.date_of_delivery, activeTab, harvestForm.harvest_id]);
 
     const resetForms = () => {
         // Reset boolean fields to false and string fields to ''
@@ -1227,7 +1416,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
         }));
         setFarmerStep(0);
         setHarvestStep(0);
@@ -1418,12 +1607,23 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
             setSuccessMessage(`${type === 'farmer' ? 'Farmer' : 'Harvest'} draft saved successfully at ${currentStepData.title}!`);
 
-            // Show success dialog
-            Alert.alert(
-                'Draft Saved',
-                `Your ${type} information has been saved as a draft at "${currentStepData.title}".\n\nYou can continue filling this form later.`,
-                [{ text: 'OK', onPress: () => { setViewMode('table'); setActiveTab(type + 's'); } }]
-            );
+            // Show success dialog using CustomAlert
+            setAlertConfig({
+                visible: true,
+                title: 'Draft Saved',
+                message: `Your ${type} information has been saved as a draft at "${currentStepData.title}".\n\nYou can continue filling this form later.`,
+                type: 'success',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                            setViewMode('table');
+                            setActiveTab(type + 's');
+                        }
+                    }
+                ]
+            });
 
             // Reload records to show the new draft
             await loadRecords();
@@ -1520,6 +1720,12 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         const formData = isFarmer ? farmerForm : harvestForm;
         const setFormData = isFarmer ? updateFarmerForm : updateHarvestForm; // FIXED: Use proper update functions for both forms
         const currentStepFields = steps[currentStep];
+
+        // Debug log
+        if (!isFarmer && currentStep === 1) {
+            console.log('[AggregationScreen] Rendering harvest form step 2 (Quality & Payment)');
+            console.log('[AggregationScreen] Fields in step:', currentStepFields.fields.map(f => ({ key: f.key, type: f.type })));
+        }
 
         const updateForm = (key, value) => {
             setFormData(key, value);
@@ -1658,6 +1864,24 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             );
                         }
 
+                        // Special handling for paid_by searchable staff picker in harvest form
+                        if (field.key === 'paid_by' && field.type === 'searchable-staff' && !isFarmer) {
+                            console.log('[AggregationScreen] Rendering SearchableStaffPicker for paid_by field');
+                            return (
+                                <SearchableStaffPicker
+                                    key={field.key}
+                                    label={`${field.label}${field.required ? ' *' : ''}`}
+                                    selectedStaffId={formData.paid_by}
+                                    onStaffSelect={(staff) => {
+                                        // Update both the ID and the staff object
+                                        updateForm('paid_by', staff.id);
+                                        updateForm('selectedStaff', staff);
+                                    }}
+                                    selectedStaff={formData.selectedStaff}
+                                />
+                            );
+                        }
+
                         // Default to CustomInput
                         const handleTextChange = (v) => {
                             let processedValue = v;
@@ -1783,66 +2007,152 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     };
     
     // Handler for deleting a record with confirmation
+    /**
+     * Performs the actual delete operation
+     */
+    const performDelete = async (record, type, displayName) => {
+        console.log(`[handleDelete] Deleting ${type}:`, record);
+        setLoading(true);
+
+        try {
+            // Check if this is a draft record
+            const isDraft = record._isDraft === true;
+
+            if (type === 'farmer') {
+                const farmerId = record.farmer_id || record.uid || record.id;
+                console.log('[handleDelete] Deleting farmer with ID:', farmerId);
+
+                if (isDraft) {
+                    // Delete draft from AsyncStorage
+                    const storageKey = 'farmer_drafts';
+                    const existingDrafts = await AsyncStorage.getItem(storageKey);
+                    const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
+                    const updatedDrafts = draftsArray.filter(d => d.id !== farmerId);
+                    await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
+                    console.log('[handleDelete] Draft deleted from local storage');
+                } else {
+                    // Delete submitted farmer from API
+                    await deleteFarmer(farmerId);
+                    console.log('[handleDelete] Farmer deleted from API');
+                }
+
+                // Remove from local state immediately for better UX
+                setFarmersList(prev => prev.filter(f =>
+                    f.farmer_id !== farmerId && f.uid !== farmerId && f.id !== farmerId
+                ));
+
+                // Show success using CustomAlert
+                setAlertConfig({
+                    visible: true,
+                    title: 'Success',
+                    message: `Farmer "${displayName}" has been deleted successfully.`,
+                    type: 'success',
+                    buttons: [
+                        {
+                            text: 'OK',
+                            onPress: async () => {
+                                setAlertConfig(prev => ({ ...prev, visible: false }));
+                                await loadRecords();
+                            }
+                        }
+                    ]
+                });
+            } else {
+                const harvestId = record.id || record.harvest_id;
+                console.log('[handleDelete] Deleting harvest with ID:', harvestId);
+
+                if (isDraft) {
+                    // Delete draft from AsyncStorage
+                    const storageKey = 'harvest_drafts';
+                    const existingDrafts = await AsyncStorage.getItem(storageKey);
+                    const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
+                    const updatedDrafts = draftsArray.filter(d => d.id !== harvestId);
+                    await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
+                    console.log('[handleDelete] Draft deleted from local storage');
+                } else {
+                    // Delete submitted harvest from API
+                    await deleteHarvest(harvestId);
+                    console.log('[handleDelete] Harvest deleted from API');
+                }
+
+                // Remove from local state immediately for better UX
+                setHarvestsList(prev => prev.filter(h =>
+                    h.id !== harvestId && h.harvest_id !== harvestId
+                ));
+
+                // Show success using CustomAlert
+                setAlertConfig({
+                    visible: true,
+                    title: 'Success',
+                    message: `Harvest record has been deleted successfully.`,
+                    type: 'success',
+                    buttons: [
+                        {
+                            text: 'OK',
+                            onPress: async () => {
+                                setAlertConfig(prev => ({ ...prev, visible: false }));
+                                await loadRecords();
+                            }
+                        }
+                    ]
+                });
+            }
+        } catch (error) {
+            console.error('[handleDelete] Delete failed:', error);
+            const errorMsg = error.response?.data?.detail
+                || error.response?.data?.message
+                || error.message
+                || 'Failed to delete record';
+
+            // Show error using CustomAlert
+            setAlertConfig({
+                visible: true,
+                title: 'Delete Failed',
+                message: errorMsg,
+                type: 'error',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                        }
+                    }
+                ]
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleDelete = (record, type) => {
         const displayName = type === 'farmer'
             ? `${record.first_name || ''} ${record.last_name || ''}`.trim()
             : `Harvest ${record.id || record.harvest_id || 'Unknown'}`;
 
-        Alert.alert(
-            'Delete Record',
-            `Are you sure you want to delete ${displayName}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
+        // Show confirmation using CustomAlert
+        setAlertConfig({
+            visible: true,
+            title: 'Delete Record',
+            message: `Are you sure you want to delete ${displayName}?`,
+            type: 'warning',
+            buttons: [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                    onPress: () => {
+                        setAlertConfig(prev => ({ ...prev, visible: false }));
+                    }
+                },
                 {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
-                        console.log(`[handleDelete] Deleting ${type}:`, record);
-                        setLoading(true);
-
-                        try {
-                            if (type === 'farmer') {
-                                // Delete farmer using farmer_id or uid or id
-                                const farmerId = record.farmer_id || record.uid || record.id;
-                                console.log('[handleDelete] Deleting farmer with ID:', farmerId);
-                                await deleteFarmer(farmerId);
-
-                                // Remove from local state immediately for better UX
-                                setFarmersList(prev => prev.filter(f =>
-                                    f.farmer_id !== farmerId && f.uid !== farmerId && f.id !== farmerId
-                                ));
-
-                                Alert.alert('Success', `Farmer "${displayName}" has been deleted successfully.`);
-                            } else {
-                                // Delete harvest using id or harvest_id
-                                const harvestId = record.id || record.harvest_id;
-                                console.log('[handleDelete] Deleting harvest with ID:', harvestId);
-                                await deleteHarvest(harvestId);
-
-                                // Remove from local state immediately for better UX
-                                setHarvestsList(prev => prev.filter(h =>
-                                    h.id !== harvestId && h.harvest_id !== harvestId
-                                ));
-
-                                Alert.alert('Success', `Harvest record has been deleted successfully.`);
-                            }
-
-                            // Reload records from server to ensure sync
-                            await loadRecords();
-                        } catch (error) {
-                            console.error('[handleDelete] Delete failed:', error);
-                            const errorMsg = error.response?.data?.detail
-                                || error.response?.data?.message
-                                || error.message
-                                || 'Failed to delete record';
-                            Alert.alert('Delete Failed', errorMsg);
-                        } finally {
-                            setLoading(false);
-                        }
+                        setAlertConfig(prev => ({ ...prev, visible: false }));
+                        await performDelete(record, type, displayName);
                     }
                 }
             ]
-        );
+        });
     };
 
     // Handler for editing a record - populates form with existing data
@@ -1918,6 +2228,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 coffee_type: record.grade || record.coffee_type || '',
                 amount_paid: String(record.amount_paid || ''),
                 paid_by: record.paid_by || record.who_paid || '',
+                selectedStaff: null, // Will be set by SearchableStaffPicker
                 harvest_id: record.id || record.harvest_id || '',
 
                 // Store additional fields for update
@@ -1938,8 +2249,144 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     };
 
     /**
+     * Handles the actual sync operation after confirmation
+     */
+    const performDraftSync = async (draftRecord, type, displayName) => {
+        setLoading(true);
+        try {
+            if (type === 'farmer') {
+                // Sync farmer draft to database
+                console.log('[handleSyncDraft] Submitting farmer draft to API...');
+                console.log('[handleSyncDraft] Draft record being synced:', draftRecord);
+
+                const farmerData = {
+                    uid: draftRecord.uid || draftRecord.farmer_id || draftRecord.id,
+                    first_name: draftRecord.first_name || '',
+                    last_name: draftRecord.last_name || '',
+                    gender: draftRecord.gender || '',
+                    nin: draftRecord.nin || '',
+                    date_of_birth: draftRecord.date_of_birth || '',
+                    contact: draftRecord.contact || '',
+                    email: draftRecord.email || '',
+                    farmer_type: draftRecord.farmer_type || 'individual',
+                    started_farming: draftRecord.started_farming || '',
+                    district: draftRecord.district || '',
+                    other_district: draftRecord.other_district || '',
+                    sub_county: draftRecord.sub_county || '',
+                    other_sub_county: draftRecord.other_sub_county || '',
+                    parish: draftRecord.parish || '',
+                    village: draftRecord.village || '',
+                    gps: draftRecord.gps || '',
+                    nearest_landmark: draftRecord.nearest_landmark || '',
+                    coffee_variety: draftRecord.coffee_variety || '',
+                    no_of_trees: draftRecord.no_of_trees || 0,
+                    all_your_trees: draftRecord.all_your_trees !== false,
+                    other_farms: draftRecord.other_farms || '',
+                    planted_date: draftRecord.planted_date || '',
+                    spacing: draftRecord.spacing || '',
+                    land_ownership: draftRecord.land_ownership || '',
+                    deforested: draftRecord.deforested !== false,
+                    seedling_source: draftRecord.seedling_source || '',
+                    seedling_type: draftRecord.seedling_type || '',
+                    age_of_seedlings: draftRecord.age_of_seedlings || '',
+                    practices: draftRecord.practices || [],
+                    irrigation: draftRecord.irrigation || '',
+                    fertilizers: draftRecord.fertilizers || [],
+                    pesticides: draftRecord.pesticides || [],
+                };
+
+                console.log('[handleSyncDraft] Farmer data prepared for submission:', JSON.stringify(farmerData, null, 2));
+                await submitFarmer(farmerData);
+                console.log('[handleSyncDraft] Farmer draft synced successfully');
+            } else {
+                // Sync harvest draft to database
+                console.log('[handleSyncDraft] Submitting harvest draft to API...');
+                console.log('[handleSyncDraft] Draft record being synced:', draftRecord);
+
+                const harvestData = {
+                    id: draftRecord.id || draftRecord.harvest_id,
+                    farmer_uid: draftRecord.farmer_uid || draftRecord.name || '',
+                    farmer_name: draftRecord.farmer_name || '',
+                    weight_on_delivery: draftRecord.weight_on_delivery || 0,
+                    number_of_bags: draftRecord.number_of_bags || 0,
+                    date_of_delivery: draftRecord.date_of_delivery || '',
+                    coffee_type: draftRecord.coffee_type || draftRecord.grade || '',
+                    amount_paid: draftRecord.amount_paid || '',
+                    paid_by: draftRecord.paid_by || '',
+                    weight_after_floating: draftRecord.weight_after_floating || '',
+                    cherry_color: draftRecord.cherry_color || '',
+                    stage: draftRecord.stage || '',
+                };
+
+                console.log('[handleSyncDraft] Harvest data prepared for submission:', JSON.stringify(harvestData, null, 2));
+                await submitHarvest(harvestData);
+                console.log('[handleSyncDraft] Harvest draft synced successfully');
+            }
+
+            // Remove draft from AsyncStorage
+            const storageKey = type === 'farmer' ? 'farmer_drafts' : 'harvest_drafts';
+            const existingDrafts = await AsyncStorage.getItem(storageKey);
+            const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
+            const updatedDrafts = draftsArray.filter(d => d.id !== draftRecord.id);
+            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
+
+            console.log(`[handleSyncDraft] Draft removed from local storage`);
+
+            // Update local state to remove the synced draft
+            if (type === 'farmer') {
+                setFarmersList(prev => prev.filter(f => f.id !== draftRecord.id));
+            } else {
+                setHarvestsList(prev => prev.filter(h => h.id !== draftRecord.id));
+            }
+
+            // Show success using CustomAlert
+            setAlertConfig({
+                visible: true,
+                title: 'Sync Successful',
+                message: `${type === 'farmer' ? 'Farmer' : 'Harvest'} draft "${displayName}" has been synced to the database successfully!`,
+                type: 'success',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: async () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                            // Reload records from server to ensure complete sync
+                            await loadRecords();
+                        }
+                    }
+                ]
+            });
+        } catch (error) {
+            console.error('[handleSyncDraft] Sync failed:', error);
+            const errorMsg = error.response?.data?.detail
+                || error.response?.data?.message
+                || error.message
+                || `Failed to sync ${type} draft`;
+
+            // Show error using CustomAlert
+            setAlertConfig({
+                visible: true,
+                title: 'Sync Failed',
+                message: errorMsg,
+                type: 'error',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                        }
+                    }
+                ]
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    /**
      * Handles syncing a draft record to the database.
      * This function submits an incomplete draft without requiring full form completion.
+     * Empty/missing fields will be filled with sensible defaults by submitFarmer/submitHarvest.
      */
     const handleSyncDraft = async (draftRecord) => {
         const type = draftRecord._draftType || (draftRecord.first_name ? 'farmer' : 'harvest');
@@ -1949,120 +2396,29 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         console.log(`[handleSyncDraft] Syncing ${type} draft:`, draftRecord);
 
-        Alert.alert(
-            'Sync Draft to Database',
-            `Are you sure you want to submit this ${type === 'farmer' ? 'farmer' : 'harvest'} draft to the database?\n\nYou can edit it later if needed.`,
-            [
-                { text: 'Cancel', style: 'cancel' },
+        // Show confirmation using CustomAlert
+        setAlertConfig({
+            visible: true,
+            title: 'Sync Draft to Database',
+            message: `Are you sure you want to submit this ${type === 'farmer' ? 'farmer' : 'harvest'} draft to the database?\n\nYou can edit it later if needed.`,
+            type: 'info',
+            buttons: [
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                    onPress: () => {
+                        setAlertConfig(prev => ({ ...prev, visible: false }));
+                    }
+                },
                 {
                     text: 'Sync',
-                    style: 'default',
                     onPress: async () => {
-                        setLoading(true);
-
-                        try {
-                            if (type === 'farmer') {
-                                // Sync farmer draft to database
-                                console.log('[handleSyncDraft] Submitting farmer draft to API...');
-                                const farmerData = {
-                                    uid: draftRecord.uid || draftRecord.farmer_id || draftRecord.id,
-                                    first_name: draftRecord.first_name || '',
-                                    last_name: draftRecord.last_name || '',
-                                    gender: draftRecord.gender || '',
-                                    nin: draftRecord.nin || '',
-                                    date_of_birth: draftRecord.date_of_birth || '',
-                                    contact: draftRecord.contact || '',
-                                    email: draftRecord.email || '',
-                                    farmer_type: draftRecord.farmer_type || 'individual',
-                                    started_farming: draftRecord.started_farming || '',
-                                    district: draftRecord.district || '',
-                                    other_district: draftRecord.other_district || '',
-                                    sub_county: draftRecord.sub_county || '',
-                                    other_sub_county: draftRecord.other_sub_county || '',
-                                    parish: draftRecord.parish || '',
-                                    village: draftRecord.village || '',
-                                    gps: draftRecord.gps || '',
-                                    nearest_landmark: draftRecord.nearest_landmark || '',
-                                    coffee_variety: draftRecord.coffee_variety || '',
-                                    no_of_trees: draftRecord.no_of_trees || 0,
-                                    all_your_trees: draftRecord.all_your_trees !== false,
-                                    other_farms: draftRecord.other_farms || '',
-                                    planted_date: draftRecord.planted_date || '',
-                                    spacing: draftRecord.spacing || '',
-                                    land_ownership: draftRecord.land_ownership || '',
-                                    deforested: draftRecord.deforested !== false,
-                                    seedling_source: draftRecord.seedling_source || '',
-                                    seedling_type: draftRecord.seedling_type || '',
-                                    age_of_seedlings: draftRecord.age_of_seedlings || '',
-                                    practices: draftRecord.practices || [],
-                                    irrigation: draftRecord.irrigation || '',
-                                    fertilizers: draftRecord.fertilizers || [],
-                                    pesticides: draftRecord.pesticides || [],
-                                    in_cooperative: draftRecord.in_cooperative || false,
-                                    cooperative: draftRecord.cooperative || '',
-                                };
-
-                                await submitFarmer(farmerData);
-                                console.log('[handleSyncDraft] Farmer draft synced successfully');
-                            } else {
-                                // Sync harvest draft to database
-                                console.log('[handleSyncDraft] Submitting harvest draft to API...');
-                                const harvestData = {
-                                    id: draftRecord.id || draftRecord.harvest_id,
-                                    farmer_uid: draftRecord.farmer_uid || draftRecord.name || '',
-                                    farmer_name: draftRecord.farmer_name || '',
-                                    weight_on_delivery: draftRecord.weight_on_delivery || 0,
-                                    number_of_bags: draftRecord.number_of_bags || 0,
-                                    date_of_delivery: draftRecord.date_of_delivery || '',
-                                    coffee_type: draftRecord.coffee_type || draftRecord.grade || '',
-                                    amount_paid: draftRecord.amount_paid || '',
-                                    paid_by: draftRecord.paid_by || '',
-                                    weight_after_floating: draftRecord.weight_after_floating || '',
-                                    cherry_color: draftRecord.cherry_color || '',
-                                    stage: draftRecord.stage || '',
-                                };
-
-                                await submitHarvest(harvestData);
-                                console.log('[handleSyncDraft] Harvest draft synced successfully');
-                            }
-
-                            // Remove draft from AsyncStorage
-                            const storageKey = type === 'farmer' ? 'farmer_drafts' : 'harvest_drafts';
-                            const existingDrafts = await AsyncStorage.getItem(storageKey);
-                            const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
-                            const updatedDrafts = draftsArray.filter(d => d.id !== draftRecord.id);
-                            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
-
-                            console.log(`[handleSyncDraft] Draft removed from local storage`);
-
-                            // Update local state to remove the synced draft
-                            if (type === 'farmer') {
-                                setFarmersList(prev => prev.filter(f => f.id !== draftRecord.id));
-                            } else {
-                                setHarvestsList(prev => prev.filter(h => h.id !== draftRecord.id));
-                            }
-
-                            Alert.alert(
-                                'Success',
-                                `${type === 'farmer' ? 'Farmer' : 'Harvest'} draft "${displayName}" has been synced to the database successfully!`
-                            );
-
-                            // Reload records from server to ensure complete sync
-                            await loadRecords();
-                        } catch (error) {
-                            console.error('[handleSyncDraft] Sync failed:', error);
-                            const errorMsg = error.response?.data?.detail
-                                || error.response?.data?.message
-                                || error.message
-                                || `Failed to sync ${type} draft`;
-                            Alert.alert('Sync Failed', errorMsg);
-                        } finally {
-                            setLoading(false);
-                        }
+                        setAlertConfig(prev => ({ ...prev, visible: false }));
+                        await performDraftSync(draftRecord, type, displayName);
                     }
                 }
             ]
-        );
+        });
     };
 
     const renderTableContent = () => {
@@ -2134,6 +2490,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 onSync={handleSyncRecords}
             />
 
+            {/* Main content container - BottomNav will sit below this */}
+            <View style={{ flex: 1 }}>
             {/* FIXED: KeyboardAvoidingView wraps entire scrollable content - optimized for Android */}
             <KeyboardAvoidingView
                 style={styles.container}
@@ -2142,7 +2500,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             >
                 <ScrollView
                     style={{ flex: 1 }}
-                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
+                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 20 }}
                     keyboardShouldPersistTaps="always"
                     showsVerticalScrollIndicator={true}
                     nestedScrollEnabled={true}
@@ -2212,7 +2570,19 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 />
             )}
 
+            </View>
+
+            {/* BottomNav now part of layout, not floating */}
             <BottomNav onNavigate={onNavigate} active="Aggregation" />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 };
@@ -2234,7 +2604,6 @@ const styles = StyleSheet.create({
     },
     contentWrapper: {
         flex: 1, // FIXED: Takes remaining space after tabs/header
-        paddingBottom: 100, // Make room for BottomNav
     },
     contentContainer: {
         flexGrow: 1,
@@ -3077,6 +3446,52 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 1,
+    },
+    // --- Autocomplete Suggestions Dropdown ---
+    suggestionsDropdown: {
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        right: 0,
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: VERY_LIGHT_BROWN,
+        marginTop: 4,
+        zIndex: 1000,
+        shadowColor: DARK_BROWN,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+        elevation: 5,
+        maxHeight: 200,
+    },
+    suggestionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: VERY_LIGHT_BROWN,
+    },
+    suggestionItemLast: {
+        borderBottomWidth: 0,
+    },
+    suggestionName: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: DARK_BROWN,
+        fontFamily: Fonts.semiBold,
+        flex: 1,
+    },
+    suggestionSubtitle: {
+        fontSize: 12,
+        color: TEXT_GRAY,
+        fontFamily: Fonts.regular,
+        marginTop: 2,
+    },
+    suggestionArrow: {
+        marginLeft: 8,
     },
 });
 

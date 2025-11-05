@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet, ScrollView,
-  Modal, TouchableOpacity, Alert, ActivityIndicator
+  Modal, TouchableOpacity, ActivityIndicator
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +10,7 @@ import NetInfo from '@react-native-community/netinfo';
 import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
 import CustomPicker from '../../components/CustomPicker';
+import CustomAlert from '../../components/CustomAlert';
 import CoffeeColors from '../../theme/colors';
 import Fonts from '../../theme/fonts';
 import ApiService from '../../services/ApiService';
@@ -496,7 +497,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
         return `${field} is required`;
       });
-      Alert.alert('Validation Error', errorMessages.join('\n'));
+      showAlert('Validation Error', errorMessages.join('\n'), 'error');
     }
   };
 
@@ -568,7 +569,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
       console.log(`Block synchronization complete. Synced ${syncedCount} of ${pendingBlocks.length} blocks.`);
 
       if (syncedCount > 0) {
-        Alert.alert('Sync Complete', `${syncedCount} block(s) synced successfully!${failedBlocks.length > 0 ? ` ${failedBlocks.length} failed.` : ''}`);
+        showAlert('Sync Complete', `${syncedCount} block(s) synced successfully!${failedBlocks.length > 0 ? ` ${failedBlocks.length} failed.` : ''}`, 'success');
       }
     } catch (err) {
       console.error('Sync error:', err);
@@ -626,7 +627,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
         return `${field} is required`;
       });
-      Alert.alert('Validation Error', errorMessages.join('\n'));
+      showAlert('Validation Error', errorMessages.join('\n'), 'error');
       return;
     }
 
@@ -709,7 +710,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
       }
     } catch (err) {
       console.error('Submit error:', err);
-      Alert.alert('Error', 'Failed to save block. Please try again.');
+      showAlert('Error', 'Failed to save block. Please try again.', 'error');
       setIsLoading(false);
     }
   };
@@ -798,6 +799,15 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
       </ScrollView>
 
       <BottomNav activeScreen="Blocks" onNavigate={(screen) => navigation.navigate(screen)} />
+
+      {/* Custom Alert Modal */}
+      <CustomAlert
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        type={alert.type}
+        buttons={alert.buttons}
+      />
     </View>
   );
 };
@@ -1125,7 +1135,7 @@ export default BlockRegistrationStepper;
 //     };
 
 //     try {
-//       const response = await fetch('https://api-3181.onrender.com/api/blocks/', {
+//       const response = await fetch('http://142.93.94.236:8000/api/blocks/', {
 //         method: 'POST',
 //         headers: {
 //           'Content-Type': 'application/json',
@@ -1723,7 +1733,7 @@ export default BlockRegistrationStepper;
 //       const pending = await AsyncStorage.getItem('pendingBlocks');
 //       const pendingBlocks = pending ? JSON.parse(pending) : [];
 //       for (const block of pendingBlocks) {
-//         await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
+//         await fetch('http://142.93.94.236:8000/api/blocks/blocks/', {
 //           method: 'POST',
 //           headers: { 'Content-Type': 'application/json' },
 //           body: JSON.stringify(block)
@@ -1759,7 +1769,7 @@ export default BlockRegistrationStepper;
 
 //       const netState = await NetInfo.fetch();
 //       if (netState.isConnected) {
-//         await fetch('https://api-3181.onrender.com/api/blocks/blocks/', {
+//         await fetch('http://142.93.94.236:8000/api/blocks/blocks/', {
 //           method: 'POST',
 //           headers: { 'Content-Type': 'application/json' },
 //           body: JSON.stringify(payload)

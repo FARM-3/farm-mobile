@@ -61,7 +61,8 @@ export default function ProcessingScreen({ navigation }) {
       {/* Simple White Header */}
       <SimpleHeader title="Processing" />
 
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
+      <View style={{ flex: 1 }}>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 20 }}>
         {/* Processing Cards Grid */}
         <View style={styles.grid}>
           {processes.map((process) => (
@@ -79,6 +80,7 @@ export default function ProcessingScreen({ navigation }) {
           ))}
         </View>
       </ScrollView>
+      </View>
 
       {/* Unified Bottom Navigation */}
       <BottomNav activeScreen="Processing" />
