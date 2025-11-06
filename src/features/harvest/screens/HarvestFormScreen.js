@@ -7,6 +7,8 @@ import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomPicker from '../../../components/CustomPicker';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
+import SearchableWorkerPicker from '../../../components/SearchableWorkerPicker';
+import CustomAlert from '../../../components/CustomAlert';
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
@@ -133,17 +135,22 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
         updateField('blockId', selectedId);
     };
 
+    // Handler for worker selection
+    const handleWorkerSelect = (worker) => {
+        console.log('[HarvestForm] Selected worker:', worker);
+        updateField('workerName', worker.displayName);
+        updateField('selectedWorker', worker);
+    };
+
     return (
         <View style={stepStyles.stepContainer}>
             <Text style={styles.heading}>1. Worker & Block Details</Text>
 
-            <Text style={styles.label}>Worker Name</Text>
-            <TextInput
-                style={styles.input}
-                value={formData.workerName}
-                onChangeText={(t) => updateField('workerName', t)}
-                placeholder="Name of worker/deliverer"
-                autoCapitalize="words"
+            <SearchableWorkerPicker
+                label="Worker Name"
+                selectedWorkerId={formData.workerName}
+                onWorkerSelect={handleWorkerSelect}
+                selectedWorker={formData.selectedWorker}
             />
 
             <Text style={styles.label}>Date of Delivery</Text>
@@ -234,6 +241,7 @@ const STEPS = [
 const initialFormState = {
     // Harvest Details
     workerName: "", // maps to Worker_name
+    selectedWorker: null, // Full worker object from SearchableWorkerPicker
     blockId: BLOCK_DATA[0].id, // Integer PK from blocks table
     weight: "", // maps to weight_on_delivery
     date: new Date(), // maps to date_of_delivery
@@ -255,6 +263,15 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editRecordId, setEditRecordId] = useState(null);
 
+    // Custom Alert state
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: [],
+    });
+
     // Initialize form with edit data if provided
     useEffect(() => {
         if (route.params?.editData) {
@@ -269,6 +286,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             setFormData(prev => ({
                 ...prev,
                 workerName: editData.name || editData.workerName || '',
+                selectedWorker: null, // Will be populated by SearchableWorkerPicker
                 blockId: editData.block || editData.blockId || BLOCK_DATA[0].id,
                 weight: String(editData.weight || ''),
                 date: dateObj,
@@ -347,7 +365,18 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     const handleNext = () => {
         const validationError = validateStep(currentStep);
         if (validationError) {
-            Alert.alert("Input Error", validationError); 
+            setAlertConfig({
+                title: "Input Error",
+                message: validationError,
+                type: 'warning',
+                buttons: [
+                    {
+                        text: "OK",
+                        onPress: () => setAlertVisible(false)
+                    }
+                ]
+            });
+            setAlertVisible(true);
             return;
         }
 
@@ -390,26 +419,41 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
 
             await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
 
-            Alert.alert(
-                "Draft Saved",
-                "Your harvest draft has been saved. You can continue filling it later.",
-                [
+            setAlertConfig({
+                title: "Draft Saved",
+                message: "Your harvest draft has been saved. You can continue filling it later.",
+                type: 'success',
+                buttons: [
                     {
                         text: "Continue Editing",
-                        style: "default"
+                        onPress: () => setAlertVisible(false)
                     },
                     {
                         text: "View Records",
-                        style: "default",
-                        onPress: () => navigation.navigate('Harvests')
+                        onPress: () => {
+                            setAlertVisible(false);
+                            navigation.navigate('Harvests');
+                        }
                     }
                 ]
-            );
+            });
+            setAlertVisible(true);
 
             console.log('[HarvestForm] Draft saved:', harvestDraft);
         } catch (error) {
             console.error('[HarvestForm] Draft save failed:', error);
-            Alert.alert("Error", "Failed to save draft. Please try again.");
+            setAlertConfig({
+                title: "Error",
+                message: "Failed to save draft. Please try again.",
+                type: 'error',
+                buttons: [
+                    {
+                        text: "OK",
+                        onPress: () => setAlertVisible(false)
+                    }
+                ]
+            });
+            setAlertVisible(true);
         } finally {
             setIsSaving(false);
         }
@@ -462,7 +506,18 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
 
         const err = validateStep(currentStep);
         if (err) {
-            Alert.alert("Validation Error", err);
+            setAlertConfig({
+                title: "Validation Error",
+                message: err,
+                type: 'warning',
+                buttons: [
+                    {
+                        text: "OK",
+                        onPress: () => setAlertVisible(false)
+                    }
+                ]
+            });
+            setAlertVisible(true);
             return;
         }
 
@@ -498,13 +553,15 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 Alert.alert('', '', [{ text: 'OK' }]);
 
                 if (response.success) {
-                    Alert.alert(
-                        "Updated!",
-                        "Your harvest record has been updated successfully.",
-                        [
+                    setAlertConfig({
+                        title: "Updated!",
+                        message: "Your harvest record has been updated successfully.",
+                        type: 'success',
+                        buttons: [
                             {
                                 text: "OK",
                                 onPress: () => {
+                                    setAlertVisible(false);
                                     setFormData(initialFormState);
                                     setCurrentStep(0);
                                     setIsEditMode(false);
@@ -512,12 +569,21 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                                 }
                             }
                         ]
-                    );
+                    });
+                    setAlertVisible(true);
                 } else {
-                    Alert.alert(
-                        "Update Failed",
-                        `Failed to update record. Status: ${response.status}. ${response.remoteData?.detail || ''}`
-                    );
+                    setAlertConfig({
+                        title: "Update Failed",
+                        message: `Failed to update record. Status: ${response.status}. ${response.remoteData?.detail || ''}`,
+                        type: 'error',
+                        buttons: [
+                            {
+                                text: "OK",
+                                onPress: () => setAlertVisible(false)
+                            }
+                        ]
+                    });
+                    setAlertVisible(true);
                     setIsSaving(false);
                 }
             } else {
@@ -533,22 +599,38 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 setFormData(initialFormState);
                 setCurrentStep(0);
 
-                // Show success message
-                Alert.alert(
-                    "Saved Locally!",
-                    "Your harvest record has been saved locally and is ready to sync.",
-                    [
+                // Show success message using CustomAlert
+                setAlertConfig({
+                    title: "Saved Locally!",
+                    message: "Your harvest record has been saved locally and is ready to sync.",
+                    type: 'success',
+                    buttons: [
                         {
                             text: "OK",
-                            onPress: () => navigation.navigate('Harvests')
+                            onPress: () => {
+                                setAlertVisible(false);
+                                navigation.navigate('Harvests');
+                            }
                         }
                     ]
-                );
+                });
+                setAlertVisible(true);
             }
 
         } catch (error) {
             console.error('[HarvestForm] Save failed:', error);
-            Alert.alert("Error", "Failed to save harvest. Please try again.");
+            setAlertConfig({
+                title: "Error",
+                message: "Failed to save harvest. Please try again.",
+                type: 'error',
+                buttons: [
+                    {
+                        text: "OK",
+                        onPress: () => setAlertVisible(false)
+                    }
+                ]
+            });
+            setAlertVisible(true);
             setIsSaving(false);
         }
     };
@@ -672,6 +754,15 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             </KeyboardAvoidingView>
             </View>
             <BottomNav activeScreen="Harvests" onNavigate={(screen) => navigation.navigate(screen)} />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertVisible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 }

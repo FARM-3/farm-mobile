@@ -227,6 +227,16 @@ export const submitFarmer = async (data) => {
     try {
         console.log('[firebaseSetup] Submitting farmer...');
 
+        // Extract and validate coffee farming year
+        let farmerYear = data.started_farming ? new Date(data.started_farming).getFullYear() : null;
+
+        // API requires farming year >= 2010, use current year - 5 as default minimum if value is too old
+        const currentYear = new Date().getFullYear();
+        if (farmerYear && farmerYear < 2010) {
+            console.warn(`[firebaseSetup] Farmer's coffee farming year (${farmerYear}) is before 2010. API requires >= 2010. Using 2010 as minimum.`);
+            farmerYear = 2010;
+        }
+
         // Transform data to match Django backend API format
         // For draft records, use sensible defaults for empty/required fields
         const apiPayload = {
@@ -239,7 +249,7 @@ export const submitFarmer = async (data) => {
             contact: data.contact,
             email: data.email || '',
             farmer_type: data.farmer_type || 'individual', // Default if not provided
-            started_coffee_farming_year: data.started_farming ? new Date(data.started_farming).getFullYear() : null,
+            started_coffee_farming_year: farmerYear,
             district: data.district || 'Not specified',
             other_district: data.other_district || '',
             sub_county: data.sub_county || 'Not specified',
@@ -511,6 +521,15 @@ export const updateFarmer = async (farmerId, data) => {
     try {
         console.log('[firebaseSetup] Updating farmer:', farmerId);
 
+        // Extract and validate coffee farming year
+        let farmerYear = data.started_farming ? new Date(data.started_farming).getFullYear() : null;
+
+        // API requires farming year >= 2010, use 2010 as minimum if value is too old
+        if (farmerYear && farmerYear < 2010) {
+            console.warn(`[firebaseSetup] Farmer's coffee farming year (${farmerYear}) is before 2010. API requires >= 2010. Using 2010 as minimum.`);
+            farmerYear = 2010;
+        }
+
         // Transform data to match Django backend API format (same as submitFarmer)
         const apiPayload = {
             farmer_id: data.uid || data.farmer_id,
@@ -522,7 +541,7 @@ export const updateFarmer = async (farmerId, data) => {
             contact: data.contact,
             email: data.email,
             farmer_type: data.farmer_type || 'individual',
-            started_coffee_farming_year: data.started_farming ? new Date(data.started_farming).getFullYear() : null,
+            started_coffee_farming_year: farmerYear,
             district: data.district,
             other_district: data.other_district || '',
             sub_county: data.sub_county,

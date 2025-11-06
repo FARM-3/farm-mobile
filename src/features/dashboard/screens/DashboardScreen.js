@@ -28,7 +28,7 @@ const DARK_BROWN = CoffeeColors.DARK_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
 
 const HEADER_HEIGHT = 330; // Header + Weather card height
-const SCROLL_THRESHOLD = 50; // Minimum scroll distance to trigger hide/show
+const SCROLL_THRESHOLD = 10; // Minimum scroll distance to trigger hide/show
 
 const DashboardScreen = ({ navigation }) => {
   const [userName, setUserName] = useState('User');
@@ -217,7 +217,7 @@ const DashboardScreen = ({ navigation }) => {
             // Scrolling up - show header
             Animated.timing(headerTranslateY, {
               toValue: 0,
-              duration: 250,
+              duration: 500,
               useNativeDriver: true,
             }).start();
           }
@@ -361,7 +361,7 @@ const DashboardScreen = ({ navigation }) => {
       </Animated.View>
 
       <Animated.ScrollView
-        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 60, paddingBottom: 20 }]}
+        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 70, paddingBottom: 20 }]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
