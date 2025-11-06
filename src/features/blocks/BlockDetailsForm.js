@@ -428,6 +428,26 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [generatedBlockId, setGeneratedBlockId] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+    buttons: []
+  });
+
+  const showAlert = (title, message, type = 'info', buttons = []) => {
+    const defaultButtons = buttons.length > 0 ? buttons : [
+      { text: 'OK', onPress: () => setAlert({ ...alert, visible: false }) }
+    ];
+    setAlert({
+      visible: true,
+      title,
+      message,
+      type,
+      buttons: defaultButtons
+    });
+  };
 
   const updateField = useCallback((key, valueOrFn) => {
     setFormData(prev => ({
