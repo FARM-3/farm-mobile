@@ -116,6 +116,7 @@ const harvestFieldDefinitions = [
         fields: [
             { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
             { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
+            { key: 'location_on_delivery', label: 'Location on Delivery', keyboardType: 'default' },
             { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
         ]
     },
