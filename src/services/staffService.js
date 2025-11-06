@@ -125,7 +125,8 @@ export const fetchAllStaff = async (useCache = true) => {
  * @returns {Array} Filtered staff list
  */
 export const searchStaff = (staffList, searchTerm) => {
-    if (!searchTerm || searchTerm.trim() === '') {
+    // Defensive check: ensure searchTerm is a string
+    if (!searchTerm || typeof searchTerm !== 'string' || searchTerm.trim() === '') {
         return staffList;
     }
 

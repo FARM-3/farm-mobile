@@ -32,6 +32,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
     const [allRecords, setAllRecords] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -199,6 +200,75 @@ export default function ProductionHarvestsScreen({ navigation }) {
         navigation.navigate('HarvestDetails', { harvestData: item });
     };
 
+    const handleSyncPress = async () => {
+        console.log('[ProductionHarvests] Sync button pressed, isSyncing:', isSyncing);
+
+        if (isSyncing) {
+            console.warn('[ProductionHarvests] Sync already in progress, ignoring duplicate request');
+            return; // Prevent multiple concurrent syncs
+        }
+
+        setIsSyncing(true);
+        setSyncStatus("Syncing harvest records...");
+
+        try {
+            // Fetch current unsynced count
+            console.log('[ProductionHarvests] Fetching unsynced records...');
+            const unsyncedResult = await getUnsyncedRecords();
+            const unsyncedRecords = unsyncedResult.records || [];
+
+            console.log('[ProductionHarvests] Unsynced records found:', unsyncedRecords.length);
+            console.log('[ProductionHarvests] Records data:', JSON.stringify(unsyncedRecords, null, 2));
+
+            if (unsyncedRecords.length === 0) {
+                console.log('[ProductionHarvests] No unsynced records, marking as synced');
+                setSyncStatus("All records are synced ✓");
+                setIsSyncing(false);
+                return;
+            }
+
+            // Sync all records
+            console.log('[ProductionHarvests] Starting sync of', unsyncedRecords.length, 'records');
+            const result = await syncAllRecords();
+
+            console.log('[ProductionHarvests] Sync result:', {
+                syncedCount: result.syncedCount,
+                totalCount: result.totalCount,
+                failedCount: result.failedRecords?.length || 0,
+                failedRecords: result.failedRecords
+            });
+
+            if (result.syncedCount > 0) {
+                setSyncStatus(`✓ Synced ${result.syncedCount} record${result.syncedCount !== 1 ? 's' : ''}`);
+                console.log('[ProductionHarvests] Sync successful, waiting 500ms before reload');
+                // Wait a brief moment for backend to process the records before reloading
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } else if (result.failedRecords && result.failedRecords.length > 0) {
+                const errorMsg = result.failedRecords.map(f => `${f.id}: ${f.error || f.reason}`).join('; ');
+                setSyncStatus(`Sync failed: ${errorMsg}`);
+                console.error('[ProductionHarvests] Sync failed with errors:', result.failedRecords);
+            } else {
+                setSyncStatus("Sync failed - check your connection and try again");
+                console.warn('[ProductionHarvests] Sync returned 0 synced records and no error details');
+            }
+
+            // Reload data to reflect sync status
+            console.log('[ProductionHarvests] Reloading data after sync');
+            await loadData();
+            console.log('[ProductionHarvests] Data reloaded successfully');
+
+        } catch (error) {
+            console.error('[ProductionHarvests] Sync error:', error);
+            setSyncStatus("Sync error - please check your connection");
+        } finally {
+            setIsSyncing(false);
+            console.log('[ProductionHarvests] Sync process completed, isSyncing set to false');
+        }
+    };
+
+    // Calculate unsynced count
+    const unsyncedCount = allRecords.filter(r => !r.isSynced).length;
+
     const renderHarvestCard = ({ item }) => {
         const displayId = item.id || 'N/A';
         const displayName = item.name || 'Unknown Worker';
@@ -266,7 +336,12 @@ export default function ProductionHarvestsScreen({ navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <SimpleHeader title="Rugyeyo Harvests" />
+            <SimpleHeader
+                title="Rugyeyo Harvests"
+                unsyncedCount={unsyncedCount}
+                onSync={handleSyncPress}
+                isSyncing={isSyncing}
+            />
 
             <View style={{ flex: 1 }}>
             <View style={styles.container}>

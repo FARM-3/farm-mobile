@@ -53,12 +53,12 @@ const farmerFieldDefinitions = [
     {
         title: 'Personal Info',
         fields: [
-            { key: 'first_name', label: 'First Name', keyboardType: 'default', required: true },
-            { key: 'last_name', label: 'Last Name', keyboardType: 'default' },
+            { key: 'first_name', label: 'First Name *', keyboardType: 'default', required: true },
+            { key: 'last_name', label: 'Last Name *', keyboardType: 'default', required: true },
             { key: 'gender', label: 'Gender', type: 'picker', pickerKey: 'gender' },
             { key: 'nin', label: 'NIN', keyboardType: 'default' },
             { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
-            { key: 'contact', label: 'Phone Number', keyboardType: 'phone-pad', required: true, placeholder: 'Example: 0770123456' },
+            { key: 'contact', label: 'Phone Number *', keyboardType: 'phone-pad', required: true, placeholder: 'Example: 0770123456' },
             { key: 'email', label: 'Email (optional)', keyboardType: 'email-address', placeholder: 'Example: johnkato@gmail.com' },
             { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'yes-no' },
             { key: 'cooperative', label: 'Cooperative Name', keyboardType: 'default', dependsOn: { field: 'in_cooperative', value: true } },
@@ -93,7 +93,7 @@ const farmerFieldDefinitions = [
             { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no' },
             { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source' },
             { key: 'seedling_type', label: 'Type of seedlings', type: 'multi-select', pickerKey: 'seedling_type' },
-            { key: 'age_of_seedlings', label: 'Age of seedlings *', keyboardType: 'default', required: true },
+            { key: 'age_of_seedlings', label: 'Age of seedlings (Days)', keyboardType: 'numeric' },
         ]
     },
     // Step 4: Practices & Chemicals
@@ -743,14 +743,14 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
         const thirdKey = fields.length > 2 ? fields[2].key : null;
 
         return (
-            <TouchableOpacity style={[styles.dataListItem, item._isDraft && styles.draftListItem]} onPress={() => onEdit(item)}>
+            <TouchableOpacity style={[styles.dataListItem, item._isDraft && styles.draftListItem, !item._isDraft && !item._isSynced && styles.pendingListItem]} onPress={() => onEdit(item)}>
                 <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <Text style={styles.dataListItemTitle}>
                             {String(displayName)}
                             <Text style={styles.dataListItemUID}> ({displayId})</Text>
                         </Text>
-                        {/* Draft Badge - Shows only for draft records */}
+                        {/* Draft Badge - Shows only for incomplete draft records */}
                         {item._isDraft && (
                             <View style={styles.draftBadge}>
                                 <Text style={styles.draftBadgeText}>DRAFT</Text>
@@ -766,6 +766,13 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                         <Text style={styles.draftStepText}>
                             Saved at: {item._draftStepTitle || 'Unknown Step'}
                         </Text>
+                    )}
+                    {/* Pending Status - Shows for submitted but unsynced records */}
+                    {!item._isDraft && !item._isSynced && (
+                        <View style={styles.syncStatusInline}>
+                            <Ionicons name="cloud-upload-outline" size={14} color={LIGHT_BROWN} />
+                            <Text style={[styles.syncStatusText, { color: LIGHT_BROWN }]}>Pending</Text>
+                        </View>
                     )}
                 </View>
 
@@ -1168,6 +1175,9 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     // State for custom alert modal
     const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
 
+    // State for sync loading indicator
+    const [isSyncing, setIsSyncing] = useState(false);
+
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
         if (route?.params?.activeTab || route?.params?.viewMode) {
@@ -1196,13 +1206,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             console.log('[loadRecords] First 3 farmers:', Array.isArray(f) ? f.slice(0, 3) : 'Not an array');
             console.log('[loadRecords] Full farmers response:', JSON.stringify(f, null, 2));
 
+            // Mark backend farmers as synced (not drafts, not pending)
+            const syncedFarmers = Array.isArray(f) ? f.map(farmer => ({
+                ...farmer,
+                _isDraft: false,
+                _isSynced: true
+            })) : [];
+
             // Load farmer drafts from AsyncStorage
             const farmerDraftsJson = await AsyncStorage.getItem('farmer_drafts');
             const farmerDrafts = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
             console.log('[loadRecords] Loaded farmer drafts count:', farmerDrafts.length);
 
-            // Combine submitted farmers and drafts
-            const allFarmers = [...(Array.isArray(f) ? f : []), ...farmerDrafts];
+            // Combine synced farmers from backend and local drafts
+            const allFarmers = [...syncedFarmers, ...farmerDrafts];
             console.log('[loadRecords] Total farmers (submitted + drafts):', allFarmers.length);
             setFarmersList(allFarmers);
 
@@ -1216,13 +1233,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             const h = await fetchHarvests();
             console.log('[loadRecords] Fetched harvests count:', Array.isArray(h) ? h.length : 0);
 
+            // Mark backend harvests as synced (not drafts, not pending)
+            const syncedHarvests = Array.isArray(h) ? h.map(harvest => ({
+                ...harvest,
+                _isDraft: false,
+                _isSynced: true
+            })) : [];
+
             // Load harvest drafts from AsyncStorage
             const harvestDraftsJson = await AsyncStorage.getItem('harvest_drafts');
             const harvestDrafts = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
             console.log('[loadRecords] Loaded harvest drafts count:', harvestDrafts.length);
 
-            // Combine submitted harvests and drafts
-            const allHarvests = [...(Array.isArray(h) ? h : []), ...harvestDrafts];
+            // Combine synced harvests from backend and local drafts
+            const allHarvests = [...syncedHarvests, ...harvestDrafts];
             setHarvestsList(allHarvests);
 
         } catch (e) {
@@ -1250,68 +1274,79 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
     // Sync unsynced records
     const handleSyncRecords = async () => {
+        setIsSyncing(true);
         try {
             const farmerDraftsJson = await AsyncStorage.getItem('farmer_drafts');
             const harvestDraftsJson = await AsyncStorage.getItem('harvest_drafts');
-            const farmerDrafts = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
-            const harvestDrafts = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
+            const allFarmerRecords = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
+            const allHarvestRecords = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
+
+            // Separate drafts from pending records (drafts are incomplete, pending are submitted but unsynced)
+            const farmerDrafts = allFarmerRecords.filter(r => r._isDraft === true);
+            const farmerPending = allFarmerRecords.filter(r => r._isDraft === false && r._isSynced !== true);
+            const harvestDrafts = allHarvestRecords.filter(r => r._isDraft === true);
+            const harvestPending = allHarvestRecords.filter(r => r._isDraft === false && r._isSynced !== true);
+
+            // Combine both drafts and pending for syncing (all unsyc ed records)
+            const farmerRecordsToSync = [...farmerDrafts, ...farmerPending];
+            const harvestRecordsToSync = [...harvestDrafts, ...harvestPending];
 
             console.log('[handleSyncRecords] Starting sync...');
-            console.log('[handleSyncRecords] Farmer drafts to sync:', farmerDrafts.length);
-            console.log('[handleSyncRecords] Harvest drafts to sync:', harvestDrafts.length);
+            console.log('[handleSyncRecords] Farmer records to sync:', farmerRecordsToSync.length, '(drafts:', farmerDrafts.length, ', pending:', farmerPending.length, ')');
+            console.log('[handleSyncRecords] Harvest records to sync:', harvestRecordsToSync.length, '(drafts:', harvestDrafts.length, ', pending:', harvestPending.length, ')');
 
             let successfullysynced = 0;
             let failedSync = 0;
             const failedDrafts = [];
 
-            // Sync farmer drafts - track which ones succeed
+            // Sync all farmer records (both drafts and pending) - track which ones succeed
             const syncedFarmerIds = [];
-            for (const draft of farmerDrafts) {
+            for (const record of farmerRecordsToSync) {
                 try {
-                    console.log(`[handleSyncRecords] Syncing farmer: ${draft.id}`);
-                    await submitFarmer(draft);
-                    syncedFarmerIds.push(draft.id);
+                    console.log(`[handleSyncRecords] Syncing farmer: ${record.id}`);
+                    await submitFarmer(record);
+                    syncedFarmerIds.push(record.id);
                     successfullysynced++;
-                    console.log(`[handleSyncRecords] ✓ Farmer synced: ${draft.id}`);
+                    console.log(`[handleSyncRecords] ✓ Farmer synced: ${record.id}`);
                 } catch (e) {
                     failedSync++;
-                    failedDrafts.push({ type: 'farmer', id: draft.id, error: e.message });
-                    console.error('[handleSyncRecords] ✗ Error syncing farmer:', draft.id, e.message);
+                    failedDrafts.push({ type: 'farmer', id: record.id, error: e.message });
+                    console.error('[handleSyncRecords] ✗ Error syncing farmer:', record.id, e.message);
                 }
             }
 
-            // Sync harvest drafts - track which ones succeed
+            // Sync all harvest records (both drafts and pending) - track which ones succeed
             const syncedHarvestIds = [];
-            for (const draft of harvestDrafts) {
+            for (const record of harvestRecordsToSync) {
                 try {
-                    console.log(`[handleSyncRecords] Syncing harvest: ${draft.id}`);
-                    await submitHarvest(draft);
-                    syncedHarvestIds.push(draft.id);
+                    console.log(`[handleSyncRecords] Syncing harvest: ${record.id}`);
+                    await submitHarvest(record);
+                    syncedHarvestIds.push(record.id);
                     successfullysynced++;
-                    console.log(`[handleSyncRecords] ✓ Harvest synced: ${draft.id}`);
+                    console.log(`[handleSyncRecords] ✓ Harvest synced: ${record.id}`);
                 } catch (e) {
                     failedSync++;
-                    failedDrafts.push({ type: 'harvest', id: draft.id, error: e.message });
-                    console.error('[handleSyncRecords] ✗ Error syncing harvest:', draft.id, e.message);
+                    failedDrafts.push({ type: 'harvest', id: record.id, error: e.message });
+                    console.error('[handleSyncRecords] ✗ Error syncing harvest:', record.id, e.message);
                 }
             }
 
-            // Only remove drafts that were successfully synced
+            // Only remove records that were successfully synced
             console.log(`[handleSyncRecords] Successfully synced: ${successfullysynced}, Failed: ${failedSync}`);
 
             if (syncedFarmerIds.length > 0) {
-                const remainingFarmerDrafts = farmerDrafts.filter(d => !syncedFarmerIds.includes(d.id));
-                if (remainingFarmerDrafts.length > 0) {
-                    await AsyncStorage.setItem('farmer_drafts', JSON.stringify(remainingFarmerDrafts));
+                const remainingFarmerRecords = allFarmerRecords.filter(d => !syncedFarmerIds.includes(d.id));
+                if (remainingFarmerRecords.length > 0) {
+                    await AsyncStorage.setItem('farmer_drafts', JSON.stringify(remainingFarmerRecords));
                 } else {
                     await AsyncStorage.removeItem('farmer_drafts');
                 }
             }
 
             if (syncedHarvestIds.length > 0) {
-                const remainingHarvestDrafts = harvestDrafts.filter(d => !syncedHarvestIds.includes(d.id));
-                if (remainingHarvestDrafts.length > 0) {
-                    await AsyncStorage.setItem('harvest_drafts', JSON.stringify(remainingHarvestDrafts));
+                const remainingHarvestRecords = allHarvestRecords.filter(d => !syncedHarvestIds.includes(d.id));
+                if (remainingHarvestRecords.length > 0) {
+                    await AsyncStorage.setItem('harvest_drafts', JSON.stringify(remainingHarvestRecords));
                 } else {
                     await AsyncStorage.removeItem('harvest_drafts');
                 }
@@ -1368,6 +1403,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
                 ]
             });
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -1503,7 +1540,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             recorder_id: userId,
             timestamp: Date.now(),
             id: recordId,
-            _isDraft: true,
+            _isDraft: false,  // Mark as submitted (not a draft)
+            _isSynced: false, // Mark as pending sync
             _syncStatus: 'pending',
         };
 
@@ -1666,7 +1704,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             weight_after_floating: Number(harvestForm.weight_after_floating) || 0,
             recorder_id: userId,
             timestamp: Date.now(),
-            _isDraft: true,
+            _isDraft: false,  // Mark as submitted (not a draft)
+            _isSynced: false, // Mark as pending sync
             _syncStatus: 'pending',
         };
 
@@ -1916,7 +1955,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                         onPress={async () => {
                                             const gpsLocation = await getCurrentGPSLocation();
                                             updateForm('gps', gpsLocation);
-                                            Alert.alert('GPS Location', `Location captured: ${gpsLocation}`);
+                                            setAlertConfig({
+                                                visible: true,
+                                                title: 'GPS Location Captured',
+                                                message: `Location: ${gpsLocation}`,
+                                                type: 'success',
+                                                buttons: [
+                                                    {
+                                                        text: 'OK',
+                                                        onPress: () => {
+                                                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                                                        }
+                                                    }
+                                                ]
+                                            });
                                         }}
                                     >
                                         <Text>
@@ -2488,6 +2540,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 onBackPress={handleBackPress}
                 unsyncedCount={unsyncedCount}
                 onSync={handleSyncRecords}
+                isSyncing={isSyncing}
             />
 
             {/* Main content container - BottomNav will sit below this */}
@@ -2566,7 +2619,10 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             {viewMode === 'success' && (
                 <SuccessMessage
                     message={successMessage}
-                    onExit={() => setViewMode('form')}
+                    onExit={() => {
+                        setViewMode('table');
+                        setActiveTab(activeTab); // Keep the current tab (farmers or harvests)
+                    }}
                 />
             )}
 
@@ -3200,6 +3256,23 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.regular,
         marginTop: 4,
         fontStyle: 'italic',
+    },
+    // --- Pending (Submitted but Unsynced) Styles ---
+    pendingListItem: {
+        backgroundColor: CoffeeColors.WHITE,
+        borderLeftWidth: 4,
+        borderLeftColor: LIGHT_BROWN, // Light brown for pending records (matching Harvest styling)
+    },
+    syncStatusInline: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 6,
+    },
+    syncStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
+        marginLeft: 4,
     },
     noRecords: {
         textAlign: 'center',

@@ -18,6 +18,10 @@ const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsy
 const mapToApiPayload = (payload) => {
     const apiPayload = {};
 
+    // 0. Harvest ID (UI: id (string like "ED2810RA00") -> API: harvest_id (string))
+    // This is required by the API
+    apiPayload.harvest_id = payload.id;
+
     // 1. Date (UI: date (Date object/ISO string) -> API: date_of_delivery (YYYY-MM-DD string))
     let dateObj = payload.date;
     if (typeof dateObj === 'string') {
@@ -49,7 +53,12 @@ const mapToApiPayload = (payload) => {
 
     // 6. Paid By (UI: paidBy (string like "RF001") -> API: paid_by (string))
     // Keep as string - API expects staff ID strings like "RF001", "RF002", etc.
-    apiPayload.paid_by = payload.paidBy;
+    // Handle if paidBy is an object with id property
+    if (typeof payload.paidBy === 'object' && payload.paidBy && payload.paidBy.id) {
+        apiPayload.paid_by = payload.paidBy.id;
+    } else {
+        apiPayload.paid_by = String(payload.paidBy || '');
+    }
 
     return apiPayload;
 };
