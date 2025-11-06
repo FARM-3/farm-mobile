@@ -147,13 +147,13 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
             <Text style={styles.heading}>1. Worker & Block Details</Text>
 
             <SearchableWorkerPicker
-                label="Worker Name"
+                label="Worker Name *"
                 selectedWorkerId={formData.workerName}
                 onWorkerSelect={handleWorkerSelect}
                 selectedWorker={formData.selectedWorker}
             />
 
-            <Text style={styles.label}>Date of Delivery</Text>
+            <Text style={styles.label}>Date of Delivery *</Text>
             <TouchableOpacity style={styles.dateButton} onPress={() => updateField('showDatePicker', true)} accessibilityLabel="Select date">
                 <Ionicons name="calendar-outline" size={20} color={CoffeeColors.DARK_BROWN} />
                 <Text style={{ marginLeft: 10, fontSize: 16, color: CoffeeColors.DARK_BROWN }}>
@@ -172,7 +172,7 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
             )}
 
             <CustomPicker
-                label="Block"
+                label="Block *"
                 selectedValue={formData.blockId}
                 onValueChange={handleBlockChange}
                 items={BLOCK_DATA}
@@ -192,7 +192,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
     <View style={stepStyles.stepContainer}>
         <Text style={styles.heading}>2. Delivery & Finance</Text>
 
-        <Text style={styles.label}>Weight on Delivery (kg)</Text>
+        <Text style={styles.label}>Weight on Delivery (kg) *</Text>
         <TextInput
             style={styles.input}
             keyboardType="numeric"
@@ -201,7 +201,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
             placeholder="e.g. 12.5"
         />
 
-        <Text style={styles.label}>Price per Kg (UGX)</Text>
+        <Text style={styles.label}>Price per Kg (UGX) *</Text>
         <TextInput
             style={styles.input}
             keyboardType="numeric"
@@ -221,7 +221,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
         <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
 
         <SearchableStaffPicker
-            label="Paid By"
+            label="Paid By *"
             selectedStaffId={formData.paidBy}
             onStaffSelect={(staff) => updateField('paidBy', staff.id)}
             selectedStaff={formData.selectedStaff}
