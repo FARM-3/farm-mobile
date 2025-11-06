@@ -117,6 +117,7 @@ const harvestFieldDefinitions = [
             { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
             { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
             { key: 'location_on_delivery', label: 'Location on Delivery', keyboardType: 'default' },
+            { key: 'gps_coordinates', label: 'GPS Coordinates', keyboardType: 'default', action: 'capture_gps' },
             { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
         ]
     },
@@ -1072,6 +1073,8 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
                 { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
                 { label: 'Date of Delivery', value: harvest.date_of_delivery },
                 { label: 'Weight on Delivery', value: harvest.weight_on_delivery ? `${harvest.weight_on_delivery} kg` : 'Not provided' },
+                { label: 'Location on Delivery', value: harvest.location_on_delivery || 'Not provided' },
+                { label: 'GPS Coordinates', value: harvest.gps_coordinates || 'Not captured' },
                 { label: 'Weight After Floating', value: harvest.weight_after_floating ? `${harvest.weight_after_floating} kg` : 'Not provided' },
                 { label: 'Number of Bags', value: harvest.number_of_bags },
             ]
@@ -1150,7 +1153,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1453,7 +1456,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
         }));
         setFarmerStep(0);
         setHarvestStep(0);
@@ -1945,7 +1948,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             />
                         );
 
-                        // Show button after GPS field
+                        // Show button after GPS field for farmer form
                         if (field.key === 'gps' && isFarmer) {
                             return (
                                 <View key={field.key}>
@@ -1975,6 +1978,42 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                             <Text style={styles.generateButtonText}>Get Current GPS Location</Text>
                                             <Text>{'\n'}</Text>
                                             <Text style={styles.generateButtonSubtext}>(Use when on farm site)</Text>
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        }
+
+                        // Show button after GPS coordinates field for harvest form
+                        if (field.key === 'gps_coordinates' && !isFarmer) {
+                            return (
+                                <View key={field.key}>
+                                    {inputElement}
+                                    <TouchableOpacity
+                                        style={styles.generateButton}
+                                        onPress={async () => {
+                                            const gpsLocation = await getCurrentGPSLocation();
+                                            updateForm('gps_coordinates', gpsLocation);
+                                            setAlertConfig({
+                                                visible: true,
+                                                title: 'GPS Coordinates Captured',
+                                                message: `Coordinates: ${gpsLocation}`,
+                                                type: 'success',
+                                                buttons: [
+                                                    {
+                                                        text: 'OK',
+                                                        onPress: () => {
+                                                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                                                        }
+                                                    }
+                                                ]
+                                            });
+                                        }}
+                                    >
+                                        <Text>
+                                            <Text style={styles.generateButtonText}>Capture Current GPS Location</Text>
+                                            <Text>{'\n'}</Text>
+                                            <Text style={styles.generateButtonSubtext}>(Capture exact delivery location)</Text>
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -2275,6 +2314,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 farmer_uid: record.name || record.farmer_uid || '',
                 farmer_name: record.farmer_name || '',
                 weight_on_delivery: String(record.weight_on_delivery || ''),
+                location_on_delivery: record.location_on_delivery || '',
+                gps_coordinates: record.gps_coordinates || '',
                 number_of_bags: String(record.number_of_bags || ''),
                 date_of_delivery: record.date_of_delivery || '',
                 coffee_type: record.grade || record.coffee_type || '',
@@ -2360,6 +2401,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     farmer_uid: draftRecord.farmer_uid || draftRecord.name || '',
                     farmer_name: draftRecord.farmer_name || '',
                     weight_on_delivery: draftRecord.weight_on_delivery || 0,
+                    location_on_delivery: draftRecord.location_on_delivery || '',
+                    gps_coordinates: draftRecord.gps_coordinates || '',
                     number_of_bags: draftRecord.number_of_bags || 0,
                     date_of_delivery: draftRecord.date_of_delivery || '',
                     coffee_type: draftRecord.coffee_type || draftRecord.grade || '',

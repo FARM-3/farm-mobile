@@ -21,6 +21,7 @@ import SyncService from '../../../services/SyncService';
 import { syncAllRecords, getUnsyncedRecords } from '../../../services/harvestRecord';
 import BottomNav from '../../../components/BottomNav';
 import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
+import { getCurrentWeather, isWeatherDataStale } from '../../../services/WeatherService';
 
 // Primary brown color and its shades
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
@@ -51,6 +52,16 @@ const DashboardScreen = ({ navigation }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
+  // Weather state
+  const [weather, setWeather] = useState({
+    location: 'Kampala',
+    temperature: 24,
+    condition: 'Partly Cloudy',
+    humidity: 76,
+    icon: 'partly-sunny',
+    loading: true,
+  });
+
   // Animation values for header collapse
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
@@ -61,9 +72,22 @@ const DashboardScreen = ({ navigation }) => {
       loadUserName();
       loadDashboardData();
       loadSyncStatus();
+      loadWeatherData();
     });
     return unsubscribe;
   }, [navigation]);
+
+  // Auto-refresh weather every 30 minutes
+  useEffect(() => {
+    loadWeatherData();
+
+    const weatherRefreshInterval = setInterval(() => {
+      console.log('[Dashboard] Auto-refreshing weather data...');
+      loadWeatherData();
+    }, 30 * 60 * 1000); // 30 minutes
+
+    return () => clearInterval(weatherRefreshInterval);
+  }, []);
 
   const loadUserName = async () => {
     try {
@@ -133,6 +157,34 @@ const DashboardScreen = ({ navigation }) => {
       setSyncStatus({ pending: records.length });
     } catch (error) {
       console.error('[Dashboard] Error loading sync status:', error);
+    }
+  };
+
+  const loadWeatherData = async () => {
+    try {
+      console.log('[Dashboard] Loading weather data...');
+      setWeather(prev => ({ ...prev, loading: true }));
+
+      const weatherData = await getCurrentWeather();
+
+      setWeather({
+        location: weatherData.location,
+        country: weatherData.country,
+        temperature: weatherData.temperature,
+        condition: weatherData.condition,
+        description: weatherData.description,
+        humidity: weatherData.humidity,
+        icon: weatherData.icon,
+        windSpeed: weatherData.windSpeed,
+        timestamp: weatherData.timestamp,
+        isFallback: weatherData.isFallback,
+        loading: false,
+      });
+
+      console.log('[Dashboard] Weather loaded:', `${weatherData.location} - ${weatherData.temperature}°C`);
+    } catch (error) {
+      console.error('[Dashboard] Error loading weather:', error);
+      setWeather(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -345,18 +397,38 @@ const DashboardScreen = ({ navigation }) => {
 
         {/* Weather Widget */}
         <View style={styles.weatherCardContainer}>
-          <View style={styles.weatherCard}>
+          <TouchableOpacity
+            style={styles.weatherCard}
+            onPress={loadWeatherData}
+            activeOpacity={0.7}
+          >
             <View style={styles.weatherContent}>
-              <View>
-                <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
-                <Text style={styles.weatherTemp}>24°C</Text>
-                <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.weatherLocation}>
+                  {weather.loading ? 'Loading...' : `${weather.location}${weather.country ? ', ' + weather.country : ''}`}
+                </Text>
+                <Text style={styles.weatherTemp}>
+                  {weather.loading ? '--°C' : `${weather.temperature}°C`}
+                </Text>
+                <Text style={styles.weatherCondition}>
+                  {weather.loading
+                    ? 'Fetching weather...'
+                    : `${weather.condition} • Humidity ${weather.humidity}%`
+                  }
+                </Text>
+                {weather.isFallback && !weather.loading && (
+                  <Text style={styles.weatherFallbackNote}>Tap to refresh</Text>
+                )}
               </View>
               <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
-                <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
+                {weather.loading ? (
+                  <ActivityIndicator size="small" color={PRIMARY_BROWN} />
+                ) : (
+                  <Ionicons name={weather.icon} size={28} color={PRIMARY_BROWN} />
+                )}
               </LinearGradient>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       </Animated.View>
 
@@ -679,6 +751,13 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.small,
     color: CoffeeColors.GRAY_TEXT,
     fontFamily: Fonts.regular,
+  },
+  weatherFallbackNote: {
+    fontSize: 10,
+    color: CoffeeColors.PRIMARY_BROWN,
+    fontFamily: Fonts.regular,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   weatherIcon: {
     width: 56,

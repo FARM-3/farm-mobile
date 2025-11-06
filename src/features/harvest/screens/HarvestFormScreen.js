@@ -1011,4 +1011,9 @@ const stepStyles = StyleSheet.create({
     },
 });
 
+// Add this to clear the queue manually
+const clearQueue = async () => {
+    await AsyncStorage.removeItem('harvests_sync_queue');
+    console.log('Queue cleared!');
+};
 
