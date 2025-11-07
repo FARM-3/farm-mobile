@@ -23,6 +23,8 @@ const BlockSummary = ({ route = {}, navigation }) => {
   const [allRecords, setAllRecords] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
   const [searchTerm, setSearchTerm] = useState('');
   const [alert, setAlert] = useState({
@@ -129,6 +131,9 @@ const BlockSummary = ({ route = {}, navigation }) => {
     });
 
     setAllRecords(finalRecords);
+    // Count unsynced records for header badge
+    const unsynced = finalRecords.filter(r => !r.isSynced).length;
+    setUnsyncedCount(unsynced);
     setIsLoading(false);
   }, []);
 
@@ -169,6 +174,61 @@ const BlockSummary = ({ route = {}, navigation }) => {
     }
   }, [route?.params?.shouldRefresh, loadData]);
 
+  const handleSyncPress = async () => {
+    if (unsyncedCount === 0) {
+      showAlert('No Records to Sync', 'All blocks are already synced to the cloud.', 'info');
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const pending = await AsyncStorage.getItem(BLOCK_SYNC_QUEUE_KEY);
+      const pendingBlocks = pending ? JSON.parse(pending) : [];
+
+      if (pendingBlocks.length === 0) {
+        setIsSyncing(false);
+        showAlert('No Records to Sync', 'All blocks are already synced to the cloud.', 'info');
+        return;
+      }
+
+      let syncedCount = 0;
+      const failedBlocks = [];
+
+      // Sync each pending block
+      for (const block of pendingBlocks) {
+        try {
+          await ApiService.post('harvests/blocks/', block);
+          syncedCount++;
+        } catch (error) {
+          console.error(`Failed to sync block ${block.block_id}:`, error);
+          failedBlocks.push(block.block_id);
+        }
+      }
+
+      // Remove successfully synced blocks from queue
+      const updatedQueue = pendingBlocks.filter(b => failedBlocks.includes(b.block_id));
+      await AsyncStorage.setItem(BLOCK_SYNC_QUEUE_KEY, JSON.stringify(updatedQueue));
+
+      // Refresh data after sync
+      await loadData();
+
+      if (syncedCount === pendingBlocks.length) {
+        showAlert('Sync Complete', `All ${syncedCount} blocks synced successfully!`, 'success');
+      } else {
+        showAlert(
+          'Partial Sync',
+          `${syncedCount} blocks synced. ${failedBlocks.length} failed. Check your internet connection and try again.`,
+          'warning'
+        );
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      showAlert('Sync Failed', 'An error occurred during sync. Please try again.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const showAlert = (title, message, type = 'info', buttons = null) => {
     const defaultButtons = [{ text: 'OK', onPress: () => setAlert(prev => ({ ...prev, visible: false })) }];
     setAlert({
@@ -192,11 +252,14 @@ const BlockSummary = ({ route = {}, navigation }) => {
     showAlert(
       'Delete Block Record',
       `Are you sure you want to delete block ${item.block_id}? This action cannot be undone.`,
+      'warning',
       [
         { text: 'Cancel', onPress: () => setAlert(prev => ({ ...prev, visible: false })) },
         {
           text: 'Delete',
+          style: 'destructive',
           onPress: async () => {
+            setAlert(prev => ({ ...prev, visible: false }));
             try {
               // If it's a synced block, try to delete from API first
               if (item.isSynced) {
@@ -206,7 +269,7 @@ const BlockSummary = ({ route = {}, navigation }) => {
                     await ApiService.delete(`harvests/blocks/${item.block_id}/`);
                   } catch (apiError) {
                     console.error('API delete failed:', apiError);
-                    Alert.alert('Warning', 'Could not delete from cloud, but will remove from local records.');
+                    showAlert('Warning', 'Could not delete from cloud, but will remove from local records.', 'warning');
                   }
                 }
               }
@@ -223,10 +286,10 @@ const BlockSummary = ({ route = {}, navigation }) => {
 
               // Refresh the data
               await loadData();
-              Alert.alert('Success', `Block ${item.block_id} has been deleted.`);
+              showAlert('Success', `Block ${item.block_id} has been deleted.`, 'success');
             } catch (error) {
               console.error('Delete error:', error);
-              Alert.alert('Error', 'Failed to delete block. Please try again.');
+              showAlert('Error', 'Failed to delete block. Please try again.', 'error');
             }
           }
         }
@@ -308,7 +371,12 @@ const BlockSummary = ({ route = {}, navigation }) => {
 
   return (
     <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-      <SimpleHeader title="Block Summary" />
+      <SimpleHeader
+        title="Block Summary"
+        unsyncedCount={unsyncedCount}
+        onSync={handleSyncPress}
+        isSyncing={isSyncing}
+      />
 
       <View style={styles.container}>
         {/* Sync Status Banner */}

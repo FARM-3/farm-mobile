@@ -54,29 +54,29 @@ const farmerFieldDefinitions = [
     {
         title: 'Personal Info',
         fields: [
-            { key: 'first_name', label: 'First Name *', keyboardType: 'default', required: true },
-            { key: 'last_name', label: 'Last Name *', keyboardType: 'default', required: true },
+            { key: 'first_name', label: 'First Name', keyboardType: 'default', required: true },
+            { key: 'last_name', label: 'Last Name', keyboardType: 'default', required: true },
             { key: 'gender', label: 'Gender', type: 'picker', pickerKey: 'gender' },
-            { key: 'nin', label: 'NIN', keyboardType: 'default' },
-            { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
-            { key: 'contact', label: 'Phone Number *', keyboardType: 'phone-pad', required: true, placeholder: 'Example: 0770123456' },
+            { key: 'nin', label: 'NIN', keyboardType: 'default', required: true },
+            { key: 'date_of_birth', label: 'Date of Birth', type: 'date', required: true },
+            { key: 'contact', label: 'Phone Number', keyboardType: 'phone-pad', required: true, placeholder: 'Example: 0770123456' },
             { key: 'email', label: 'Email (optional)', keyboardType: 'email-address', placeholder: 'Example: johnkato@gmail.com' },
             { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'yes-no' },
             { key: 'cooperative', label: 'Cooperative Name', keyboardType: 'default', dependsOn: { field: 'in_cooperative', value: true } },
-            { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date' },
+            { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date', required: true },
         ]
     },
     // Step 2: Location & UID
     {
         title: 'Location & ID',
         fields: [
-            { key: 'district', label: 'District', type: 'picker', pickerKey: 'district' },
-            { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county' },
+            { key: 'district', label: 'District', type: 'picker', pickerKey: 'district', required: true },
+            { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county', required: true },
             // Parish will dynamically filter based on sub_county
-            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish', dynamic: true }, 
+            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish', dynamic: true, required: true },
             { key: 'village', label: 'Village', keyboardType: 'default' },
             { key: 'gps', label: 'GPS Location (optional)', keyboardType: 'default' },
-            { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default' },
+            { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default', required: true },
             { key: 'uid', label: 'Farmer UID (Generated)', special: 'generate_uid', readOnly: true },
         ]
     },
@@ -84,27 +84,27 @@ const farmerFieldDefinitions = [
     {
         title: 'Farm Details',
         fields: [
-            { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety' },
-            { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric' },
-            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'yes-no' },
+            { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety', required: true },
+            { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric', required: true },
+            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'yes-no', required: true },
             { key: 'other_farms', label: 'If no, which farms (location, owner)', keyboardType: 'default', dependsOn: { field: 'all_your_trees', value: false } },
-            { key: 'planted_date', label: 'Date planted', type: 'date' },
-            { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing' },
-            { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership' },
-            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no' },
-            { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source' },
-            { key: 'seedling_type', label: 'Type of seedlings', type: 'multi-select', pickerKey: 'seedling_type' },
-            { key: 'age_of_seedlings', label: 'Age of seedlings (Days)', keyboardType: 'numeric' },
+            { key: 'planted_date', label: 'Date planted', type: 'date', required: true },
+            { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing', required: true },
+            { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership', required: true },
+            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no', required: true },
+            { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source', required: true },
+            { key: 'seedling_type', label: 'Type of seedlings', type: 'multi-select', pickerKey: 'seedling_type', required: true },
+            { key: 'age_of_seedlings', label: 'Age of seedlings (Days)', keyboardType: 'numeric', required: true },
         ]
     },
     // Step 4: Practices & Chemicals
     {
         title: 'Farming Practices',
         fields: [
-            { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices' },
-            { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation' },
-            { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true },
-            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'yes-no' },
+            { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices', required: true },
+            { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation', required: true },
+            { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true, required: true },
+            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'yes-no', required: true },
             { key: 'pesticides', label: 'If yes, list pesticides (comma separated)', array: true, dependsOn: { field: 'uses_pesticides', value: true } },
         ]
     }
@@ -126,10 +126,10 @@ const harvestFieldDefinitions = [
     {
         title: 'Quality & Payment',
         fields: [
-            { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type' },
+            { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type', required: true },
             { key: 'price_per_kg', label: 'Price per Kg (UGX)', keyboardType: 'numeric', required: true },
             { key: 'amount_paid', label: 'Amount Paid (UGX)', keyboardType: 'numeric', readOnly: true, calculated: true },
-            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff' },
+            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff', required: true },
             { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
         ]
     }
@@ -190,18 +190,19 @@ const getCurrentGPSLocation = async () => {
 // === 2. LIGHTWEIGHT LOCAL UI HELPERS (POLISHED)===
 // ===============================================
 
-const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true, placeholder = '' }) => (
+const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true, placeholder = '', error = '' }) => (
     <View style={{ marginBottom: 15 }}>
         {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-        <TextInput 
-            value={value} 
-            onChangeText={onChangeText} 
-            keyboardType={keyboardType} 
-            style={[styles.textInput, !editable && styles.readOnlyInput]} 
+        <TextInput
+            value={value}
+            onChangeText={onChangeText}
+            keyboardType={keyboardType}
+            style={[styles.textInput, !editable && styles.readOnlyInput, error && styles.errorInput]}
             editable={editable}
             placeholder={placeholder}
             placeholderTextColor={BORDER_LIGHT}
         />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
 );
 
@@ -1182,6 +1183,10 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     // State for sync loading indicator
     const [isSyncing, setIsSyncing] = useState(false);
 
+    // State for validation errors
+    const [farmerErrors, setFarmerErrors] = useState({});
+    const [harvestErrors, setHarvestErrors] = useState({});
+
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
         if (route?.params?.activeTab || route?.params?.viewMode) {
@@ -1461,6 +1466,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         }));
         setFarmerStep(0);
         setHarvestStep(0);
+        setFarmerErrors({});
+        setHarvestErrors({});
     };
 
     const getFarmerDisplayName = (f) => {
@@ -1481,12 +1488,32 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             }
             // Logic for 'Yes'/'No' pickers (which represent booleans in state)
             if (['in_cooperative', 'all_your_trees', 'deforested', 'uses_pesticides'].includes(key)) {
-                 newState[key] = value === 'Yes' || value === true;
+                  newState[key] = value === 'Yes' || value === true;
             }
 
             console.log('[Farmer Form] New state after update:', newState);
             return newState;
         });
+
+        // Validation for NIN
+        if (key === 'nin') {
+            if (value && !/^(CF|CM)[A-Z0-9]*$/.test(value.toUpperCase())) {
+                setFarmerErrors(prev => ({ ...prev, nin: 'NIN must start with CF or CM in uppercase letters.' }));
+            } else {
+                setFarmerErrors(prev => ({ ...prev, nin: '' }));
+            }
+        }
+
+        // Validation for contact
+        if (key === 'contact') {
+            if (value && /[^0-9]/.test(value)) {
+                setFarmerErrors(prev => ({ ...prev, contact: 'Phone number must contain only digits.' }));
+            } else if (value && value.length > 10) {
+                setFarmerErrors(prev => ({ ...prev, contact: 'Phone number should not exceed 10 digits.' }));
+            } else {
+                setFarmerErrors(prev => ({ ...prev, contact: '' }));
+            }
+        }
     };
 
     // FIXED: Create proper update function for harvest form
@@ -1791,13 +1818,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         };
         
         const handleNext = () => {
+            // Check for validation errors
+            const hasErrors = isFarmer ? Object.values(farmerErrors).some(error => error) : Object.values(harvestErrors).some(error => error);
+            if (hasErrors) {
+                Alert.alert("Input Error", "Please fix the validation errors before proceeding.");
+                return;
+            }
+
             // Basic required field validation for current step
             const missingRequired = currentStepFields.fields.some(f =>
                 f.required && (!formData[f.key] || (typeof formData[f.key] === 'string' && formData[f.key].trim() === ''))
             );
 
             if (missingRequired) {
-                Alert.alert("Validation", "Please fill all required fields in this step.");
+                Alert.alert("Input Error", "Please fill all required fields in this step.");
                 return;
             }
 
@@ -1962,6 +1996,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                 keyboardType={field.keyboardType}
                                 editable={!field.readOnly}
                                 placeholder={field.readOnly ? '' : (field.placeholder || `Enter ${field.label}`)}
+                                error={isFarmer ? farmerErrors[field.key] : harvestErrors[field.key]}
                             />
                         );
 
@@ -2793,6 +2828,15 @@ const styles = StyleSheet.create({
     readOnlyInput: {
         backgroundColor: LIGHT_GRAY_BG,
         color: TEXT_GRAY,
+    },
+    errorInput: {
+        borderColor: '#d32f2f',
+    },
+    errorText: {
+        color: '#d32f2f',
+        fontSize: 12,
+        marginTop: 4,
+        fontFamily: Fonts.regular,
     },
     helperText: {
         fontSize: 12,
