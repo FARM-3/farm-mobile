@@ -290,7 +290,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
 
 // New steps structure based on the required fields
 const STEPS = [
-    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['RugyeyoStaff', 'date', 'blockId'] },
+    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['workerName', 'date', 'blockId'] },
     { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'pricePerKg', 'paidBy'] },
 ];
 
@@ -361,9 +361,9 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     useEffect(() => {
         setFormData(prev => ({
             ...prev,
-            generatedId: generateHarvestId(prev.RugyeyoStaff, prev.date)
+            generatedId: generateHarvestId(prev.workerName, prev.date)
         }));
-    }, [formData.RugyeyoStaff, formData.date]);
+    }, [formData.workerName, formData.date]);
 
     // Auto-calculate amount paid when weight or pricePerKg changes
     useEffect(() => {
@@ -598,7 +598,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
         try {
             const harvestData = {
                 // Fields aligned with API schema
-                RugyeyoStaff: (formData.RugyeyoStaff || '').trim(),
+                workerName: (formData.workerName || '').trim(),
                 blockId: formData.blockId, // Integer PK
                 weight: Number(formData.weight),
                 date: formData.date,
