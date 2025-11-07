@@ -9,7 +9,9 @@ import CustomPicker from '../../../components/CustomPicker';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import SearchableWorkerPicker from '../../../components/SearchableWorkerPicker';
 import CustomAlert from '../../../components/CustomAlert';
+import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
 import { fetchCurrentPrice } from '../../../services/priceService';
+
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
@@ -145,7 +147,7 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
 
     return (
         <View style={stepStyles.stepContainer}>
-            <Text style={styles.heading}>1. Worker & Block Details</Text>
+            <Text style={styles.heading}>1. Rugyeyo Staff & Block Details</Text>
 
             <SearchableWorkerPicker
                 label="Worker Name *"
@@ -223,6 +225,16 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
             }
         };
 
+
+        // <Text style={styles.label}>Price per Kg (UGX)</Text>
+        // <TextInput
+        //     style={styles.input}
+        //     keyboardType="numeric"
+        //     value={formData.pricePerKg}
+        //     onChangeText={(t) => updateField('pricePerKg', t)}
+        //     placeholder="e.g. 4,000"
+        // />
+
         loadPrice();
     }, []);
 
@@ -278,7 +290,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
 
 // New steps structure based on the required fields
 const STEPS = [
-    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['workerName', 'date', 'blockId'] },
+    { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['RugyeyoStaff', 'date', 'blockId'] },
     { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'pricePerKg', 'paidBy'] },
 ];
 
@@ -334,8 +346,8 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 blockId: editData.block || editData.blockId || BLOCK_DATA[0].id,
                 weight: String(editData.weight || ''),
                 date: dateObj,
-                pricePerKg: String(editData.pricePerKg || ''),
-                amountPaid: String(editData.amountPaid || ''),
+                pricePerKg: editData.pricePerKg ? formatNumberWithCommas(String(editData.pricePerKg)) : '',
+                amountPaid: editData.amountPaid ? formatNumberWithCommas(String(editData.amountPaid)) : '',
                 paidBy: editData.paidBy || '',
                 selectedStaff: null, // Will be populated by SearchableStaffPicker
                 generatedId: editData.id || prev.generatedId,
@@ -349,27 +361,42 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     useEffect(() => {
         setFormData(prev => ({
             ...prev,
-            generatedId: generateHarvestId(prev.workerName, prev.date)
+            generatedId: generateHarvestId(prev.RugyeyoStaff, prev.date)
         }));
-    }, [formData.workerName, formData.date]);
+    }, [formData.RugyeyoStaff, formData.date]);
 
     // Auto-calculate amount paid when weight or pricePerKg changes
     useEffect(() => {
         const weight = Number(formData.weight) || 0;
-        const pricePerKg = Number(formData.pricePerKg) || 0;
+        const pricePerKg = parseFormattedNumber(formData.pricePerKg) || 0;
         const calculatedAmount = weight * pricePerKg;
 
         setFormData(prev => ({
             ...prev,
-            amountPaid: calculatedAmount > 0 ? calculatedAmount.toFixed(2) : ""
+            amountPaid: calculatedAmount > 0 ? formatNumberWithCommas(calculatedAmount.toFixed(2)) : ""
         }));
     }, [formData.weight, formData.pricePerKg]);
 
-    // Unified field updater
+    // Unified field updater with comma formatting for money fields
     const updateField = useCallback((key, value) => {
+        let processedValue = value;
+
+        // Handle money fields with comma formatting
+        if (key === 'pricePerKg') {
+            // Remove any non-numeric characters except decimal point
+            const cleaned = String(value).replace(/[^0-9.]/g, '');
+            // Prevent multiple decimal points
+            const parts = cleaned.split('.');
+            if (parts.length > 2) {
+                return; // Don't update if multiple decimal points
+            }
+            // Format with commas
+            processedValue = formatNumberWithCommas(cleaned);
+        }
+
         setFormData(prev => ({
             ...prev,
-            [key]: value,
+            [key]: processedValue,
         }));
     }, []);
 
@@ -398,7 +425,8 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             if (isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
                 return "Enter a valid weight (> 0 kg) on delivery.";
             }
-            if (formData.pricePerKg === "" || isNaN(Number(formData.pricePerKg)) || Number(formData.pricePerKg) <= 0) {
+            const pricePerKgValue = parseFormattedNumber(formData.pricePerKg);
+            if (formData.pricePerKg === "" || isNaN(pricePerKgValue) || pricePerKgValue <= 0) {
                 return "Enter a valid price per kg (> 0 UGX).";
             }
         }
@@ -570,12 +598,12 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
         try {
             const harvestData = {
                 // Fields aligned with API schema
-                workerName: formData.workerName.trim(),
+                RugyeyoStaff: (formData.RugyeyoStaff || '').trim(),
                 blockId: formData.blockId, // Integer PK
                 weight: Number(formData.weight),
                 date: formData.date,
-                pricePerKg: Number(formData.pricePerKg),
-                amountPaid: Number(formData.amountPaid),
+                pricePerKg: parseFormattedNumber(formData.pricePerKg),
+                amountPaid: parseFormattedNumber(formData.amountPaid),
                 paidBy: formData.paidBy, // Integer PK (don't trim)
                 id: formData.generatedId,
 
@@ -1055,4 +1083,9 @@ const stepStyles = StyleSheet.create({
     },
 });
 
+// Add this to clear the queue manually
+const clearQueue = async () => {
+    await AsyncStorage.removeItem('harvests_sync_queue');
+    console.log('Queue cleared!');
+};
 
