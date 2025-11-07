@@ -225,19 +225,18 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
             }
         };
 
-<<<<<<< HEAD
-        <Text style={styles.label}>Price per Kg (UGX)</Text>
-        <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={formData.pricePerKg}
-            onChangeText={(t) => updateField('pricePerKg', t)}
-            placeholder="e.g. 4,000"
-        />
-=======
+
+        // <Text style={styles.label}>Price per Kg (UGX)</Text>
+        // <TextInput
+        //     style={styles.input}
+        //     keyboardType="numeric"
+        //     value={formData.pricePerKg}
+        //     onChangeText={(t) => updateField('pricePerKg', t)}
+        //     placeholder="e.g. 4,000"
+        // />
+
         loadPrice();
     }, []);
->>>>>>> 9afa8f53df8a4aa38bd3165cfa6899385cfe01a9
 
     return (
         <View style={stepStyles.stepContainer}>
