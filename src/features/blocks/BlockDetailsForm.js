@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet, ScrollView,
-  Modal, TouchableOpacity, ActivityIndicator
+  Modal, TouchableOpacity, ActivityIndicator, Alert
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -414,7 +414,7 @@ const Step3_StandardPractices = ({ formData, updateField }) => (
 
 // === STEPS ===
 const STEPS = [
-  { title: 'Tree Details', Component: Step1_TreeDetails, requiredFields: ['numTrees', 'typeCoffee', 'sourceSeedling'] },
+  { title: 'Tree Details', Component: Step1_TreeDetails, requiredFields: ['numTrees', 'typeCoffee', 'sourceSeedling', 'typeOfSeedling'] },
   { title: 'Fertilizers & Pesticides', Component: Step2_FertilizersPesticides, requiredFields: [] },
   { title: 'Standard Practices', Component: Step3_StandardPractices, requiredFields: [] }
 ];
@@ -514,6 +514,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         if (field === 'numTrees') return 'Number of Trees is required';
         if (field === 'typeCoffee') return 'Coffee Type is required';
         if (field === 'sourceSeedling') return 'Seedling Source is required';
+        if (field === 'typeOfSeedling') return 'Type of Seedling is required';
         if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
         return `${field} is required`;
       });
@@ -644,6 +645,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         if (field === 'numTrees') return 'Number of Trees is required';
         if (field === 'typeCoffee') return 'Coffee Type is required';
         if (field === 'sourceSeedling') return 'Seedling Source is required';
+        if (field === 'typeOfSeedling') return 'Type of Seedling is required';
         if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
         return `${field} is required`;
       });
@@ -702,7 +704,14 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
 
       // Attempt to sync using ApiService (includes authentication)
       try {
-        const response = await ApiService.post('harvests/blocks/', payload);
+        let response;
+        if (isEditMode) {
+          // For edit mode, use PUT to update the existing block
+          response = await ApiService.put(`harvests/blocks/${blockId}/`, payload);
+        } else {
+          // For new blocks, use POST to create
+          response = await ApiService.post('harvests/blocks/', payload);
+        }
 
         // Success - response.data contains the result
         const syncedBlockId = response.data.block_id || blockId;

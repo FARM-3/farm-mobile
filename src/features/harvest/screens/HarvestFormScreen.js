@@ -9,6 +9,7 @@ import CustomPicker from '../../../components/CustomPicker';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import SearchableWorkerPicker from '../../../components/SearchableWorkerPicker';
 import CustomAlert from '../../../components/CustomAlert';
+import { fetchCurrentPrice } from '../../../services/priceService';
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
@@ -188,46 +189,89 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
     );
 };
 
-const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
-    <View style={stepStyles.stepContainer}>
-        <Text style={styles.heading}>2. Delivery & Finance</Text>
+const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
+    const [productionPrice, setProductionPrice] = useState(null);
+    const [loadingPrice, setLoadingPrice] = useState(false);
 
-        <Text style={styles.label}>Weight on Delivery (kg) *</Text>
-        <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={formData.weight}
-            onChangeText={(t) => updateField('weight', t.replace(",", "."))}
-            placeholder="e.g. 12.5"
-        />
+    useEffect(() => {
+        const loadPrice = async () => {
+            setLoadingPrice(true);
+            try {
+                const price = await fetchCurrentPrice();
+                if (price) {
+                    setProductionPrice(price);
+                    // Auto-fill the price field if it's empty
+                    if (!formData.pricePerKg) {
+                        updateField('pricePerKg', String(price));
+                    }
+                } else {
+                    // Default price if no price is set in API
+                    setProductionPrice(3000);
+                    if (!formData.pricePerKg) {
+                        updateField('pricePerKg', '3000');
+                    }
+                }
+            } catch (error) {
+                console.error('[HarvestForm] Error fetching price:', error);
+                // Fallback to default price on error
+                setProductionPrice(3000);
+                if (!formData.pricePerKg) {
+                    updateField('pricePerKg', '3000');
+                }
+            } finally {
+                setLoadingPrice(false);
+            }
+        };
 
-        <Text style={styles.label}>Price per Kg (UGX) *</Text>
-        <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={formData.pricePerKg}
-            onChangeText={(t) => updateField('pricePerKg', t.replace(",", "."))}
-            placeholder="e.g. 4000"
-        />
+        loadPrice();
+    }, []);
 
-        <Text style={styles.label}>Amount Paid (UGX)</Text>
-        <TextInput
-            style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
-            keyboardType="numeric"
-            value={formData.amountPaid}
-            editable={false}
-            placeholder="Auto-calculated"
-        />
-        <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
+    return (
+        <View style={stepStyles.stepContainer}>
+            <Text style={styles.heading}>2. Delivery & Finance</Text>
 
-        <SearchableStaffPicker
-            label="Paid By *"
-            selectedStaffId={formData.paidBy}
-            onStaffSelect={(staff) => updateField('paidBy', staff.id)}
-            selectedStaff={formData.selectedStaff}
-        />
-    </View>
-);
+            <Text style={styles.label}>Weight on Delivery (kg) *</Text>
+            <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={formData.weight}
+                onChangeText={(t) => updateField('weight', t.replace(",", "."))}
+                placeholder="e.g. 12.5"
+            />
+
+            <Text style={styles.label}>Price per Kg (UGX)</Text>
+            <View style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
+                {loadingPrice ? (
+                    <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
+                ) : (
+                    <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
+                        {formData.pricePerKg || productionPrice || '3000'}
+                    </Text>
+                )}
+            </View>
+            <Text style={styles.helperText}>
+                Current production price from system settings
+            </Text>
+
+            <Text style={styles.label}>Amount Paid (UGX)</Text>
+            <TextInput
+                style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
+                keyboardType="numeric"
+                value={formData.amountPaid}
+                editable={false}
+                placeholder="Auto-calculated"
+            />
+            <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
+
+            <SearchableStaffPicker
+                label="Paid By *"
+                selectedStaffId={formData.paidBy}
+                onStaffSelect={(staff) => updateField('paidBy', staff.id)}
+                selectedStaff={formData.selectedStaff}
+            />
+        </View>
+    );
+};
 
 
 // --- MAIN FORM COMPONENT ---
