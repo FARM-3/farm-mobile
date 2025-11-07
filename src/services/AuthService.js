@@ -241,6 +241,131 @@ class AuthService {
       throw new Error('Session expired. Please login again.');
     }
   }
+
+  /**
+   * Get 3 random security questions for first-time user setup
+   * @param {string} phone - 10-digit phone number
+   * @returns {Promise<Object>} - Array of 3 random security questions
+   */
+  async getRandomSecurityQuestions(phone) {
+    try {
+      console.log('[AuthService] Getting random security questions for phone:', phone);
+
+      const response = await ApiService.post('/users/random-security-questions/', {
+        phone: phone,
+      });
+
+      console.log('[AuthService] Full response:', response.data);
+
+      const { questions } = response.data;
+
+      if (!questions) {
+        console.error('[AuthService] No questions in response:', response.data);
+        throw new Error('Invalid response - no questions found');
+      }
+
+      if (questions.length === 0) {
+        throw new Error('No security questions available');
+      }
+
+      console.log('[AuthService] Retrieved', questions.length, 'security questions');
+
+      return {
+        success: true,
+        questions: questions, // Array of {id, text}
+      };
+    } catch (error) {
+      console.error('[AuthService] Get random questions error:', error);
+      console.error('[AuthService] Error response:', error.response?.data);
+      console.error('[AuthService] Error message:', error.message);
+
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+
+      throw new Error(error.message || 'Failed to retrieve security questions');
+    }
+  }
+
+  /**
+   * Setup security answers on first login
+   * @param {string} phone - 10-digit phone number
+   * @param {Array} answers - Array of {question_id, answer} objects
+   * @returns {Promise<Object>} - Success message
+   */
+  async setupSecurityAnswers(phone, answers) {
+    try {
+      console.log('[AuthService] Setting up security answers for phone:', phone);
+
+      if (!answers || answers.length !== 3) {
+        throw new Error('Must provide exactly 3 answers');
+      }
+
+      const response = await ApiService.post('/users/setup-security-answers/', {
+        phone: phone,
+        answers: answers, // Array of {question_id, answer}
+      });
+
+      const { message, security_answers_set } = response.data;
+
+      console.log('[AuthService] Security answers set successfully');
+
+      return {
+        success: true,
+        message: message || 'Security answers set successfully',
+        security_answers_set: security_answers_set,
+      };
+    } catch (error) {
+      console.error('[AuthService] Setup answers error:', error.response?.data || error.message);
+
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+
+      throw new Error(error.message || 'Failed to set security answers');
+    }
+  }
+
+  /**
+   * Verify security answers and reset PIN
+   * Used when user forgets PIN and needs to reset it
+   * @param {string} phone - 10-digit phone number
+   * @param {Array} answers - Array of {question_id, answer} objects
+   * @param {string} newPin - New 4-digit PIN
+   * @returns {Promise<Object>} - Success message
+   */
+  async verifyAnswersAndResetPin(phone, answers, newPin) {
+    try {
+      console.log('[AuthService] Verifying answers and resetting PIN for phone:', phone);
+
+      if (!answers || answers.length !== 3) {
+        throw new Error('Must provide exactly 3 answers');
+      }
+
+      const response = await ApiService.post('/users/verify-answers-reset-pin/', {
+        phone: phone,
+        answers: answers,
+        new_pin: newPin,
+      });
+
+      const { message } = response.data;
+
+      console.log('[AuthService] PIN reset via security answers successful');
+
+      return {
+        success: true,
+        message: message || 'PIN reset successful. You can now login with your new PIN.',
+      };
+    } catch (error) {
+      console.error('[AuthService] Verify answers and reset PIN error:', error.response?.data || error.message);
+
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+
+      throw new Error(error.message || 'Failed to verify answers and reset PIN');
+    }
+  }
 }
 
 // Export singleton instance

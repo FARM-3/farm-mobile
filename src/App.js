@@ -40,6 +40,7 @@ global.resetApp = async () => {
 // Dashboard screens
 import WelcomeScreen from './features/dashboard/screens/WelcomeScreen';
 import LoginScreen from './features/dashboard/screens/LoginScreen';
+import SecurityQuestionsScreen from './features/dashboard/screens/SecurityQuestionsScreen';
 import DashboardScreen from './features/dashboard/screens/DashboardScreen';
 import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 
@@ -160,6 +161,16 @@ const App = () => {
                         name="Login"
                         component={LoginScreen}
                         options={{ title: 'Login' }}
+                    />
+
+                    {/* Security Questions screen - shown on first-time login */}
+                    <Stack.Screen
+                        name="SecurityQuestions"
+                        component={SecurityQuestionsScreen}
+                        options={{
+                            title: 'Security Questions',
+                            animationEnabled: true,
+                        }}
                     />
 
                     {/* Dashboard screen */}

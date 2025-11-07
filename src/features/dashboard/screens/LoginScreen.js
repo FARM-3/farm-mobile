@@ -16,6 +16,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from "@expo/vector-icons";
 import AuthService from "../../../services/AuthService";
+import ApiService from "../../../services/ApiService";
 import Fonts from "../../../theme/fonts";
 import CoffeeColors from "../../../theme/colors";
 
@@ -38,9 +39,10 @@ export default function LoginScreen({ navigation }) {
 
   // RESET PIN Mode
   const [isResetPinMode, setIsResetPinMode] = useState(false);
-  const [resetStep, setResetStep] = useState(1); // 1: get question, 2: answer & new PIN
-  const [securityQuestion, setSecurityQuestion] = useState("");
-  const [securityAnswer, setSecurityAnswer] = useState("");
+  const [resetStep, setResetStep] = useState(1); // 1: enter phone, 2: answer questions & new PIN
+  const [resetPhoneNumber, setResetPhoneNumber] = useState("");
+  const [resetSecurityQuestions, setResetSecurityQuestions] = useState([]); // 3 questions
+  const [resetSecurityAnswers, setResetSecurityAnswers] = useState(["", "", ""]); // 3 answers
   const [newPinReset, setNewPinReset] = useState(["", "", "", ""]);
   const [confirmPinReset, setConfirmPinReset] = useState(["", "", "", ""]);
   const newPinResetRefs = useRef([]);
@@ -117,10 +119,25 @@ export default function LoginScreen({ navigation }) {
       setMessage("Login successful! Redirecting...");
       setMessageType("success");
 
-      // Navigate to Dashboard
+      // Check if user has set up security questions
+      const userHasSetupSecurityAnswers = response.user.security_answers_set === true;
+
+      // Navigate based on security setup status
       setTimeout(() => {
         setLoading(false);
-        navigation.replace('Dashboard');
+
+        if (!userHasSetupSecurityAnswers) {
+          // First-time login: navigate to security questions setup
+          console.log('[LoginScreen] First-time login - redirecting to security questions setup');
+          navigation.replace('SecurityQuestions', {
+            phone: phoneNumber,
+            user: response.user
+          });
+        } else {
+          // Already set up: go straight to dashboard
+          console.log('[LoginScreen] Security questions already set - going to dashboard');
+          navigation.replace('Dashboard');
+        }
       }, 500);
 
     } catch (err) {
@@ -132,13 +149,13 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // --- GET SECURITY QUESTION ---
-  const handleGetSecurityQuestion = async () => {
+  // --- LOAD USER'S SECURITY QUESTIONS FOR PIN RESET ---
+  const handleLoadSecurityQuestionsForReset = async () => {
     Keyboard.dismiss();
     setMessage("");
     setMessageType("");
 
-    if (!/^\d{10}$/.test(phoneNumber)) {
+    if (!/^\d{10}$/.test(resetPhoneNumber)) {
       setMessage("Please enter a valid 10-digit phone number.");
       setMessageType("error");
       return;
@@ -146,20 +163,44 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const response = await AuthService.getSecurityQuestion(phoneNumber);
-      setSecurityQuestion(response.securityQuestion);
-      setResetStep(2);
-      setMessage("");
-      setMessageType("");
+      console.log('[LoginScreen] Loading user\'s security questions for PIN reset for phone:', resetPhoneNumber);
+
+      // Call the USER SECURITY QUESTIONS endpoint (not random)
+      // This returns the SPECIFIC questions the user answered during first login
+      const response = await ApiService.post('/users/user-security-questions/', {
+        phone: resetPhoneNumber,
+      });
+
+      console.log('[LoginScreen] User security questions response:', response.data);
+
+      const { questions } = response.data;
+
+      if (questions && questions.length > 0) {
+        console.log('[LoginScreen] User questions loaded:', questions);
+        console.log('[LoginScreen] Number of questions:', questions.length);
+
+        // Dynamically create answers array based on number of questions
+        const answersArray = new Array(questions.length).fill("");
+
+        setResetSecurityQuestions(questions);
+        setResetSecurityAnswers(answersArray);
+        setResetStep(2);
+        setMessage("");
+        setMessageType("");
+      } else {
+        throw new Error('Failed to load security questions');
+      }
     } catch (err) {
-      setMessage(err.message || "Failed to get security question");
+      console.error('[LoginScreen] Error loading user questions for reset:', err);
+      const errorMsg = err.response?.data?.error || err.message || "Failed to load security questions.";
+      setMessage(errorMsg);
       setMessageType("error");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- RESET PIN LOGIC ---
+  // --- RESET PIN WITH NEW 3-QUESTION SYSTEM ---
   const handleResetPin = async () => {
     Keyboard.dismiss();
     setMessage("");
@@ -167,8 +208,18 @@ export default function LoginScreen({ navigation }) {
     const fullNewPin = newPinReset.join("");
     const fullConfirmPin = confirmPinReset.join("");
 
-    if (!securityAnswer.trim()) {
-      setMessage("Please answer the security question.");
+    // Validate all answers are filled
+    const allAnswersFilled = resetSecurityAnswers.every(ans => ans.trim().length > 0);
+    if (!allAnswersFilled) {
+      setMessage("Please answer all security questions.");
+      setMessageType("error");
+      return;
+    }
+
+    // Validate minimum answer length
+    const allAnswersValid = resetSecurityAnswers.every(ans => ans.trim().length >= 2);
+    if (!allAnswersValid) {
+      setMessage("Each answer must be at least 2 characters long.");
       setMessageType("error");
       return;
     }
@@ -187,7 +238,14 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      await AuthService.resetPin(phoneNumber, securityAnswer, fullNewPin);
+      // Format answers for API
+      const formattedAnswers = resetSecurityQuestions.map((q, idx) => ({
+        question_id: q.id,
+        answer: resetSecurityAnswers[idx].trim().toLowerCase(),
+      }));
+
+      console.log('[LoginScreen] Verifying answers and resetting PIN for phone:', resetPhoneNumber);
+      await AuthService.verifyAnswersAndResetPin(resetPhoneNumber, formattedAnswers, fullNewPin);
 
       setMessage("PIN reset successful! You can now login.");
       setMessageType("success");
@@ -196,8 +254,9 @@ export default function LoginScreen({ navigation }) {
       setTimeout(() => {
         setIsResetPinMode(false);
         setResetStep(1);
-        setSecurityQuestion("");
-        setSecurityAnswer("");
+        setResetPhoneNumber("");
+        setResetSecurityQuestions([]);
+        setResetSecurityAnswers([]); // Clear dynamically
         setNewPinReset(["", "", "", ""]);
         setConfirmPinReset(["", "", "", ""]);
         setMessage("");
@@ -205,7 +264,8 @@ export default function LoginScreen({ navigation }) {
       }, 1500);
 
     } catch (err) {
-      setMessage(err.message || "Failed to reset PIN");
+      console.error('[LoginScreen] Error resetting PIN:', err);
+      setMessage(err.message || "Failed to reset PIN. Please check your answers and try again.");
       setMessageType("error");
     } finally {
       setLoading(false);
@@ -358,17 +418,17 @@ export default function LoginScreen({ navigation }) {
 
         <View style={styles.contentWrapper}>
           <Text style={styles.instructionText}>
-            Enter your phone number to retrieve your security question.
+            Enter your phone number to answer your security questions.
           </Text>
 
           {/* Phone Number Input */}
           <Text style={styles.enterPinLabel}>Phone Number</Text>
           <TextInput
-            style={[styles.textInput, focusedField.row === 'phone' && styles.focusedInput]}
-            value={phoneNumber}
+            style={[styles.textInput, focusedField.row === 'resetPhone' && styles.focusedInput]}
+            value={resetPhoneNumber}
             onChangeText={text => {
               const cleanText = text.replace(/[^0-9]/g, '').slice(0, 10);
-              setPhoneNumber(cleanText);
+              setResetPhoneNumber(cleanText);
               setMessage("");
             }}
             placeholder=""
@@ -376,9 +436,9 @@ export default function LoginScreen({ navigation }) {
             keyboardType="number-pad"
             returnKeyType="done"
             editable={!loading}
-            onFocus={() => setFocusedField({ row: "phone", idx: -1 })}
+            onFocus={() => setFocusedField({ row: "resetPhone", idx: -1 })}
             onBlur={() => setFocusedField({ row: null, idx: null })}
-            onSubmitEditing={handleGetSecurityQuestion}
+            onSubmitEditing={handleLoadSecurityQuestionsForReset}
           />
 
           {/* Message Box */}
@@ -392,9 +452,9 @@ export default function LoginScreen({ navigation }) {
 
           {/* Continue Button */}
           <TouchableOpacity
-            style={[styles.unlockButton, (loading || phoneNumber.length !== 10) && styles.disabledButton]}
-            onPress={handleGetSecurityQuestion}
-            disabled={loading || phoneNumber.length !== 10}
+            style={[styles.unlockButton, (loading || resetPhoneNumber.length !== 10) && styles.disabledButton]}
+            onPress={handleLoadSecurityQuestionsForReset}
+            disabled={loading || resetPhoneNumber.length !== 10}
           >
             {loading ? (
               <ActivityIndicator color={CoffeeColors.WHITE} />
@@ -409,6 +469,9 @@ export default function LoginScreen({ navigation }) {
             onPress={() => {
               setIsResetPinMode(false);
               setResetStep(1);
+              setResetPhoneNumber("");
+              setResetSecurityQuestions([]);
+              setResetSecurityAnswers([]); // Clear dynamically
               setMessage("");
               setMessageType("");
             }}
@@ -422,93 +485,103 @@ export default function LoginScreen({ navigation }) {
   );
 
   /**
-   * Renders the Reset PIN screen - Step 2: Answer security question & new PIN
+   * Renders the Reset PIN screen - Step 2: Answer 3 security questions & new PIN
    */
   const renderResetPinStep2 = () => (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.centeredContent}>
-        <View style={styles.iconCircle}>
-          <Ionicons name="key" size={32} color={LoginColors.BUTTON_BROWN} />
-        </View>
+      <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.centeredContent}>
+          <View style={styles.iconCircle}>
+            <Ionicons name="key" size={32} color={LoginColors.BUTTON_BROWN} />
+          </View>
 
-        <Text style={styles.welcomeText}>Reset PIN</Text>
+          <Text style={styles.welcomeText}>Reset PIN</Text>
 
-        <View style={styles.contentWrapper}>
-          <Text style={styles.instructionText}>
-            Answer the security question and set a new PIN.
-          </Text>
+          <View style={styles.contentWrapper}>
+            <Text style={styles.instructionText}>
+              Answer all 3 security questions and set a new PIN.
+            </Text>
 
-          {/* Security Question */}
-          <Text style={styles.enterPinLabel}>Security Question</Text>
-          <Text style={styles.securityQuestionText}>{securityQuestion}</Text>
+            {/* Security Questions */}
+            {resetSecurityQuestions.map((question, idx) => (
+              <View key={question.id}>
+                <Text style={styles.enterPinLabel}>Question {idx + 1}</Text>
+                <Text style={styles.securityQuestionText}>{question.text}</Text>
 
-          {/* Security Answer Input */}
-          <Text style={styles.enterPinLabel}>Your Answer</Text>
-          <TextInput
-            style={[styles.textInput, focusedField.row === 'answer' && styles.focusedInput]}
-            value={securityAnswer}
-            onChangeText={text => {
-              setSecurityAnswer(text);
-              setMessage("");
-            }}
-            placeholder="Enter your answer"
-            autoCapitalize="none"
-            editable={!loading}
-            onFocus={() => setFocusedField({ row: "answer", idx: -1 })}
-            onBlur={() => setFocusedField({ row: null, idx: null })}
-          />
+                <Text style={styles.enterPinLabel}>Your Answer</Text>
+                <TextInput
+                  style={[styles.textInput, focusedField.row === `answer-${idx}` && styles.focusedInput]}
+                  value={resetSecurityAnswers[idx]}
+                  onChangeText={text => {
+                    const cleaned = text.replace(/[^a-zA-Z0-9\s]/g, '');
+                    const updated = [...resetSecurityAnswers];
+                    updated[idx] = cleaned;
+                    setResetSecurityAnswers(updated);
+                    setMessage("");
+                  }}
+                  placeholder="Enter your answer"
+                  autoCapitalize="none"
+                  editable={!loading}
+                  onFocus={() => setFocusedField({ row: `answer-${idx}`, idx: -1 })}
+                  onBlur={() => setFocusedField({ row: null, idx: null })}
+                />
+              </View>
+            ))}
 
-          {/* New PIN Input */}
-          <Text style={styles.enterPinLabel}>New PIN</Text>
-          {renderPinInput(newPinReset, newPinResetRefs, "new")}
-
-          {/* Confirm PIN Input */}
-          <Text style={styles.enterPinLabel}>Confirm New PIN</Text>
-          {renderPinInput(confirmPinReset, confirmPinResetRefs, "confirm")}
-
-          {/* Message Box */}
-          {message ? (
-            <View style={getMessageStyle()}>
-              <Text style={messageType === "error" ? styles.errorMessageText : styles.successMessageText}>
-                {message}
-              </Text>
+            {/* New PIN Input */}
+            <View style={{ marginTop: 20 }}>
+              <Text style={styles.enterPinLabel}>New PIN</Text>
+              {renderPinInput(newPinReset, newPinResetRefs, "new")}
             </View>
-          ) : <View style={{ height: 40 }} />}
 
-          {/* Reset PIN Button */}
-          <TouchableOpacity
-            style={[
-              styles.unlockButton,
-              (loading || !securityAnswer.trim() || newPinReset.join("").length !== 4 || confirmPinReset.join("").length !== 4) && styles.disabledButton
-            ]}
-            onPress={handleResetPin}
-            disabled={loading || !securityAnswer.trim() || newPinReset.join("").length !== 4 || confirmPinReset.join("").length !== 4}
-          >
-            {loading ? (
-              <ActivityIndicator color={CoffeeColors.WHITE} />
-            ) : (
-              <Text style={styles.loginButtonText}>Reset PIN</Text>
-            )}
-          </TouchableOpacity>
+            {/* Confirm PIN Input */}
+            <Text style={styles.enterPinLabel}>Confirm New PIN</Text>
+            {renderPinInput(confirmPinReset, confirmPinResetRefs, "confirm")}
 
-          {/* Back Link */}
-          <TouchableOpacity
-            style={styles.resetPinLinkContainer}
-            onPress={() => {
-              setResetStep(1);
-              setSecurityQuestion("");
-              setSecurityAnswer("");
-              setNewPinReset(["", "", "", ""]);
-              setConfirmPinReset(["", "", "", ""]);
-              setMessage("");
-              setMessageType("");
-            }}
-            disabled={loading}
-          >
-            <Text style={[styles.resetPinLinkText, { color: CoffeeColors.DARK_BROWN }]}>Back</Text>
-          </TouchableOpacity>
+            {/* Message Box */}
+            {message ? (
+              <View style={getMessageStyle()}>
+                <Text style={messageType === "error" ? styles.errorMessageText : styles.successMessageText}>
+                  {message}
+                </Text>
+              </View>
+            ) : <View style={{ height: 40 }} />}
+
+            {/* Reset PIN Button */}
+            <TouchableOpacity
+              style={[
+                styles.unlockButton,
+                (loading || resetSecurityAnswers.some(a => !a.trim()) || newPinReset.join("").length !== 4 || confirmPinReset.join("").length !== 4) && styles.disabledButton
+              ]}
+              onPress={handleResetPin}
+              disabled={loading || resetSecurityAnswers.some(a => !a.trim()) || newPinReset.join("").length !== 4 || confirmPinReset.join("").length !== 4}
+            >
+              {loading ? (
+                <ActivityIndicator color={CoffeeColors.WHITE} />
+              ) : (
+                <Text style={styles.loginButtonText}>Reset PIN</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Back Link */}
+            <TouchableOpacity
+              style={styles.resetPinLinkContainer}
+              onPress={() => {
+                setResetStep(1);
+                setResetSecurityQuestions([]);
+                setResetSecurityAnswers([]); // Clear dynamically
+                setNewPinReset(["", "", "", ""]);
+                setConfirmPinReset(["", "", "", ""]);
+                setMessage("");
+                setMessageType("");
+              }}
+              disabled={loading}
+            >
+              <Text style={[styles.resetPinLinkText, { color: CoffeeColors.DARK_BROWN }]}>Back</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </TouchableWithoutFeedback>
   );
 
