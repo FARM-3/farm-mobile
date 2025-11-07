@@ -2582,10 +2582,26 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     onDelete={(r) => handleDelete(r, 'harvest')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
                     onVoucher={(r) => {
-                        // Prepare harvest data for voucher
+                        // Prepare harvest data for voucher - lookup farmer name from farmersList
+                        const farmerUID = r.name || r.farmer_name || r.farmer_uid;
+                        let farmerName = farmerUID || 'Unknown';
+
+                        // Look up farmer name from farmersList
+                        if (farmerUID && Array.isArray(farmersList)) {
+                            const farmer = farmersList.find(f =>
+                                String(f.farmer_id) === String(farmerUID) ||
+                                String(f.uid) === String(farmerUID) ||
+                                String(f.id) === String(farmerUID)
+                            );
+
+                            if (farmer) {
+                                farmerName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || farmer.name || farmerUID;
+                            }
+                        }
+
                         const voucherData = {
                             ...r,
-                            workerName: r.farmer_name || r.name || 'Unknown',
+                            farmer_name: farmerName, // Use farmer_name to match PaymentVoucherScreen expectations
                             blockId: 'N/A', // Aggregation might not have blocks
                             pricePerKg: r.price_per_kg || 0,
                             amountPaid: r.amount_paid || 0,

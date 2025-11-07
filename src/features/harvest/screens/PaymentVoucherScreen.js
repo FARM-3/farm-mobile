@@ -68,17 +68,25 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
         fetchStaffName();
     }, [harvestData?.paidBy]);
 
+    // Generate simple unique voucher number
+    const generateVoucherNumber = () => {
+        const timestamp = Date.now();
+        const shortId = timestamp.toString().slice(-6); // Last 6 digits of timestamp
+        return `VN${shortId}`;
+    };
+
     // Extract data from harvest record
     const voucherData = {
-        voucherNo: harvestData?.id || 'N/A',
+        voucherNo: harvestData?.id || harvestData?.harvest_id || 'N/A',
+        voucherNumber: generateVoucherNumber(),
         paymentDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-        paidTo: harvestData?.workerName || 'N/A',
-        harvestId: harvestData?.id || 'N/A',
-        deliveryDate: harvestData?.dateReadable || (harvestData?.date ? new Date(harvestData.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')),
-        weight: `${harvestData?.weight || 0} kg`,
+        paidTo: harvestData?.farmer_name || harvestData?.workerName || harvestData?.farmer_uid || 'N/A',
+        harvestId: harvestData?.id || harvestData?.harvest_id || 'N/A',
+        deliveryDate: harvestData?.dateReadable || (harvestData?.date_of_delivery ? new Date(harvestData.date_of_delivery).toLocaleDateString('en-GB') : (harvestData?.date ? new Date(harvestData.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'))),
+        weight: `${harvestData?.weight_on_delivery || harvestData?.weight || 0} kg`,
         blockNo: harvestData?.blockId || 'N/A',
-        pricePerKg: `UGX ${Number(harvestData?.pricePerKg || 0).toLocaleString()}`,
-        amount: Number(harvestData?.amountPaid || 0),
+        pricePerKg: `UGX ${Number(harvestData?.price_per_kg || harvestData?.pricePerKg || 0).toLocaleString()}`,
+        amount: Number(harvestData?.amount_paid || harvestData?.amountPaid || 0),
         paidBy: paidByName,
         paymentMethod: 'Mobile Money', // Can be made dynamic
     };
@@ -117,6 +125,16 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
             align-items: start;
             margin-bottom: 15px;
         }
+        .logo-section {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .logo {
+            width: 60px;
+            height: 60px;
+            margin-right: 15px;
+        }
         .company-info h1 {
             color: #8B4513;
             font-size: 28px;
@@ -146,6 +164,12 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
             color: #8B4513;
             font-weight: bold;
             font-size: 13px;
+        }
+        .serial-number {
+            margin-top: 5px;
+            color: #666;
+            font-size: 11px;
+            font-weight: normal;
         }
         .voucher-title {
             text-align: center;
@@ -229,31 +253,6 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
         .harvest-item span:last-child {
             color: #333;
         }
-        .signatures {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 25px;
-            margin-top: 50px;
-            padding-top: 25px;
-            border-top: 2px solid #e0e0e0;
-        }
-        .signature-block {
-            text-align: center;
-        }
-        .signature-line {
-            border-top: 2px solid #333;
-            margin-bottom: 8px;
-            padding-top: 35px;
-        }
-        .signature-label {
-            font-weight: bold;
-            color: #333;
-            font-size: 12px;
-        }
-        .signature-date {
-            color: #666;
-            font-size: 11px;
-        }
         .notes-section {
             margin-top: 25px;
             padding: 15px;
@@ -283,16 +282,20 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
 <body>
     <div class="voucher-container">
         <div class="voucher-header">
-            <div class="header-top">
+            <div class="logo-section">
+                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" class="logo" alt="Rugyeyo Logo" />
                 <div class="company-info">
                     <h1>RUGGEYO FARM</h1>
                     <p>Coffee Production & Processing</p>
                     <p>Namayumba, Wakiso District, Uganda</p>
-                    <p>Tel: +256 XXX XXX XXX | Email: info@rugyeyofarm.com</p>
+                    <p>Namayumba, Wakiso District, Uganda</p>
+                    <p>Tel: +256772701051 | Email: rkabushenga@gmail.com</p>
                 </div>
+            </div>
+            <div class="header-top">
                 <div class="voucher-number">
-                    <h2>VOUCHER #</h2>
-                    <p>${voucherData.voucherNo}</p>
+                    <h2>VOUCHER NUMBER</h2>
+                    <p>${voucherData.voucherNumber}</p>
                     <p class="original-badge">ORIGINAL</p>
                 </div>
             </div>
@@ -335,17 +338,10 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                     <span>${voucherData.weight}</span>
                 </div>
                 <div class="harvest-item">
-                    <span>Block Number:</span>
-                    <span>${voucherData.blockNo}</span>
-                </div>
-                <div class="harvest-item">
                     <span>Rate per kg:</span>
                     <span>${voucherData.pricePerKg}</span>
                 </div>
-                <div class="harvest-item">
-                    <span>Quality Grade:</span>
-                    <span>Premium AA</span>
-                </div>
+
             </div>
         </div>
 
@@ -365,7 +361,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
         <div class="voucher-details">
             <div class="detail-row">
                 <div class="detail-label">Payment For:</div>
-                <div class="detail-value">Coffee Cherry Harvest - Fresh delivery from ${voucherData.blockNo}</div>
+                <div class="detail-value">Coffee Cherry Harvest</div>
             </div>
         </div>
 
@@ -379,23 +375,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
             </p>
         </div>
 
-        <div class="signatures">
-            <div class="signature-block">
-                <div class="signature-line"></div>
-                <div class="signature-label">Received By</div>
-                <div class="signature-date">(Payee Signature)</div>
-            </div>
-            <div class="signature-block">
-                <div class="signature-line"></div>
-                <div class="signature-label">Approved By</div>
-                <div class="signature-date">(Farm Manager)</div>
-            </div>
-            <div class="signature-block">
-                <div class="signature-line"></div>
-                <div class="signature-label">Verified By</div>
-                <div class="signature-date">(Accountant)</div>
-            </div>
-        </div>
+    
 
         <div class="footer">
             <p>This is a computer-generated voucher and is valid without signature if verified digitally.</p>
@@ -465,13 +445,17 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                     {/* Header */}
                     <View style={styles.header}>
                         <View style={styles.headerLeft}>
-                            <Text style={styles.companyName}>RUGYEYO FARM</Text>
-                            <Text style={styles.companySubtitle}>Coffee Production & Processing</Text>
-                            <Text style={styles.companyAddress}>Namayumba, Wakiso District, Uganda</Text>
+                            <Image source={require('../../../assets/rugyeyo_logo.png')} style={styles.logo} />
+                            <View style={styles.companyInfo}>
+                                <Text style={styles.companyName}>RUGYEYO FARM</Text>
+                                <Text style={styles.companySubtitle}>Coffee Production & Processing</Text>
+                                <Text style={styles.companyAddress}>Namayumba, Wakiso District, Uganda</Text>
+                                <Text style={styles.companyContact}>Tel: +256772701051 | Email: rkabushenga@gmail.com</Text>
+                            </View>
                         </View>
                         <View style={styles.headerRight}>
-                            <Text style={styles.voucherLabel}>VOUCHER #</Text>
-                            <Text style={styles.voucherNumber}>{voucherData.voucherNo}</Text>
+                            <Text style={styles.voucherLabel}>VOUCHER NUMBER</Text>
+                            <Text style={styles.voucherNumber}>{voucherData.voucherNumber}</Text>
                             <Text style={styles.originalBadge}>ORIGINAL</Text>
                         </View>
                     </View>
@@ -485,7 +469,6 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                     <View style={styles.section}>
                         <DetailRow label="Date of Payment" value={voucherData.paymentDate} />
                         <DetailRow label="Paid To" value={voucherData.paidTo} />
-                        <DetailRow label="Payment Method" value={voucherData.paymentMethod} />
                         <DetailRow label="Paid By" value={voucherData.paidBy} />
                     </View>
 
@@ -496,9 +479,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                             <HarvestItem label="Harvest ID" value={voucherData.harvestId} />
                             <HarvestItem label="Delivery Date" value={voucherData.deliveryDate} />
                             <HarvestItem label="Weight" value={voucherData.weight} />
-                            <HarvestItem label="Block" value={voucherData.blockNo} />
                             <HarvestItem label="Rate/kg" value={voucherData.pricePerKg} />
-                            <HarvestItem label="Quality" value="Premium AA" />
                         </View>
                     </View>
 
@@ -518,7 +499,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                     <View style={styles.section}>
                         <DetailRow
                             label="Payment For"
-                            value={`Coffee Cherry Harvest - Fresh delivery from ${voucherData.blockNo}`}
+                            value="Coffee Cherry Harvest"
                         />
                     </View>
 
@@ -533,24 +514,6 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                         </Text>
                     </View>
 
-                    {/* Signatures Placeholder */}
-                    <View style={styles.signaturesSection}>
-                        <View style={styles.signatureBlock}>
-                            <View style={styles.signatureLine} />
-                            <Text style={styles.signatureLabel}>Received By</Text>
-                            <Text style={styles.signatureSubtext}>(Payee)</Text>
-                        </View>
-                        <View style={styles.signatureBlock}>
-                            <View style={styles.signatureLine} />
-                            <Text style={styles.signatureLabel}>Approved By</Text>
-                            <Text style={styles.signatureSubtext}>(Manager)</Text>
-                        </View>
-                        <View style={styles.signatureBlock}>
-                            <View style={styles.signatureLine} />
-                            <Text style={styles.signatureLabel}>Verified By</Text>
-                            <Text style={styles.signatureSubtext}>(Accountant)</Text>
-                        </View>
-                    </View>
                 </View>
 
                 {/* Action Buttons */}
@@ -631,6 +594,17 @@ const styles = StyleSheet.create({
     },
     headerLeft: {
         flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    logo: {
+        width: 50,
+        height: 50,
+        marginRight: 12,
+        resizeMode: 'contain',
+    },
+    companyInfo: {
+        flex: 1,
     },
     companyName: {
         fontSize: 24,
@@ -647,6 +621,11 @@ const styles = StyleSheet.create({
     companyAddress: {
         fontSize: 11,
         color: '#666',
+    },
+    companyContact: {
+        fontSize: 10,
+        color: '#666',
+        marginTop: 2,
     },
     headerRight: {
         alignItems: 'flex-end',
@@ -665,6 +644,11 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: CoffeeColors.PRIMARY_BROWN,
         fontWeight: 'bold',
+        marginTop: 4,
+    },
+    serialNumber: {
+        fontSize: 10,
+        color: '#666',
         marginTop: 4,
     },
     titleContainer: {
