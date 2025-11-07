@@ -9,10 +9,15 @@ import * as Location from 'expo-location';
  * and replace the WEATHER_API_KEY below with your actual key.
  */
 
-// TODO: Replace with your OpenWeatherMap API key
-// Get your free API key from: https://openweathermap.org/api
-const WEATHER_API_KEY = 'YOUR_API_KEY_HERE'; // Replace this with your actual API key
+// OpenWeatherMap API key for real-time weather data
+// Your personal API key from OpenWeatherMap
+const WEATHER_API_KEY = '3d315b57c7b5bd4581a9a7bc69e3ae6b'; // Your OpenWeatherMap API key
 const WEATHER_API_BASE_URL = 'https://api.openweathermap.org/data/2.5';
+
+// Cache settings to reduce API calls
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+let weatherCache = null;
+let lastFetchTime = 0;
 
 /**
  * Get current device location
@@ -105,6 +110,11 @@ const fetchWeatherByCoords = async (coords) => {
         const response = await fetch(url);
 
         if (!response.ok) {
+            // Handle rate limiting (429) and other errors
+            if (response.status === 429) {
+                console.warn('[WeatherService] Rate limit reached. Using cached or fallback data.');
+                return weatherCache || getFallbackWeather();
+            }
             throw new Error(`Weather API error: ${response.status}`);
         }
 
@@ -179,6 +189,13 @@ export const getCurrentWeather = async () => {
     try {
         console.log('[WeatherService] Getting current weather...');
 
+        // Check cache first to avoid rate limiting
+        const now = Date.now();
+        if (weatherCache && (now - lastFetchTime) < CACHE_DURATION) {
+            console.log('[WeatherService] Using cached weather data');
+            return weatherCache;
+        }
+
         // Get device location
         const location = await getCurrentLocation();
 
@@ -189,10 +206,16 @@ export const getCurrentWeather = async () => {
 
         // Fetch weather data
         const weatherData = await fetchWeatherByCoords(location);
+
+        // Cache the result
+        weatherCache = weatherData;
+        lastFetchTime = now;
+
         return weatherData;
     } catch (error) {
         console.error('[WeatherService] Error in getCurrentWeather:', error);
-        return getFallbackWeather();
+        // Return cached data if available, otherwise fallback
+        return weatherCache || getFallbackWeather();
     }
 };
 

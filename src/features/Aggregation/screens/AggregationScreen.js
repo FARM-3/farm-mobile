@@ -26,6 +26,7 @@ import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import CustomAlert from '../../../components/CustomAlert';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
+import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
 
 // ================================================
@@ -1492,15 +1493,31 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     const updateHarvestForm = (key, value) => {
         console.log(`[Harvest Form] Updating field: ${key}, value:`, value);
         setHarvestForm(p => {
-            const newState = { ...p, [key]: value };
+            let processedValue = value;
+
+            // Handle money fields with comma formatting
+            if (key === 'price_per_kg') {
+                // Remove any non-numeric characters except decimal point
+                const cleaned = String(value).replace(/[^0-9.]/g, '');
+                // Prevent multiple decimal points
+                const parts = cleaned.split('.');
+                if (parts.length > 2) {
+                    return p; // Don't update if multiple decimal points
+                }
+                // Format with commas
+                processedValue = formatNumberWithCommas(cleaned);
+            }
+
+            const newState = { ...p, [key]: processedValue };
 
             // Auto-calculate amount_paid when weight or price_per_kg changes
             if (key === 'weight_on_delivery' || key === 'price_per_kg') {
-                const weight = Number(key === 'weight_on_delivery' ? value : newState.weight_on_delivery) || 0;
-                const pricePerKg = Number(key === 'price_per_kg' ? value : newState.price_per_kg) || 0;
+                const weight = parseFormattedNumber(key === 'weight_on_delivery' ? processedValue : newState.weight_on_delivery) || 0;
+                const pricePerKg = parseFormattedNumber(key === 'price_per_kg' ? processedValue : newState.price_per_kg) || 0;
                 const calculatedAmount = weight * pricePerKg;
 
-                newState.amount_paid = calculatedAmount > 0 ? calculatedAmount.toFixed(2) : '';
+                // Format calculated amount with commas
+                newState.amount_paid = calculatedAmount > 0 ? formatNumberWithCommas(calculatedAmount.toFixed(2)) : '';
                 console.log(`[Harvest Form] Auto-calculated amount_paid: ${newState.amount_paid} (${weight} kg × ${pricePerKg} UGX/kg)`);
             }
 
@@ -1700,9 +1717,9 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         const harvestRecord = {
             ...harvestForm,
             id: recordId,
-            weight_on_delivery: Number(harvestForm.weight_on_delivery) || 0,
-            price_per_kg: Number(harvestForm.price_per_kg) || 0,
-            amount_paid: Number(harvestForm.amount_paid) || 0,
+            weight_on_delivery: parseFormattedNumber(harvestForm.weight_on_delivery) || 0,
+            price_per_kg: parseFormattedNumber(harvestForm.price_per_kg) || 0,
+            amount_paid: parseFormattedNumber(harvestForm.amount_paid) || 0,
             number_of_bags: Number(harvestForm.number_of_bags) || 0,
             weight_after_floating: Number(harvestForm.weight_after_floating) || 0,
             recorder_id: userId,
@@ -2319,7 +2336,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 number_of_bags: String(record.number_of_bags || ''),
                 date_of_delivery: record.date_of_delivery || '',
                 coffee_type: record.grade || record.coffee_type || '',
-                amount_paid: String(record.amount_paid || ''),
+                price_per_kg: record.price_per_kg ? formatNumberWithCommas(String(record.price_per_kg)) : '',
+                amount_paid: record.amount_paid ? formatNumberWithCommas(String(record.amount_paid)) : '',
                 paid_by: record.paid_by || record.who_paid || '',
                 selectedStaff: null, // Will be set by SearchableStaffPicker
                 harvest_id: record.id || record.harvest_id || '',
