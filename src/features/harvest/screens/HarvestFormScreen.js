@@ -9,11 +9,9 @@ import CustomPicker from '../../../components/CustomPicker';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import SearchableWorkerPicker from '../../../components/SearchableWorkerPicker';
 import CustomAlert from '../../../components/CustomAlert';
-<<<<<<< HEAD
 import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
-=======
 import { fetchCurrentPrice } from '../../../services/priceService';
->>>>>>> 9afa8f53df8a4aa38bd3165cfa6899385cfe01a9
+
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
