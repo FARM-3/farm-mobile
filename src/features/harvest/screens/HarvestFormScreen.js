@@ -194,12 +194,14 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
 const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
     const [productionPrice, setProductionPrice] = useState(null);
     const [loadingPrice, setLoadingPrice] = useState(false);
+    const [priceRefreshKey, setPriceRefreshKey] = useState(0);
 
     useEffect(() => {
         const loadPrice = async () => {
             setLoadingPrice(true);
             try {
                 const price = await fetchCurrentPrice();
+                console.log('[HarvestForm] Fetched price:', price);
                 if (price) {
                     setProductionPrice(price);
                     // Auto-fill the price field if it's empty
@@ -225,18 +227,8 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
             }
         };
 
-
-        // <Text style={styles.label}>Price per Kg (UGX)</Text>
-        // <TextInput
-        //     style={styles.input}
-        //     keyboardType="numeric"
-        //     value={formData.pricePerKg}
-        //     onChangeText={(t) => updateField('pricePerKg', t)}
-        //     placeholder="e.g. 4,000"
-        // />
-
         loadPrice();
-    }, []);
+    }, [priceRefreshKey, formData.pricePerKg, updateField]);
 
     return (
         <View style={stepStyles.stepContainer}>
@@ -252,17 +244,37 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
             />
 
             <Text style={styles.label}>Price per Kg (UGX)</Text>
-            <View style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
-                {loadingPrice ? (
-                    <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
-                ) : (
-                    <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
-                        {formData.pricePerKg || productionPrice || '3000'}
-                    </Text>
-                )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.input, { flex: 1, backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
+                    {loadingPrice ? (
+                        <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
+                    ) : (
+                        <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
+                            {formData.pricePerKg || productionPrice || '3000'}
+                        </Text>
+                    )}
+                </View>
+                <TouchableOpacity
+                    style={{
+                        backgroundColor: CoffeeColors.PRIMARY_BROWN,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderRadius: 8,
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                    }}
+                    onPress={() => setPriceRefreshKey(prev => prev + 1)}
+                    disabled={loadingPrice}
+                >
+                    <Ionicons
+                        name={loadingPrice ? "hourglass" : "refresh"}
+                        size={20}
+                        color={CoffeeColors.WHITE}
+                    />
+                </TouchableOpacity>
             </View>
             <Text style={styles.helperText}>
-                Current production price from system settings
+                Current production price from system settings. Tap refresh icon to update.
             </Text>
 
             <Text style={styles.label}>Amount Paid (UGX)</Text>
