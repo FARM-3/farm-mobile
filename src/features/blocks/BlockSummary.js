@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList
+  View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput, FlatList, ScrollView
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,21 +19,123 @@ import { deleteBlock } from '../../utils/firebaseSetup';
 
 const BLOCK_SYNC_QUEUE_KEY = "blocks_sync_queue";
 
+// ===============================================
+// === BLOCK DETAIL VIEW COMPONENT      ===
+// ===============================================
+
+/**
+ * BlockDetailView - Mobile-friendly detail screen for viewing block information
+ * Displays all block data organized in logical sections with proper labels
+ */
+const BlockDetailView = ({ block, onBack }) => {
+    if (!block) return null;
+
+    // Helper to format field values properly
+    const formatValue = (value) => {
+        if (value === null || value === undefined || value === '') return 'Not provided';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'Not provided';
+        return String(value);
+    };
+
+    // Field sections for organized display - showing ALL available data from the 3-step form
+    const sections = [
+        {
+            title: 'Tree Details',
+            fields: [
+                { label: 'Block ID', value: block.block_id },
+                { label: 'Number of Trees', value: block.no_of_trees || block.trees },
+                { label: 'Age of Seedling (months)', value: block.age_of_seedling },
+                { label: 'Date Planted', value: block.date_planted || block.date },
+                { label: 'Coffee Type', value: block.type_of_coffee || block.type },
+                { label: 'Type of Seedling', value: block.type_of_seedling },
+                { label: 'Seedling Source', value: block.source_of_seedling || block.source },
+            ]
+        },
+        {
+            title: 'Fertilizers & Pesticides',
+            fields: [
+                { label: 'Fertilizer Type', value: block.fertilizers },
+                { label: 'Fertilizer Names', value: block.fertilizer_names || block.fertilizer },
+                { label: 'Use Pesticides', value: block.use_pesticides },
+                { label: 'Pesticides List', value: block.pesticides_list },
+            ]
+        },
+        {
+            title: 'Standard Practices',
+            fields: [
+                { label: 'Standard Practices', value: block.standard_practices },
+                { label: 'Sync Status', value: block.isSynced ? 'Synced' : 'Pending' },
+            ]
+        },
+        {
+            title: 'Additional Information',
+            fields: [
+                { label: 'Recorder ID', value: block.recorder_id || 'N/A' },
+                { label: 'Timestamp', value: block.timestamp ? new Date(block.timestamp).toLocaleString() : 'N/A' },
+            ]
+        }
+    ];
+
+    return (
+        <View style={styles.detailViewContainer}>
+            {/* Header with back button */}
+            <View style={styles.detailHeader}>
+                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={CoffeeColors.DARK_BROWN} />
+                </TouchableOpacity>
+                <Text style={styles.detailHeaderTitle}>Block Details</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            {/* Scrollable content */}
+            <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
+                {/* Block Name and ID Card */}
+                <View style={styles.detailNameCard}>
+                    <Text style={styles.detailFarmerName}>
+                        {block.block_id || 'Unknown Block'}
+                    </Text>
+                    <Text style={styles.detailFarmerId}>
+                        Type: {block.type || 'N/A'}
+                    </Text>
+                </View>
+
+                {/* Information Sections */}
+                {sections.map((section, sectionIndex) => (
+                    <View key={sectionIndex} style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>{section.title}</Text>
+                        {section.fields.map((field, fieldIndex) => (
+                            <View key={fieldIndex} style={styles.detailFieldRow}>
+                                <Text style={styles.detailFieldLabel}>{field.label}:</Text>
+                                <Text style={styles.detailFieldValue}>{formatValue(field.value)}</Text>
+                            </View>
+                        ))}
+                    </View>
+                ))}
+            </ScrollView>
+        </View>
+    );
+};
+
 const BlockSummary = ({ route = {}, navigation }) => {
-  const [allRecords, setAllRecords] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [unsyncedCount, setUnsyncedCount] = useState(0);
-  const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
-  const [searchTerm, setSearchTerm] = useState('');
-  const [alert, setAlert] = useState({
-    visible: false,
-    title: '',
-    message: '',
-    type: 'info',
-    buttons: [],
-  });
+    const [allRecords, setAllRecords] = useState([]);
+    const [filteredData, setFilteredData] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [unsyncedCount, setUnsyncedCount] = useState(0);
+    const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
+    const [searchTerm, setSearchTerm] = useState('');
+    const [alert, setAlert] = useState({
+      visible: false,
+      title: '',
+      message: '',
+      type: 'info',
+      buttons: [],
+    });
+
+    // State for detail view
+    const [selectedBlock, setSelectedBlock] = useState(null);
+    const [viewMode, setViewMode] = useState('table'); // 'table' or 'detail'
 
   // --- OFFLINE SYNC UTILITIES ---
 
@@ -68,8 +170,11 @@ const BlockSummary = ({ route = {}, navigation }) => {
         const remoteResponse = await ApiService.get('harvests/blocks/');
         if (remoteResponse.data && Array.isArray(remoteResponse.data.results)) {
           remoteRecords = remoteResponse.data.results.map(r => ({
+            // Keep all original field names for detail view
+            ...r,
             id: r.block_id,
             block_id: r.block_id,
+            // Also keep simplified names for backward compatibility
             trees: r.no_of_trees || 0,
             type: r.type_of_coffee || 'N/A',
             date: r.date_planted,
@@ -89,8 +194,11 @@ const BlockSummary = ({ route = {}, navigation }) => {
     const localResponse = await getUnsyncedBlocks();
     if (localResponse.success && Array.isArray(localResponse.records)) {
       localRecords = localResponse.records.map(r => ({
+        // Keep all original field names for detail view
+        ...r,
         id: r.block_id,
         block_id: r.block_id,
+        // Also keep simplified names for backward compatibility
         trees: r.no_of_trees || 0,
         type: r.type_of_coffee || 'N/A',
         date: r.date_planted,
@@ -298,7 +406,8 @@ const BlockSummary = ({ route = {}, navigation }) => {
   };
 
   const handleViewDetails = (item) => {
-    navigation.navigate('BlockDetails', { blockData: item });
+    setSelectedBlock(item);
+    setViewMode('detail');
   };
 
   const renderBlockCard = ({ item }) => {
@@ -369,6 +478,16 @@ const BlockSummary = ({ route = {}, navigation }) => {
     );
   }
 
+  // Handler for back press
+  const handleBackPress = () => {
+    if (viewMode === 'detail') {
+      setViewMode('table');
+      setSelectedBlock(null);
+    } else {
+      navigation.goBack();
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
       <SimpleHeader
@@ -376,62 +495,57 @@ const BlockSummary = ({ route = {}, navigation }) => {
         unsyncedCount={unsyncedCount}
         onSync={handleSyncPress}
         isSyncing={isSyncing}
+        onBackPress={handleBackPress}
       />
 
       <View style={styles.container}>
-        {/* Sync Status Banner */}
-        <View style={styles.syncBanner}>
-          <Text style={styles.syncText}>{syncStatus}</Text>
-          <TouchableOpacity onPress={loadData} style={{ marginLeft: 10 }}>
-            <Ionicons name="reload-circle-sharp" size={24} color={CoffeeColors.CREAM} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search-outline" size={20} color={CoffeeColors.MEDIUM_BROWN} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by block ID, type, or source..."
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            placeholderTextColor={CoffeeColors.GRAY_TEXT}
-          />
-          {searchTerm.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchTerm('')}>
-              <Ionicons name="close-circle" size={20} color={CoffeeColors.MEDIUM_BROWN} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Action Bar */}
-        <View style={styles.actionBar}>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => navigation.navigate('BlockRegistration')}
-          >
-            <Ionicons name="add-circle-outline" size={20} color={CoffeeColors.CREAM} />
-            <Text style={styles.addButtonText}>Register New Block</Text>
-          </TouchableOpacity>
-          <Text style={styles.recordCount}>{filteredData.length} blocks</Text>
-        </View>
-
-        {/* Block Records List */}
-        <FlatList
-          data={filteredData}
-          renderItem={renderBlockCard}
-          keyExtractor={(item, index) => `${item.block_id}_${item.isSynced}_${index}`}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="file-tray-outline" size={64} color={CoffeeColors.MEDIUM_BROWN} />
-              <Text style={styles.emptyText}>No block records found</Text>
-              {searchTerm && (
-                <Text style={styles.emptySubtext}>Try adjusting your search</Text>
-              )}
+        {viewMode === 'table' && (
+          <>
+            {/* Sync Status Banner */}
+            <View style={styles.syncBanner}>
+              <Text style={styles.syncText}>{syncStatus}</Text>
+              <TouchableOpacity onPress={loadData} style={{ marginLeft: 10 }}>
+                <Ionicons name="reload-circle-sharp" size={24} color={CoffeeColors.CREAM} />
+              </TouchableOpacity>
             </View>
-          }
-          contentContainerStyle={{ paddingBottom: 100 }}
-        />
+
+            {/* Action Bar */}
+            <View style={styles.actionBar}>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => navigation.navigate('BlockRegistration')}
+              >
+                <Ionicons name="add-circle-outline" size={20} color={CoffeeColors.CREAM} />
+                <Text style={styles.addButtonText}>Register New Block</Text>
+              </TouchableOpacity>
+              <Text style={styles.recordCount}>{filteredData.length} blocks</Text>
+            </View>
+
+            {/* Block Records List */}
+            <FlatList
+              data={filteredData}
+              renderItem={renderBlockCard}
+              keyExtractor={(item, index) => `${item.block_id}_${item.isSynced}_${index}`}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="file-tray-outline" size={64} color={CoffeeColors.MEDIUM_BROWN} />
+                  <Text style={styles.emptyText}>No block records found</Text>
+                </View>
+              }
+              contentContainerStyle={{ paddingBottom: 100 }}
+            />
+          </>
+        )}
+
+        {viewMode === 'detail' && selectedBlock && (
+          <BlockDetailView
+            block={selectedBlock}
+            onBack={() => {
+              setSelectedBlock(null);
+              setViewMode('table');
+            }}
+          />
+        )}
       </View>
 
       <BottomNav activeScreen="Blocks" />
@@ -611,6 +725,108 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: CoffeeColors.GRAY_TEXT,
     fontStyle: 'italic',
+  },
+  // --- Block Detail View ---
+  detailViewContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    overflow: 'hidden',
+    elevation: 3,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: CoffeeColors.DARK_BROWN,
+    borderBottomWidth: 1,
+    borderBottomColor: CoffeeColors.LIGHT_BROWN,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CoffeeColors.LIGHT_BROWN,
+    borderRadius: 20,
+  },
+  detailHeaderTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+    fontFamily: Fonts.bold,
+    flex: 1,
+    textAlign: 'center',
+  },
+  detailScrollView: {
+    flex: 1,
+  },
+  detailContent: {
+    padding: 16,
+  },
+  detailNameCard: {
+    backgroundColor: '#fef5f0',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: CoffeeColors.DARK_BROWN,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  detailFarmerName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.bold,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  detailFarmerId: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: CoffeeColors.MEDIUM_BROWN,
+    fontFamily: Fonts.semiBold,
+  },
+  detailSection: {
+    marginBottom: 24,
+    backgroundColor: CoffeeColors.LIGHT_GRAY_BG,
+    borderRadius: 10,
+    padding: 16,
+  },
+  detailSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.bold,
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: CoffeeColors.DARK_BROWN,
+  },
+  detailFieldRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: CoffeeColors.LIGHT_BROWN,
+  },
+  detailFieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: CoffeeColors.GRAY_TEXT,
+    fontFamily: Fonts.semiBold,
+    flex: 1,
+  },
+  detailFieldValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.regular,
+    flex: 2,
+    textAlign: 'right',
   },
 });
 

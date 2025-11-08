@@ -44,7 +44,7 @@ const SuccessModal = ({ isVisible, message, blockId, onClose, onGoToSummary }) =
   >
     <View style={modalStyles.centeredView}>
       <View style={modalStyles.modalView}>
-        <Text style={modalStyles.modalTitle}>✅ Success!</Text>
+        <Text style={modalStyles.modalTitle}>Success!</Text>
         <Text style={modalStyles.modalText}>{message}</Text>
         {blockId && <Text style={modalStyles.modalTextSmall}>Block ID: {blockId}</Text>}
         <View style={modalStyles.buttonContainer}>

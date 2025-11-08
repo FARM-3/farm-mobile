@@ -1126,7 +1126,6 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
             <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
                 {/* Harvest ID Card */}
                 <View style={styles.detailNameCard}>
-                    <Ionicons name="leaf" size={32} color={PRIMARY_BROWN} style={{ marginBottom: 8 }} />
                     <Text style={styles.detailFarmerName}>
                         {farmerDisplayName}
                     </Text>
@@ -3529,7 +3528,7 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     detailNameCard: {
-        backgroundColor: VERY_LIGHT_BROWN,
+        backgroundColor: '#fef5f0',
         padding: 20,
         borderRadius: 12,
         marginBottom: 20,
