@@ -53,6 +53,7 @@ import BlockDetailsScreen from './features/blocks/BlockDetailsScreen';
 import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen';
 import ProductionHarvestsScreen from './features/harvest/screens/ProductionHarvestsScreen';
 import HarvestDetailsScreen from './features/harvest/screens/HarvestDetailsScreen';
+import PaymentVoucherScreen from './features/harvest/screens/PaymentVoucherScreen';
 
 // Aggregation screens
 import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
@@ -204,6 +205,12 @@ const App = () => {
                         name="HarvestForm"
                         component={HarvestFormScreen}
                         options={{ title: 'New Harvest Entry' }}
+                    />
+
+                    <Stack.Screen
+                        name="PaymentVoucher"
+                        component={PaymentVoucherScreen}
+                        options={{ title: 'Payment Voucher' }}
                     />
 
                     {/* Processing screen */}

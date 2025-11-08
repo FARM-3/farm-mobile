@@ -306,6 +306,15 @@ export default function ProductionHarvestsScreen({ navigation }) {
                         style={styles.iconButton}
                         onPress={(e) => {
                             e.stopPropagation();
+                            navigation.navigate('PaymentVoucher', { harvestData: item });
+                        }}
+                    >
+                        <Ionicons name="document-text" size={20} color={CoffeeColors.PRIMARY_BROWN} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={(e) => {
+                            e.stopPropagation();
                             handleEdit(item);
                         }}
                     >
