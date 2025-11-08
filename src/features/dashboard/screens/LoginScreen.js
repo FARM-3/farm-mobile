@@ -267,7 +267,20 @@ export default function LoginScreen({ navigation }) {
 
     } catch (err) {
       console.error('[LoginScreen] Error resetting PIN:', err);
-      setMessage(err.message || "Failed to reset PIN. Please check your answers and try again.");
+
+      // Provide specific error messages
+      let errorMessage = "Failed to reset PIN. Please check your answers and try again.";
+
+      if (err.message?.includes('No refresh token')) {
+        // This means the endpoint returned 401 - answers were probably incorrect
+        errorMessage = "One or more answers are incorrect. Please check and try again.";
+      } else if (err.message?.includes('Unauthorized')) {
+        errorMessage = "Authentication failed. Please check your answers.";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setMessage(errorMessage);
       setMessageType("error");
     } finally {
       setLoading(false);
