@@ -671,22 +671,8 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 setFormData(initialFormState);
                 setCurrentStep(0);
 
-                // Show success message using CustomAlert
-                setAlertConfig({
-                    title: "Saved Locally!",
-                    message: "Your harvest record has been saved locally and is ready to sync.",
-                    type: 'success',
-                    buttons: [
-                        {
-                            text: "OK",
-                            onPress: () => {
-                                setAlertVisible(false);
-                                navigation.navigate('Harvests');
-                            }
-                        }
-                    ]
-                });
-                setAlertVisible(true);
+                // Auto-navigate to Payment Voucher
+                navigation.navigate('PaymentVoucher', { harvestData });
             }
 
         } catch (error) {

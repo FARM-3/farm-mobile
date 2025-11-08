@@ -569,7 +569,7 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
 };
 
 // --- NEW/REPLACED Table Component: Searchable Data List ---
-const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, isFarmer, farmersList = [] }) => {
+const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, onVoucher, isFarmer, farmersList = [] }) => {
     const [searchText, setSearchText] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -779,7 +779,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                     )}
                 </View>
 
-                {/* Edit, Sync Draft (if draft), and Delete Icon Buttons */}
+                {/* Edit, Sync Draft (if draft), Voucher (for harvests), and Delete Icon Buttons */}
                 <View style={styles.recordActions}>
                     {/* Sync Draft Button - Only shows for draft records */}
                     {item._isDraft && onSyncDraft && (
@@ -791,6 +791,19 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                             }}
                         >
                             <Ionicons name="cloud-upload-outline" size={20} color="#4CAF50" />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Voucher Button - Only shows for harvest records */}
+                    {!isFarmer && onVoucher && (
+                        <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={(e) => {
+                                e.stopPropagation(); // Prevent triggering the main onPress
+                                onVoucher(item);
+                            }}
+                        >
+                            <Ionicons name="document-text" size={20} color={PRIMARY_BROWN} />
                         </TouchableOpacity>
                     )}
 
@@ -1497,8 +1510,14 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         // Validation for NIN
         if (key === 'nin') {
-            if (value && !/^(CF|CM)[A-Z0-9]*$/.test(value.toUpperCase())) {
-                setFarmerErrors(prev => ({ ...prev, nin: 'NIN must start with CF or CM in uppercase letters.' }));
+            if (value) {
+                if (value.length > 14) {
+                    setFarmerErrors(prev => ({ ...prev, nin: 'NIN must not exceed 14 characters.' }));
+                } else if (!/^(CF|CM)[A-Z0-9]*$/.test(value.toUpperCase())) {
+                    setFarmerErrors(prev => ({ ...prev, nin: 'NIN must start with CF or CM in uppercase letters.' }));
+                } else {
+                    setFarmerErrors(prev => ({ ...prev, nin: '' }));
+                }
             } else {
                 setFarmerErrors(prev => ({ ...prev, nin: '' }));
             }
@@ -1778,11 +1797,21 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
             console.log(`[handleHarvestSubmit] ✅ Harvest saved locally!`);
 
-            setSuccessMessage(`Harvest for '${harvestForm.farmer_name || harvestForm.farmer_uid}' saved locally and ready to sync!`);
-            setViewMode('success');
             resetForms();
             await loadRecords();
             await countUnsyncedRecords();
+
+            // Auto-generate voucher
+            const voucherData = {
+                ...harvestRecord,
+                workerName: harvestForm.farmer_name || harvestForm.farmer_uid,
+                blockId: 'N/A', // Aggregation might not have blocks
+                pricePerKg: harvestForm.price_per_kg,
+                amountPaid: harvestForm.amount_paid,
+                paidBy: harvestForm.paid_by,
+                date: harvestForm.date_of_delivery,
+            };
+            onNavigate('PaymentVoucher', { harvestData: voucherData });
         } catch (e) {
             console.error(`[handleHarvestSubmit] ❌ Save error:`, e);
             console.error('[handleHarvestSubmit] Error details:', {
@@ -2590,6 +2619,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     }}
                     onDelete={(r) => handleDelete(r, 'farmer')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
+                    onVoucher={null}
                 />
             );
         } else {
@@ -2613,6 +2643,35 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     }}
                     onDelete={(r) => handleDelete(r, 'harvest')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
+                    onVoucher={(r) => {
+                        // Prepare harvest data for voucher - lookup farmer name from farmersList
+                        const farmerUID = r.name || r.farmer_name || r.farmer_uid;
+                        let farmerName = farmerUID || 'Unknown';
+
+                        // Look up farmer name from farmersList
+                        if (farmerUID && Array.isArray(farmersList)) {
+                            const farmer = farmersList.find(f =>
+                                String(f.farmer_id) === String(farmerUID) ||
+                                String(f.uid) === String(farmerUID) ||
+                                String(f.id) === String(farmerUID)
+                            );
+
+                            if (farmer) {
+                                farmerName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || farmer.name || farmerUID;
+                            }
+                        }
+
+                        const voucherData = {
+                            ...r,
+                            farmer_name: farmerName, // Use farmer_name to match PaymentVoucherScreen expectations
+                            blockId: 'N/A', // Aggregation might not have blocks
+                            pricePerKg: r.price_per_kg || 0,
+                            amountPaid: r.amount_paid || 0,
+                            paidBy: r.paid_by || 'N/A',
+                            date: r.date_of_delivery || r.date,
+                        };
+                        onNavigate('PaymentVoucher', { harvestData: voucherData });
+                    }}
                 />
             );
         }

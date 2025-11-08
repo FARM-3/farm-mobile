@@ -314,9 +314,11 @@ const DashboardScreen = ({ navigation }) => {
         <LinearGradient colors={[DARK_BROWN, '#7a3f1a', '#8B4513']} style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
-              <View style={styles.avatarIcon}>
-                <Ionicons name="leaf" size={20} color="#fff" />
-              </View>
+              <Image
+                source={require('../../../assets/rugyeyo_logo.png')}
+                style={styles.loadingLogo}
+                resizeMode="contain"
+              />
               <View>
                 <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
                 <Text style={styles.headerSubtitle}>Hello, {userName}</Text>
@@ -599,6 +601,11 @@ const styles = StyleSheet.create({
     color: PRIMARY_BROWN,
     fontWeight: Fonts.weights.semiBold,
     fontFamily: Fonts.semiBold,
+  },
+  loadingLogo: {
+    width: 40,
+    height: 40,
+    marginRight: 12,
   },
   headerContainer: {
     position: 'absolute',
