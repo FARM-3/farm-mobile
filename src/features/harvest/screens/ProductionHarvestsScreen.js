@@ -238,18 +238,26 @@ export default function ProductionHarvestsScreen({ navigation }) {
                 failedRecords: result.failedRecords
             });
 
-            if (result.syncedCount > 0) {
+            if (result.syncedCount === result.totalCount && result.totalCount > 0) {
+                // All records synced successfully
                 setSyncStatus(`✓ Synced ${result.syncedCount} record${result.syncedCount !== 1 ? 's' : ''}`);
                 console.log('[ProductionHarvests] Sync successful, waiting 500ms before reload');
                 // Wait a brief moment for backend to process the records before reloading
                 await new Promise(resolve => setTimeout(resolve, 500));
-            } else if (result.failedRecords && result.failedRecords.length > 0) {
+            } else if (result.syncedCount > 0 && result.failedRecords && result.failedRecords.length > 0) {
+                // Partial success
+                const failedCount = result.totalCount - result.syncedCount;
+                const errorMsg = result.failedRecords.map(f => `${f.id}: ${f.error || f.reason}`).join('; ');
+                setSyncStatus(`Partial: ${result.syncedCount}/${result.totalCount} synced. Failed: ${errorMsg}`);
+                console.warn('[ProductionHarvests] Partial sync result:', result.failedRecords);
+            } else if (result.syncedCount === 0 && result.failedRecords && result.failedRecords.length > 0) {
+                // All failed
                 const errorMsg = result.failedRecords.map(f => `${f.id}: ${f.error || f.reason}`).join('; ');
                 setSyncStatus(`Sync failed: ${errorMsg}`);
                 console.error('[ProductionHarvests] Sync failed with errors:', result.failedRecords);
             } else {
                 setSyncStatus("Sync failed - check your connection and try again");
-                console.warn('[ProductionHarvests] Sync returned 0 synced records and no error details');
+                console.warn('[ProductionHarvests] Sync returned unexpected result:', result);
             }
 
             // Reload data to reflect sync status
@@ -259,7 +267,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
 
         } catch (error) {
             console.error('[ProductionHarvests] Sync error:', error);
-            setSyncStatus("Sync error - please check your connection");
+            setSyncStatus(`Sync error: ${error.message || 'Unknown error'}`);
         } finally {
             setIsSyncing(false);
             console.log('[ProductionHarvests] Sync process completed, isSyncing set to false');

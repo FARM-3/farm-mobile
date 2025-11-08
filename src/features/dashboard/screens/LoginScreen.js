@@ -176,13 +176,15 @@ export default function LoginScreen({ navigation }) {
       const { questions } = response.data;
 
       if (questions && questions.length > 0) {
-        console.log('[LoginScreen] User questions loaded:', questions);
-        console.log('[LoginScreen] Number of questions:', questions.length);
+        // Cap questions to 3 for the Reset PIN flow (frontend defensive guard)
+        const cappedQuestions = questions.slice(0, 3);
+        console.log('[LoginScreen] User questions loaded (capped to 3):', cappedQuestions);
+        console.log('[LoginScreen] Number of questions (capped):', cappedQuestions.length);
 
-        // Dynamically create answers array based on number of questions
-        const answersArray = new Array(questions.length).fill("");
+        // Always use a 3-length answers array for the Reset PIN flow
+        const answersArray = new Array(3).fill("");
 
-        setResetSecurityQuestions(questions);
+        setResetSecurityQuestions(cappedQuestions);
         setResetSecurityAnswers(answersArray);
         setResetStep(2);
         setMessage("");
@@ -252,11 +254,11 @@ export default function LoginScreen({ navigation }) {
 
       // Return to login screen
       setTimeout(() => {
-        setIsResetPinMode(false);
-        setResetStep(1);
-        setResetPhoneNumber("");
-        setResetSecurityQuestions([]);
-        setResetSecurityAnswers([]); // Clear dynamically
+  setIsResetPinMode(false);
+  setResetStep(1);
+  setResetPhoneNumber("");
+  setResetSecurityQuestions([]);
+  setResetSecurityAnswers(new Array(3).fill("")); // Clear dynamically (keep length 3)
         setNewPinReset(["", "", "", ""]);
         setConfirmPinReset(["", "", "", ""]);
         setMessage("");
@@ -471,7 +473,7 @@ export default function LoginScreen({ navigation }) {
               setResetStep(1);
               setResetPhoneNumber("");
               setResetSecurityQuestions([]);
-              setResetSecurityAnswers([]); // Clear dynamically
+              setResetSecurityAnswers(new Array(3).fill("")); // Clear dynamically (keep length 3)
               setMessage("");
               setMessageType("");
             }}
@@ -504,7 +506,7 @@ export default function LoginScreen({ navigation }) {
 
             {/* Security Questions */}
             {resetSecurityQuestions.map((question, idx) => (
-              <View key={question.id}>
+              <View key={question.id} style={{ width: '100%', marginBottom: 20 }}>
                 <Text style={styles.enterPinLabel}>Question {idx + 1}</Text>
                 <Text style={styles.securityQuestionText}>{question.text}</Text>
 
@@ -569,7 +571,7 @@ export default function LoginScreen({ navigation }) {
               onPress={() => {
                 setResetStep(1);
                 setResetSecurityQuestions([]);
-                setResetSecurityAnswers([]); // Clear dynamically
+                setResetSecurityAnswers(new Array(3).fill("")); // Clear dynamically (keep length 3)
                 setNewPinReset(["", "", "", ""]);
                 setConfirmPinReset(["", "", "", ""]);
                 setMessage("");
