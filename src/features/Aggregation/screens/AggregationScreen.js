@@ -1805,8 +1805,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 ...harvestRecord,
                 workerName: harvestForm.farmer_name || harvestForm.farmer_uid,
                 blockId: 'N/A', // Aggregation might not have blocks
-                pricePerKg: harvestForm.price_per_kg,
-                amountPaid: harvestForm.amount_paid,
+                pricePerKg: harvestRecord.price_per_kg, // Use raw numeric value
+                amountPaid: harvestRecord.amount_paid, // Use raw numeric value
                 paidBy: harvestForm.paid_by,
                 date: harvestForm.date_of_delivery,
             };
@@ -2664,8 +2664,11 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             ...r,
                             farmer_name: farmerName, // Use farmer_name to match PaymentVoucherScreen expectations
                             blockId: 'N/A', // Aggregation might not have blocks
-                            pricePerKg: r.price_per_kg || 0,
-                            amountPaid: r.amount_paid || 0,
+                            price_per_kg: parseFormattedNumber(r.price_per_kg) || 0, // Parse formatted strings from API
+                            amount_paid: parseFormattedNumber(r.amount_paid) || 0, // Parse formatted strings from API
+                            weight_on_delivery: parseFormattedNumber(r.weight_on_delivery) || 0, // Parse formatted strings from API
+                            pricePerKg: parseFormattedNumber(r.price_per_kg) || 0,
+                            amountPaid: parseFormattedNumber(r.amount_paid) || 0,
                             paidBy: r.paid_by || 'N/A',
                             date: r.date_of_delivery || r.date,
                         };
@@ -3372,9 +3375,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        backgroundColor: '#fff',
         paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: LIGHT_GRAY_BG,
+        paddingHorizontal: 15,
+        borderRadius: 8,
+        marginBottom: 10,
+        borderLeftWidth: 4,
+        borderLeftColor: PRIMARY_BROWN,
+        shadowColor: DARK_BROWN,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
     },
     dataListItemTitle: {
         fontSize: 16,

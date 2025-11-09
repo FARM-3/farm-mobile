@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         marginBottom: 10,
         borderLeftWidth: 4,
-        borderLeftColor: CoffeeColors.MEDIUM_BROWN,
+        borderLeftColor: CoffeeColors.PRIMARY_BROWN,
         shadowColor: CoffeeColors.DARK_BROWN,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
