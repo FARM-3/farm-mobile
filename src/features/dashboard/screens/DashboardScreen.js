@@ -117,6 +117,29 @@ const DashboardScreen = ({ navigation }) => {
       const blocksData = await AsyncStorage.getItem('blocks_sync_queue');
       const blocks = blocksData ? JSON.parse(blocksData) : [];
 
+      // Fetch recent activities from backend
+      let recentActivities = [];
+      try {
+        const apiUrl = await AsyncStorage.getItem('apiUrl') || 'http://localhost:8000/api';
+        const token = await AsyncStorage.getItem('auth_token');
+
+        const activitiesResponse = await fetch(`${apiUrl}/activities/?limit=10`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (activitiesResponse.ok) {
+          const activitiesData = await activitiesResponse.json();
+          recentActivities = activitiesData.results || activitiesData;
+          console.log('[Dashboard] Fetched activities:', recentActivities.length);
+        }
+      } catch (activityError) {
+        console.warn('[Dashboard] Could not fetch activities:', activityError.message);
+      }
+
       setStats({
         farmers: farmers.length,
         harvests: harvests.length,
@@ -129,6 +152,7 @@ const DashboardScreen = ({ navigation }) => {
         aggregationHarvest: harvests[0] || null,
         harvest: productionResponse.remoteData?.results?.[0] || null,
         block: blocks[0] || null,
+        activities: recentActivities,
         loading: false,
       });
     } catch (error) {
@@ -529,77 +553,29 @@ const DashboardScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.recentActivityCard}>
-          {/* Recent Production Harvest */}
-          {lastRecords.harvest && (
-            <>
-              <View style={styles.activityItem}>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>New harvest recorded</Text>
-                  <Text style={styles.activitySubtitle}>
-                    {lastRecords.harvest.weight_on_delivery || 'Unknown'} kg coffee from {lastRecords.harvest.name || 'Worker'}
-                  </Text>
-                  <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
-                    {getTimeAgo(lastRecords.harvest.created_at || lastRecords.harvest.date_of_delivery)}
-                  </Text>
+          {/* Recent Activities from Backend */}
+          {lastRecords.activities && lastRecords.activities.length > 0 ? (
+            lastRecords.activities.map((activity, index) => (
+              <View key={activity.id || index}>
+                <View style={styles.activityItem}>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>
+                      {activity.object_repr || 'Activity'} - {activity.action}
+                    </Text>
+                    <Text style={styles.activitySubtitle}>
+                      By: <Text style={{ fontWeight: '600' }}>{activity.user_name || 'Unknown User'}</Text>
+                    </Text>
+                    <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
+                      {getTimeAgo(activity.timestamp)}
+                    </Text>
+                  </View>
                 </View>
+                {index < lastRecords.activities.length - 1 && (
+                  <View style={styles.activityDivider} />
+                )}
               </View>
-              <View style={styles.activityDivider} />
-            </>
-          )}
-
-          {/* Recent Aggregation Farmer */}
-          {lastRecords.aggregationFarmer && (
-            <>
-              <View style={styles.activityItem}>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>Farmer registration</Text>
-                  <Text style={styles.activitySubtitle}>
-                    {lastRecords.aggregationFarmer.first_name || lastRecords.aggregationFarmer.name || 'New farmer'} added to network
-                  </Text>
-                  <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
-                    {getTimeAgo(lastRecords.aggregationFarmer.created_at)}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.activityDivider} />
-            </>
-          )}
-
-          {/* Recent Aggregation Harvest */}
-          {lastRecords.aggregationHarvest && (
-            <>
-              <View style={styles.activityItem}>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityTitle}>Bought coffee from farmer</Text>
-                  <Text style={styles.activitySubtitle}>
-                    {lastRecords.aggregationHarvest.quantity || 'Unknown'} units purchased
-                  </Text>
-                  <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
-                    {getTimeAgo(lastRecords.aggregationHarvest.created_at)}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.activityDivider} />
-            </>
-          )}
-
-          {/* Recent Block */}
-          {lastRecords.block && (
-            <View style={styles.activityItem}>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Block details recorded</Text>
-                <Text style={styles.activitySubtitle}>
-                  {lastRecords.block.block_name || 'Block'} - {lastRecords.block.size_hectares || 'Unknown'} hectares
-                </Text>
-                <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
-                  {getTimeAgo(lastRecords.block.created_at)}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* No Activities Message */}
-          {!lastRecords.harvest && !lastRecords.aggregationFarmer && !lastRecords.aggregationHarvest && !lastRecords.block && (
+            ))
+          ) : (
             <View style={styles.activityItem}>
               <View style={styles.activityContent}>
                 <Text style={styles.activityTitle}>No recent activity</Text>

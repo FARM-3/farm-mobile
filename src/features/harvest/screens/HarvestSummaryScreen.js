@@ -157,6 +157,10 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     // State for custom alert modal
     const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
 
+    // State for success message with auto-dismiss
+    const [successMessage, setSuccessMessage] = useState('');
+    const successTimeoutRef = useRef(null);
+
     // Ref for synchronized scrolling
     const headerScrollRef = useRef(null);
     const rowScrollRefs = useRef([]);
@@ -306,6 +310,15 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         return unsubscribe;
     }, [navigation, loadAndSyncData]);
 
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (successTimeoutRef.current) {
+                clearTimeout(successTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const handleSyncPress = async () => {
         if (unsyncedCount > 0) {
             // If there are unsynced records, sync them
@@ -379,6 +392,18 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         navigation.navigate('HarvestForm', { editData: item });
     };
 
+    const showSuccessMessage = (message) => {
+        setSuccessMessage(message);
+        // Clear any existing timeout
+        if (successTimeoutRef.current) {
+            clearTimeout(successTimeoutRef.current);
+        }
+        // Auto-dismiss after 2.5 seconds
+        successTimeoutRef.current = setTimeout(() => {
+            setSuccessMessage('');
+        }, 2500);
+    };
+
     const handleDelete = (item) => {
         setAlertConfig({
             visible: true,
@@ -400,15 +425,12 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                             const result = await deleteHarvestRecord(item.id);
 
                             if (result.success) {
-                                // Refresh the data
-                                await loadAndSyncData();
-                                setAlertConfig({
-                                    visible: true,
-                                    title: 'Success',
-                                    message: 'Harvest record deleted successfully',
-                                    type: 'success',
-                                    buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
-                                });
+                                // Show success message first
+                                showSuccessMessage('Harvest record deleted successfully');
+                                // Refresh the data after a brief delay
+                                setTimeout(() => {
+                                    loadAndSyncData();
+                                }, 1000);
                             } else {
                                 setAlertConfig({
                                     visible: true,
@@ -566,6 +588,14 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                 onSync={handleSyncPress}
                 onBackPress={handleBackPress}
             />
+            {/* Success Message Banner */}
+            {successMessage ? (
+                <View style={styles.successBanner}>
+                    <Ionicons name="checkmark-circle" size={20} color={CoffeeColors.WHITE} style={{ marginRight: 8 }} />
+                    <Text style={styles.successText}>{successMessage}</Text>
+                </View>
+            ) : null}
+
             {/* Main scrollable content container */}
             <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <View style={styles.container}>
@@ -1020,6 +1050,29 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.regular,
         flex: 2,
         textAlign: 'right',
+    },
+    // --- Success Message Banner ---
+    successBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        backgroundColor: '#4CAF50',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#388E3C',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+    },
+    successText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: CoffeeColors.WHITE,
+        fontFamily: Fonts.semiBold,
+        flex: 1,
     },
 });
 
