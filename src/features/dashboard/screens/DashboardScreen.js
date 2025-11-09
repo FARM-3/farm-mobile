@@ -523,49 +523,90 @@ const DashboardScreen = ({ navigation }) => {
         {/* Recent Activity */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAllText}>View All</Text>
+          <TouchableOpacity onPress={loadDashboardData}>
+            <Text style={styles.viewAllText}>Refresh</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.recentActivityCard}>
-          <View style={styles.activityItem}>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>New harvest recorded</Text>
-              <Text style={styles.activitySubtitle}>150 kg coffee beans from Block A</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>45 minutes ago</Text>
+          {/* Recent Production Harvest */}
+          {lastRecords.harvest && (
+            <>
+              <View style={styles.activityItem}>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>New harvest recorded</Text>
+                  <Text style={styles.activitySubtitle}>
+                    {lastRecords.harvest.weight_on_delivery || 'Unknown'} kg coffee from {lastRecords.harvest.name || 'Worker'}
+                  </Text>
+                  <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
+                    {getTimeAgo(lastRecords.harvest.created_at || lastRecords.harvest.date_of_delivery)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.activityDivider} />
+            </>
+          )}
+
+          {/* Recent Aggregation Farmer */}
+          {lastRecords.aggregationFarmer && (
+            <>
+              <View style={styles.activityItem}>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>Farmer registration</Text>
+                  <Text style={styles.activitySubtitle}>
+                    {lastRecords.aggregationFarmer.first_name || lastRecords.aggregationFarmer.name || 'New farmer'} added to network
+                  </Text>
+                  <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
+                    {getTimeAgo(lastRecords.aggregationFarmer.created_at)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.activityDivider} />
+            </>
+          )}
+
+          {/* Recent Aggregation Harvest */}
+          {lastRecords.aggregationHarvest && (
+            <>
+              <View style={styles.activityItem}>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityTitle}>Bought coffee from farmer</Text>
+                  <Text style={styles.activitySubtitle}>
+                    {lastRecords.aggregationHarvest.quantity || 'Unknown'} units purchased
+                  </Text>
+                  <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
+                    {getTimeAgo(lastRecords.aggregationHarvest.created_at)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.activityDivider} />
+            </>
+          )}
+
+          {/* Recent Block */}
+          {lastRecords.block && (
+            <View style={styles.activityItem}>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityTitle}>Block details recorded</Text>
+                <Text style={styles.activitySubtitle}>
+                  {lastRecords.block.block_name || 'Block'} - {lastRecords.block.size_hectares || 'Unknown'} hectares
+                </Text>
+                <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
+                  {getTimeAgo(lastRecords.block.created_at)}
+                </Text>
+              </View>
             </View>
-          </View>
+          )}
 
-          <View style={styles.activityDivider} />
-
-          <View style={styles.activityItem}>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Farmer registration</Text>
-              <Text style={styles.activitySubtitle}>John Mugisha added to network</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>2 hours ago</Text>
+          {/* No Activities Message */}
+          {!lastRecords.harvest && !lastRecords.aggregationFarmer && !lastRecords.aggregationHarvest && !lastRecords.block && (
+            <View style={styles.activityItem}>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityTitle}>No recent activity</Text>
+                <Text style={styles.activitySubtitle}>Start by recording harvests or adding farmers</Text>
+              </View>
             </View>
-          </View>
-
-          <View style={styles.activityDivider} />
-
-          <View style={styles.activityItem}>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Processing completed</Text>
-              <Text style={styles.activitySubtitle}>Batch #247 - Drying stage finished</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>5 hours ago</Text>
-            </View>
-          </View>
-
-          <View style={styles.activityDivider} />
-
-          <View style={styles.activityItem}>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Quality check completed</Text>
-              <Text style={styles.activitySubtitle}>Grade A certification • by Sarah</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>7 hours ago</Text>
-            </View>
-          </View>
+          )}
         </View>
       </Animated.ScrollView>
       </View>
