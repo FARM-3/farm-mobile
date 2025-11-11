@@ -49,7 +49,7 @@ const CustomAlert = ({ visible, title, message, type = 'info', buttons = [] }) =
   const iconConfig = getIconConfig();
 
   // Default button if none provided
-  const displayButtons = buttons.length > 0 ? buttons : [
+  const displayButtons = buttons && buttons.length > 0 ? buttons : [
     { text: 'OK', onPress: () => {} }
   ];
 

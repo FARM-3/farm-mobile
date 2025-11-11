@@ -26,6 +26,7 @@ import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import CustomAlert from '../../../components/CustomAlert';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
+import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
 
 // ================================================
@@ -54,28 +55,28 @@ const farmerFieldDefinitions = [
         title: 'Personal Info',
         fields: [
             { key: 'first_name', label: 'First Name', keyboardType: 'default', required: true },
-            { key: 'last_name', label: 'Last Name', keyboardType: 'default' },
+            { key: 'last_name', label: 'Last Name', keyboardType: 'default', required: true },
             { key: 'gender', label: 'Gender', type: 'picker', pickerKey: 'gender' },
-            { key: 'nin', label: 'NIN', keyboardType: 'default' },
-            { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
+            { key: 'nin', label: 'NIN', keyboardType: 'default', required: true },
+            { key: 'date_of_birth', label: 'Date of Birth', type: 'date', required: true },
             { key: 'contact', label: 'Phone Number', keyboardType: 'phone-pad', required: true, placeholder: 'Example: 0770123456' },
             { key: 'email', label: 'Email (optional)', keyboardType: 'email-address', placeholder: 'Example: johnkato@gmail.com' },
             { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'yes-no' },
             { key: 'cooperative', label: 'Cooperative Name', keyboardType: 'default', dependsOn: { field: 'in_cooperative', value: true } },
-            { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date' },
+            { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date', required: true },
         ]
     },
     // Step 2: Location & UID
     {
         title: 'Location & ID',
         fields: [
-            { key: 'district', label: 'District', type: 'picker', pickerKey: 'district' },
-            { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county' },
+            { key: 'district', label: 'District', type: 'picker', pickerKey: 'district', required: true },
+            { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county', required: true },
             // Parish will dynamically filter based on sub_county
-            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish', dynamic: true }, 
+            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish', dynamic: true, required: true },
             { key: 'village', label: 'Village', keyboardType: 'default' },
             { key: 'gps', label: 'GPS Location (optional)', keyboardType: 'default' },
-            { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default' },
+            { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default', required: true },
             { key: 'uid', label: 'Farmer UID (Generated)', special: 'generate_uid', readOnly: true },
         ]
     },
@@ -83,27 +84,27 @@ const farmerFieldDefinitions = [
     {
         title: 'Farm Details',
         fields: [
-            { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety' },
-            { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric' },
-            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'yes-no' },
+            { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety', required: true },
+            { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric', required: true },
+            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'yes-no', required: true },
             { key: 'other_farms', label: 'If no, which farms (location, owner)', keyboardType: 'default', dependsOn: { field: 'all_your_trees', value: false } },
-            { key: 'planted_date', label: 'Date planted', type: 'date' },
-            { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing' },
-            { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership' },
-            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no' },
-            { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source' },
-            { key: 'seedling_type', label: 'Type of seedlings', type: 'multi-select', pickerKey: 'seedling_type' },
-            { key: 'age_of_seedlings', label: 'Age of seedlings *', keyboardType: 'default', required: true },
+            { key: 'planted_date', label: 'Date planted', type: 'date', required: true },
+            { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing', required: true },
+            { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership', required: true },
+            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no', required: true },
+            { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source', required: true },
+            { key: 'seedling_type', label: 'Type of seedlings', type: 'multi-select', pickerKey: 'seedling_type', required: true },
+            { key: 'age_of_seedlings', label: 'Age of seedlings (Days)', keyboardType: 'numeric', required: true },
         ]
     },
     // Step 4: Practices & Chemicals
     {
         title: 'Farming Practices',
         fields: [
-            { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices' },
-            { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation' },
-            { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true },
-            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'yes-no' },
+            { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices', required: true },
+            { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation', required: true },
+            { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true, required: true },
+            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'yes-no', required: true },
             { key: 'pesticides', label: 'If yes, list pesticides (comma separated)', array: true, dependsOn: { field: 'uses_pesticides', value: true } },
         ]
     }
@@ -116,7 +117,8 @@ const harvestFieldDefinitions = [
         fields: [
             { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
             { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
-            { key: 'number_of_bags', label: 'Number of Bags', keyboardType: 'numeric' },
+            { key: 'location_on_delivery', label: 'Location on Delivery', keyboardType: 'default' },
+            { key: 'gps_coordinates', label: 'GPS Coordinates', keyboardType: 'default', action: 'capture_gps' },
             { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
         ]
     },
@@ -124,10 +126,10 @@ const harvestFieldDefinitions = [
     {
         title: 'Quality & Payment',
         fields: [
-            { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type' },
+            { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type', required: true },
             { key: 'price_per_kg', label: 'Price per Kg (UGX)', keyboardType: 'numeric', required: true },
             { key: 'amount_paid', label: 'Amount Paid (UGX)', keyboardType: 'numeric', readOnly: true, calculated: true },
-            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff' },
+            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff', required: true },
             { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
         ]
     }
@@ -188,18 +190,19 @@ const getCurrentGPSLocation = async () => {
 // === 2. LIGHTWEIGHT LOCAL UI HELPERS (POLISHED)===
 // ===============================================
 
-const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true, placeholder = '' }) => (
+const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true, placeholder = '', error = '' }) => (
     <View style={{ marginBottom: 15 }}>
         {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-        <TextInput 
-            value={value} 
-            onChangeText={onChangeText} 
-            keyboardType={keyboardType} 
-            style={[styles.textInput, !editable && styles.readOnlyInput]} 
+        <TextInput
+            value={value}
+            onChangeText={onChangeText}
+            keyboardType={keyboardType}
+            style={[styles.textInput, !editable && styles.readOnlyInput, error && styles.errorInput]}
             editable={editable}
             placeholder={placeholder}
             placeholderTextColor={BORDER_LIGHT}
         />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
 );
 
@@ -566,7 +569,7 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
 };
 
 // --- NEW/REPLACED Table Component: Searchable Data List ---
-const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, isFarmer, farmersList = [] }) => {
+const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, onVoucher, isFarmer, farmersList = [] }) => {
     const [searchText, setSearchText] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -743,14 +746,14 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
         const thirdKey = fields.length > 2 ? fields[2].key : null;
 
         return (
-            <TouchableOpacity style={[styles.dataListItem, item._isDraft && styles.draftListItem]} onPress={() => onEdit(item)}>
+            <TouchableOpacity style={[styles.dataListItem, item._isDraft && styles.draftListItem, !item._isDraft && !item._isSynced && styles.pendingListItem]} onPress={() => onEdit(item)}>
                 <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <Text style={styles.dataListItemTitle}>
                             {String(displayName)}
                             <Text style={styles.dataListItemUID}> ({displayId})</Text>
                         </Text>
-                        {/* Draft Badge - Shows only for draft records */}
+                        {/* Draft Badge - Shows only for incomplete draft records */}
                         {item._isDraft && (
                             <View style={styles.draftBadge}>
                                 <Text style={styles.draftBadgeText}>DRAFT</Text>
@@ -767,9 +770,16 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                             Saved at: {item._draftStepTitle || 'Unknown Step'}
                         </Text>
                     )}
+                    {/* Pending Status - Shows for submitted but unsynced records */}
+                    {!item._isDraft && !item._isSynced && (
+                        <View style={styles.syncStatusInline}>
+                            <Ionicons name="cloud-upload-outline" size={14} color={LIGHT_BROWN} />
+                            <Text style={[styles.syncStatusText, { color: LIGHT_BROWN }]}>Pending</Text>
+                        </View>
+                    )}
                 </View>
 
-                {/* Edit, Sync Draft (if draft), and Delete Icon Buttons */}
+                {/* Edit, Sync Draft (if draft), Voucher (for harvests), and Delete Icon Buttons */}
                 <View style={styles.recordActions}>
                     {/* Sync Draft Button - Only shows for draft records */}
                     {item._isDraft && onSyncDraft && (
@@ -781,6 +791,19 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                             }}
                         >
                             <Ionicons name="cloud-upload-outline" size={20} color="#4CAF50" />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Voucher Button - Only shows for harvest records */}
+                    {!isFarmer && onVoucher && (
+                        <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={(e) => {
+                                e.stopPropagation(); // Prevent triggering the main onPress
+                                onVoucher(item);
+                            }}
+                        >
+                            <Ionicons name="document-text" size={20} color={PRIMARY_BROWN} />
                         </TouchableOpacity>
                     )}
 
@@ -1065,6 +1088,8 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
                 { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
                 { label: 'Date of Delivery', value: harvest.date_of_delivery },
                 { label: 'Weight on Delivery', value: harvest.weight_on_delivery ? `${harvest.weight_on_delivery} kg` : 'Not provided' },
+                { label: 'Location on Delivery', value: harvest.location_on_delivery || 'Not provided' },
+                { label: 'GPS Coordinates', value: harvest.gps_coordinates || 'Not captured' },
                 { label: 'Weight After Floating', value: harvest.weight_after_floating ? `${harvest.weight_after_floating} kg` : 'Not provided' },
                 { label: 'Number of Bags', value: harvest.number_of_bags },
             ]
@@ -1101,7 +1126,6 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
             <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
                 {/* Harvest ID Card */}
                 <View style={styles.detailNameCard}>
-                    <Ionicons name="leaf" size={32} color={PRIMARY_BROWN} style={{ marginBottom: 8 }} />
                     <Text style={styles.detailFarmerName}>
                         {farmerDisplayName}
                     </Text>
@@ -1143,7 +1167,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1167,6 +1191,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
     // State for custom alert modal
     const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
+
+    // State for sync loading indicator
+    const [isSyncing, setIsSyncing] = useState(false);
+
+    // State for validation errors
+    const [farmerErrors, setFarmerErrors] = useState({});
+    const [harvestErrors, setHarvestErrors] = useState({});
 
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
@@ -1196,13 +1227,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             console.log('[loadRecords] First 3 farmers:', Array.isArray(f) ? f.slice(0, 3) : 'Not an array');
             console.log('[loadRecords] Full farmers response:', JSON.stringify(f, null, 2));
 
+            // Mark backend farmers as synced (not drafts, not pending)
+            const syncedFarmers = Array.isArray(f) ? f.map(farmer => ({
+                ...farmer,
+                _isDraft: false,
+                _isSynced: true
+            })) : [];
+
             // Load farmer drafts from AsyncStorage
             const farmerDraftsJson = await AsyncStorage.getItem('farmer_drafts');
             const farmerDrafts = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
             console.log('[loadRecords] Loaded farmer drafts count:', farmerDrafts.length);
 
-            // Combine submitted farmers and drafts
-            const allFarmers = [...(Array.isArray(f) ? f : []), ...farmerDrafts];
+            // Combine synced farmers from backend and local drafts
+            const allFarmers = [...syncedFarmers, ...farmerDrafts];
             console.log('[loadRecords] Total farmers (submitted + drafts):', allFarmers.length);
             setFarmersList(allFarmers);
 
@@ -1216,13 +1254,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             const h = await fetchHarvests();
             console.log('[loadRecords] Fetched harvests count:', Array.isArray(h) ? h.length : 0);
 
+            // Mark backend harvests as synced (not drafts, not pending)
+            const syncedHarvests = Array.isArray(h) ? h.map(harvest => ({
+                ...harvest,
+                _isDraft: false,
+                _isSynced: true
+            })) : [];
+
             // Load harvest drafts from AsyncStorage
             const harvestDraftsJson = await AsyncStorage.getItem('harvest_drafts');
             const harvestDrafts = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
             console.log('[loadRecords] Loaded harvest drafts count:', harvestDrafts.length);
 
-            // Combine submitted harvests and drafts
-            const allHarvests = [...(Array.isArray(h) ? h : []), ...harvestDrafts];
+            // Combine synced harvests from backend and local drafts
+            const allHarvests = [...syncedHarvests, ...harvestDrafts];
             setHarvestsList(allHarvests);
 
         } catch (e) {
@@ -1250,68 +1295,79 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
     // Sync unsynced records
     const handleSyncRecords = async () => {
+        setIsSyncing(true);
         try {
             const farmerDraftsJson = await AsyncStorage.getItem('farmer_drafts');
             const harvestDraftsJson = await AsyncStorage.getItem('harvest_drafts');
-            const farmerDrafts = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
-            const harvestDrafts = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
+            const allFarmerRecords = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
+            const allHarvestRecords = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
+
+            // Separate drafts from pending records (drafts are incomplete, pending are submitted but unsynced)
+            const farmerDrafts = allFarmerRecords.filter(r => r._isDraft === true);
+            const farmerPending = allFarmerRecords.filter(r => r._isDraft === false && r._isSynced !== true);
+            const harvestDrafts = allHarvestRecords.filter(r => r._isDraft === true);
+            const harvestPending = allHarvestRecords.filter(r => r._isDraft === false && r._isSynced !== true);
+
+            // Combine both drafts and pending for syncing (all unsyc ed records)
+            const farmerRecordsToSync = [...farmerDrafts, ...farmerPending];
+            const harvestRecordsToSync = [...harvestDrafts, ...harvestPending];
 
             console.log('[handleSyncRecords] Starting sync...');
-            console.log('[handleSyncRecords] Farmer drafts to sync:', farmerDrafts.length);
-            console.log('[handleSyncRecords] Harvest drafts to sync:', harvestDrafts.length);
+            console.log('[handleSyncRecords] Farmer records to sync:', farmerRecordsToSync.length, '(drafts:', farmerDrafts.length, ', pending:', farmerPending.length, ')');
+            console.log('[handleSyncRecords] Harvest records to sync:', harvestRecordsToSync.length, '(drafts:', harvestDrafts.length, ', pending:', harvestPending.length, ')');
 
             let successfullysynced = 0;
             let failedSync = 0;
             const failedDrafts = [];
 
-            // Sync farmer drafts - track which ones succeed
+            // Sync all farmer records (both drafts and pending) - track which ones succeed
             const syncedFarmerIds = [];
-            for (const draft of farmerDrafts) {
+            for (const record of farmerRecordsToSync) {
                 try {
-                    console.log(`[handleSyncRecords] Syncing farmer: ${draft.id}`);
-                    await submitFarmer(draft);
-                    syncedFarmerIds.push(draft.id);
+                    console.log(`[handleSyncRecords] Syncing farmer: ${record.id}`);
+                    await submitFarmer(record);
+                    syncedFarmerIds.push(record.id);
                     successfullysynced++;
-                    console.log(`[handleSyncRecords] ✓ Farmer synced: ${draft.id}`);
+                    console.log(`[handleSyncRecords] ✓ Farmer synced: ${record.id}`);
                 } catch (e) {
                     failedSync++;
-                    failedDrafts.push({ type: 'farmer', id: draft.id, error: e.message });
-                    console.error('[handleSyncRecords] ✗ Error syncing farmer:', draft.id, e.message);
+                    failedDrafts.push({ type: 'farmer', id: record.id, error: e.message });
+                    console.error('[handleSyncRecords] ✗ Error syncing farmer:', record.id, e.message);
                 }
             }
 
-            // Sync harvest drafts - track which ones succeed
+            // Sync all harvest records (both drafts and pending) - track which ones succeed
             const syncedHarvestIds = [];
-            for (const draft of harvestDrafts) {
+            for (const record of harvestRecordsToSync) {
                 try {
-                    console.log(`[handleSyncRecords] Syncing harvest: ${draft.id}`);
-                    await submitHarvest(draft);
-                    syncedHarvestIds.push(draft.id);
+                    console.log(`[handleSyncRecords] Syncing harvest: ${record.id}`);
+                    await submitHarvest(record);
+                    syncedHarvestIds.push(record.id);
                     successfullysynced++;
-                    console.log(`[handleSyncRecords] ✓ Harvest synced: ${draft.id}`);
+                    console.log(`[handleSyncRecords] ✓ Harvest synced: ${record.id}`);
                 } catch (e) {
                     failedSync++;
-                    failedDrafts.push({ type: 'harvest', id: draft.id, error: e.message });
-                    console.error('[handleSyncRecords] ✗ Error syncing harvest:', draft.id, e.message);
+                    failedDrafts.push({ type: 'harvest', id: record.id, error: e.message });
+                    console.error('[handleSyncRecords] ✗ Error syncing harvest:', record.id, e.message);
                 }
             }
 
-            // Only remove drafts that were successfully synced
+            // Only remove records that were successfully synced
             console.log(`[handleSyncRecords] Successfully synced: ${successfullysynced}, Failed: ${failedSync}`);
 
             if (syncedFarmerIds.length > 0) {
-                const remainingFarmerDrafts = farmerDrafts.filter(d => !syncedFarmerIds.includes(d.id));
-                if (remainingFarmerDrafts.length > 0) {
-                    await AsyncStorage.setItem('farmer_drafts', JSON.stringify(remainingFarmerDrafts));
+                const remainingFarmerRecords = allFarmerRecords.filter(d => !syncedFarmerIds.includes(d.id));
+                if (remainingFarmerRecords.length > 0) {
+                    await AsyncStorage.setItem('farmer_drafts', JSON.stringify(remainingFarmerRecords));
                 } else {
                     await AsyncStorage.removeItem('farmer_drafts');
                 }
             }
 
             if (syncedHarvestIds.length > 0) {
-                const remainingHarvestDrafts = harvestDrafts.filter(d => !syncedHarvestIds.includes(d.id));
-                if (remainingHarvestDrafts.length > 0) {
-                    await AsyncStorage.setItem('harvest_drafts', JSON.stringify(remainingHarvestDrafts));
+                const remainingHarvestRecords = allHarvestRecords.filter(d => !syncedHarvestIds.includes(d.id));
+                if (remainingHarvestRecords.length > 0) {
+                    await AsyncStorage.setItem('harvest_drafts', JSON.stringify(remainingHarvestRecords));
                 } else {
                     await AsyncStorage.removeItem('harvest_drafts');
                 }
@@ -1368,6 +1424,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
                 ]
             });
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -1416,10 +1474,12 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
         }));
         setFarmerStep(0);
         setHarvestStep(0);
+        setFarmerErrors({});
+        setHarvestErrors({});
     };
 
     const getFarmerDisplayName = (f) => {
@@ -1440,27 +1500,69 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             }
             // Logic for 'Yes'/'No' pickers (which represent booleans in state)
             if (['in_cooperative', 'all_your_trees', 'deforested', 'uses_pesticides'].includes(key)) {
-                 newState[key] = value === 'Yes' || value === true;
+                  newState[key] = value === 'Yes' || value === true;
             }
 
             console.log('[Farmer Form] New state after update:', newState);
             return newState;
         });
+
+        // Validation for NIN
+        if (key === 'nin') {
+            if (value) {
+                if (value.length > 14) {
+                    setFarmerErrors(prev => ({ ...prev, nin: 'NIN must not exceed 14 characters.' }));
+                } else if (!/^(CF|CM)[A-Z0-9]*$/.test(value.toUpperCase())) {
+                    setFarmerErrors(prev => ({ ...prev, nin: 'NIN must start with CF or CM in uppercase letters.' }));
+                } else {
+                    setFarmerErrors(prev => ({ ...prev, nin: '' }));
+                }
+            } else {
+                setFarmerErrors(prev => ({ ...prev, nin: '' }));
+            }
+        }
+
+        // Validation for contact
+        if (key === 'contact') {
+            if (value && /[^0-9]/.test(value)) {
+                setFarmerErrors(prev => ({ ...prev, contact: 'Phone number must contain only digits.' }));
+            } else if (value && value.length > 10) {
+                setFarmerErrors(prev => ({ ...prev, contact: 'Phone number should not exceed 10 digits.' }));
+            } else {
+                setFarmerErrors(prev => ({ ...prev, contact: '' }));
+            }
+        }
     };
 
     // FIXED: Create proper update function for harvest form
     const updateHarvestForm = (key, value) => {
         console.log(`[Harvest Form] Updating field: ${key}, value:`, value);
         setHarvestForm(p => {
-            const newState = { ...p, [key]: value };
+            let processedValue = value;
+
+            // Handle money fields with comma formatting
+            if (key === 'price_per_kg') {
+                // Remove any non-numeric characters except decimal point
+                const cleaned = String(value).replace(/[^0-9.]/g, '');
+                // Prevent multiple decimal points
+                const parts = cleaned.split('.');
+                if (parts.length > 2) {
+                    return p; // Don't update if multiple decimal points
+                }
+                // Format with commas
+                processedValue = formatNumberWithCommas(cleaned);
+            }
+
+            const newState = { ...p, [key]: processedValue };
 
             // Auto-calculate amount_paid when weight or price_per_kg changes
             if (key === 'weight_on_delivery' || key === 'price_per_kg') {
-                const weight = Number(key === 'weight_on_delivery' ? value : newState.weight_on_delivery) || 0;
-                const pricePerKg = Number(key === 'price_per_kg' ? value : newState.price_per_kg) || 0;
+                const weight = parseFormattedNumber(key === 'weight_on_delivery' ? processedValue : newState.weight_on_delivery) || 0;
+                const pricePerKg = parseFormattedNumber(key === 'price_per_kg' ? processedValue : newState.price_per_kg) || 0;
                 const calculatedAmount = weight * pricePerKg;
 
-                newState.amount_paid = calculatedAmount > 0 ? calculatedAmount.toFixed(2) : '';
+                // Format calculated amount with commas
+                newState.amount_paid = calculatedAmount > 0 ? formatNumberWithCommas(calculatedAmount.toFixed(2)) : '';
                 console.log(`[Harvest Form] Auto-calculated amount_paid: ${newState.amount_paid} (${weight} kg × ${pricePerKg} UGX/kg)`);
             }
 
@@ -1503,7 +1605,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             recorder_id: userId,
             timestamp: Date.now(),
             id: recordId,
-            _isDraft: true,
+            _isDraft: false,  // Mark as submitted (not a draft)
+            _isSynced: false, // Mark as pending sync
             _syncStatus: 'pending',
         };
 
@@ -1659,14 +1762,15 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         const harvestRecord = {
             ...harvestForm,
             id: recordId,
-            weight_on_delivery: Number(harvestForm.weight_on_delivery) || 0,
-            price_per_kg: Number(harvestForm.price_per_kg) || 0,
-            amount_paid: Number(harvestForm.amount_paid) || 0,
+            weight_on_delivery: parseFormattedNumber(harvestForm.weight_on_delivery) || 0,
+            price_per_kg: parseFormattedNumber(harvestForm.price_per_kg) || 0,
+            amount_paid: parseFormattedNumber(harvestForm.amount_paid) || 0,
             number_of_bags: Number(harvestForm.number_of_bags) || 0,
             weight_after_floating: Number(harvestForm.weight_after_floating) || 0,
             recorder_id: userId,
             timestamp: Date.now(),
-            _isDraft: true,
+            _isDraft: false,  // Mark as submitted (not a draft)
+            _isSynced: false, // Mark as pending sync
             _syncStatus: 'pending',
         };
 
@@ -1692,11 +1796,21 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
             console.log(`[handleHarvestSubmit] ✅ Harvest saved locally!`);
 
-            setSuccessMessage(`Harvest for '${harvestForm.farmer_name || harvestForm.farmer_uid}' saved locally and ready to sync!`);
-            setViewMode('success');
             resetForms();
             await loadRecords();
             await countUnsyncedRecords();
+
+            // Auto-generate voucher
+            const voucherData = {
+                ...harvestRecord,
+                workerName: harvestForm.farmer_name || harvestForm.farmer_uid,
+                blockId: 'N/A', // Aggregation might not have blocks
+                pricePerKg: harvestForm.price_per_kg,
+                amountPaid: harvestForm.amount_paid,
+                paidBy: harvestForm.paid_by,
+                date: harvestForm.date_of_delivery,
+            };
+            onNavigate('PaymentVoucher', { harvestData: voucherData });
         } catch (e) {
             console.error(`[handleHarvestSubmit] ❌ Save error:`, e);
             console.error('[handleHarvestSubmit] Error details:', {
@@ -1732,13 +1846,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         };
         
         const handleNext = () => {
+            // Check for validation errors
+            const hasErrors = isFarmer ? Object.values(farmerErrors).some(error => error) : Object.values(harvestErrors).some(error => error);
+            if (hasErrors) {
+                Alert.alert("Input Error", "Please fix the validation errors before proceeding.");
+                return;
+            }
+
             // Basic required field validation for current step
             const missingRequired = currentStepFields.fields.some(f =>
                 f.required && (!formData[f.key] || (typeof formData[f.key] === 'string' && formData[f.key].trim() === ''))
             );
 
             if (missingRequired) {
-                Alert.alert("Validation", "Please fill all required fields in this step.");
+                Alert.alert("Input Error", "Please fill all required fields in this step.");
                 return;
             }
 
@@ -1903,10 +2024,11 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                 keyboardType={field.keyboardType}
                                 editable={!field.readOnly}
                                 placeholder={field.readOnly ? '' : (field.placeholder || `Enter ${field.label}`)}
+                                error={isFarmer ? farmerErrors[field.key] : harvestErrors[field.key]}
                             />
                         );
 
-                        // Show button after GPS field
+                        // Show button after GPS field for farmer form
                         if (field.key === 'gps' && isFarmer) {
                             return (
                                 <View key={field.key}>
@@ -1916,13 +2038,62 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                         onPress={async () => {
                                             const gpsLocation = await getCurrentGPSLocation();
                                             updateForm('gps', gpsLocation);
-                                            Alert.alert('GPS Location', `Location captured: ${gpsLocation}`);
+                                            setAlertConfig({
+                                                visible: true,
+                                                title: 'GPS Location Captured',
+                                                message: `Location: ${gpsLocation}`,
+                                                type: 'success',
+                                                buttons: [
+                                                    {
+                                                        text: 'OK',
+                                                        onPress: () => {
+                                                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                                                        }
+                                                    }
+                                                ]
+                                            });
                                         }}
                                     >
                                         <Text>
                                             <Text style={styles.generateButtonText}>Get Current GPS Location</Text>
                                             <Text>{'\n'}</Text>
                                             <Text style={styles.generateButtonSubtext}>(Use when on farm site)</Text>
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        }
+
+                        // Show button after GPS coordinates field for harvest form
+                        if (field.key === 'gps_coordinates' && !isFarmer) {
+                            return (
+                                <View key={field.key}>
+                                    {inputElement}
+                                    <TouchableOpacity
+                                        style={styles.generateButton}
+                                        onPress={async () => {
+                                            const gpsLocation = await getCurrentGPSLocation();
+                                            updateForm('gps_coordinates', gpsLocation);
+                                            setAlertConfig({
+                                                visible: true,
+                                                title: 'GPS Coordinates Captured',
+                                                message: `Coordinates: ${gpsLocation}`,
+                                                type: 'success',
+                                                buttons: [
+                                                    {
+                                                        text: 'OK',
+                                                        onPress: () => {
+                                                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                                                        }
+                                                    }
+                                                ]
+                                            });
+                                        }}
+                                    >
+                                        <Text>
+                                            <Text style={styles.generateButtonText}>Capture Current GPS Location</Text>
+                                            <Text>{'\n'}</Text>
+                                            <Text style={styles.generateButtonSubtext}>(Capture exact delivery location)</Text>
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
@@ -2223,10 +2394,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 farmer_uid: record.name || record.farmer_uid || '',
                 farmer_name: record.farmer_name || '',
                 weight_on_delivery: String(record.weight_on_delivery || ''),
+                location_on_delivery: record.location_on_delivery || '',
+                gps_coordinates: record.gps_coordinates || '',
                 number_of_bags: String(record.number_of_bags || ''),
                 date_of_delivery: record.date_of_delivery || '',
                 coffee_type: record.grade || record.coffee_type || '',
-                amount_paid: String(record.amount_paid || ''),
+                price_per_kg: record.price_per_kg ? formatNumberWithCommas(String(record.price_per_kg)) : '',
+                amount_paid: record.amount_paid ? formatNumberWithCommas(String(record.amount_paid)) : '',
                 paid_by: record.paid_by || record.who_paid || '',
                 selectedStaff: null, // Will be set by SearchableStaffPicker
                 harvest_id: record.id || record.harvest_id || '',
@@ -2308,6 +2482,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     farmer_uid: draftRecord.farmer_uid || draftRecord.name || '',
                     farmer_name: draftRecord.farmer_name || '',
                     weight_on_delivery: draftRecord.weight_on_delivery || 0,
+                    location_on_delivery: draftRecord.location_on_delivery || '',
+                    gps_coordinates: draftRecord.gps_coordinates || '',
                     number_of_bags: draftRecord.number_of_bags || 0,
                     date_of_delivery: draftRecord.date_of_delivery || '',
                     coffee_type: draftRecord.coffee_type || draftRecord.grade || '',
@@ -2442,6 +2618,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     }}
                     onDelete={(r) => handleDelete(r, 'farmer')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
+                    onVoucher={null}
                 />
             );
         } else {
@@ -2465,6 +2642,35 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     }}
                     onDelete={(r) => handleDelete(r, 'harvest')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
+                    onVoucher={(r) => {
+                        // Prepare harvest data for voucher - lookup farmer name from farmersList
+                        const farmerUID = r.name || r.farmer_name || r.farmer_uid;
+                        let farmerName = farmerUID || 'Unknown';
+
+                        // Look up farmer name from farmersList
+                        if (farmerUID && Array.isArray(farmersList)) {
+                            const farmer = farmersList.find(f =>
+                                String(f.farmer_id) === String(farmerUID) ||
+                                String(f.uid) === String(farmerUID) ||
+                                String(f.id) === String(farmerUID)
+                            );
+
+                            if (farmer) {
+                                farmerName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || farmer.name || farmerUID;
+                            }
+                        }
+
+                        const voucherData = {
+                            ...r,
+                            farmer_name: farmerName, // Use farmer_name to match PaymentVoucherScreen expectations
+                            blockId: 'N/A', // Aggregation might not have blocks
+                            pricePerKg: r.price_per_kg || 0,
+                            amountPaid: r.amount_paid || 0,
+                            paidBy: r.paid_by || 'N/A',
+                            date: r.date_of_delivery || r.date,
+                        };
+                        onNavigate('PaymentVoucher', { harvestData: voucherData });
+                    }}
                 />
             );
         }
@@ -2484,10 +2690,11 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     return (
         <View style={styles.screen}>
             <SimpleHeader
-                title="Aggregation Records"
+                title="External Harvest Records"
                 onBackPress={handleBackPress}
                 unsyncedCount={unsyncedCount}
                 onSync={handleSyncRecords}
+                isSyncing={isSyncing}
             />
 
             {/* Main content container - BottomNav will sit below this */}
@@ -2566,7 +2773,10 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             {viewMode === 'success' && (
                 <SuccessMessage
                     message={successMessage}
-                    onExit={() => setViewMode('form')}
+                    onExit={() => {
+                        setViewMode('table');
+                        setActiveTab(activeTab); // Keep the current tab (farmers or harvests)
+                    }}
                 />
             )}
 
@@ -2676,6 +2886,15 @@ const styles = StyleSheet.create({
     readOnlyInput: {
         backgroundColor: LIGHT_GRAY_BG,
         color: TEXT_GRAY,
+    },
+    errorInput: {
+        borderColor: '#d32f2f',
+    },
+    errorText: {
+        color: '#d32f2f',
+        fontSize: 12,
+        marginTop: 4,
+        fontFamily: Fonts.regular,
     },
     helperText: {
         fontSize: 12,
@@ -3201,6 +3420,23 @@ const styles = StyleSheet.create({
         marginTop: 4,
         fontStyle: 'italic',
     },
+    // --- Pending (Submitted but Unsynced) Styles ---
+    pendingListItem: {
+        backgroundColor: CoffeeColors.WHITE,
+        borderLeftWidth: 4,
+        borderLeftColor: LIGHT_BROWN, // Light brown for pending records (matching Harvest styling)
+    },
+    syncStatusInline: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 6,
+    },
+    syncStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
+        marginLeft: 4,
+    },
     noRecords: {
         textAlign: 'center',
         padding: 20,
@@ -3292,7 +3528,7 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     detailNameCard: {
-        backgroundColor: VERY_LIGHT_BROWN,
+        backgroundColor: '#fef5f0',
         padding: 20,
         borderRadius: 12,
         marginBottom: 20,

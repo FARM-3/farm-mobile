@@ -40,6 +40,7 @@ global.resetApp = async () => {
 // Dashboard screens
 import WelcomeScreen from './features/dashboard/screens/WelcomeScreen';
 import LoginScreen from './features/dashboard/screens/LoginScreen';
+import SecurityQuestionsScreen from './features/dashboard/screens/SecurityQuestionsScreen';
 import DashboardScreen from './features/dashboard/screens/DashboardScreen';
 import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 
@@ -52,6 +53,7 @@ import BlockDetailsScreen from './features/blocks/BlockDetailsScreen';
 import HarvestFormScreen from './features/harvest/screens/HarvestFormScreen';
 import ProductionHarvestsScreen from './features/harvest/screens/ProductionHarvestsScreen';
 import HarvestDetailsScreen from './features/harvest/screens/HarvestDetailsScreen';
+import PaymentVoucherScreen from './features/harvest/screens/PaymentVoucherScreen';
 
 // Aggregation screens
 import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
@@ -162,6 +164,16 @@ const App = () => {
                         options={{ title: 'Login' }}
                     />
 
+                    {/* Security Questions screen - shown on first-time login */}
+                    <Stack.Screen
+                        name="SecurityQuestions"
+                        component={SecurityQuestionsScreen}
+                        options={{
+                            title: 'Security Questions',
+                            animationEnabled: true,
+                        }}
+                    />
+
                     {/* Dashboard screen */}
                     <Stack.Screen
                         name="Dashboard"
@@ -193,6 +205,12 @@ const App = () => {
                         name="HarvestForm"
                         component={HarvestFormScreen}
                         options={{ title: 'New Harvest Entry' }}
+                    />
+
+                    <Stack.Screen
+                        name="PaymentVoucher"
+                        component={PaymentVoucherScreen}
+                        options={{ title: 'Payment Voucher' }}
                     />
 
                     {/* Processing screen */}

@@ -1,16 +1,16 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, Image, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import CoffeeColors from '../theme/colors';
 import Fonts from '../theme/fonts';
 
 /**
- * Simple White Header Component
+ * Simple Brown Header Component
  * Used for non-dashboard screens
- * Features: white background, back button, title, sync icon
+ * Features: brown background, white text, back button, title, sync icon with loading indicator
  */
-const SimpleHeader = ({ title = 'Screen', onBackPress, unsyncedCount = 0, onSync }) => {
+const SimpleHeader = ({ title = 'Screen', onBackPress, unsyncedCount = 0, onSync, isSyncing = false }) => {
   const navigation = useNavigation();
 
   const handleBackPress = () => {
@@ -34,7 +34,7 @@ const SimpleHeader = ({ title = 'Screen', onBackPress, unsyncedCount = 0, onSync
         onPress={handleBackPress}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Ionicons name="chevron-back" size={28} color={CoffeeColors.DARK_BROWN} />
+        <Ionicons name="chevron-back" size={28} color={CoffeeColors.WHITE} />
       </TouchableOpacity>
 
       <View style={styles.logoTitleContainer}>
@@ -50,9 +50,14 @@ const SimpleHeader = ({ title = 'Screen', onBackPress, unsyncedCount = 0, onSync
         style={styles.syncButton}
         onPress={handleSync}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        disabled={isSyncing}
       >
-        <Ionicons name="cloud-upload-outline" size={24} color={CoffeeColors.DARK_BROWN} />
-        {unsyncedCount > 0 && (
+        {isSyncing ? (
+          <ActivityIndicator size={24} color={CoffeeColors.WHITE} />
+        ) : (
+          <Ionicons name="cloud-upload-outline" size={24} color={CoffeeColors.WHITE} />
+        )}
+        {unsyncedCount > 0 && !isSyncing && (
           <View style={styles.syncBadge}>
             <Text style={styles.syncBadgeText}>{unsyncedCount}</Text>
           </View>
@@ -67,11 +72,16 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 12 : 16,
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: CoffeeColors.WHITE,
+    backgroundColor: CoffeeColors.DARK_BROWN,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 0,
+    shadowColor: CoffeeColors.DARK_BROWN,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   backButton: {
     padding: 4,
@@ -92,7 +102,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     fontFamily: Fonts.semiBold,
-    color: CoffeeColors.DARK_BROWN,
+    color: CoffeeColors.WHITE,
     textAlign: 'center',
   },
   syncButton: {

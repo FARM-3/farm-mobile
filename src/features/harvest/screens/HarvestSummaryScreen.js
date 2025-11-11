@@ -30,10 +30,113 @@ import {
 import SimpleHeader from '../../../components/SimpleHeader';
 import CustomPicker from '../../../components/CustomPicker';
 import BottomNav from '../../../components/BottomNav';
+import CustomAlert from '../../../components/CustomAlert';
 
 // --- Constants for Filters ---
 const BLOCK_OPTIONS = ["All Blocks", "Block A-1", "Block B-2", "Block C-3"];
 const SYNC_STATUS_OPTIONS = ["All Statuses", "Synced", "Pending"];
+
+// ===============================================
+// === HARVEST DETAIL VIEW COMPONENT      ===
+// ===============================================
+
+/**
+ * HarvestDetailView - Mobile-friendly detail screen for viewing harvest information
+ * Displays all harvest data organized in logical sections with proper labels
+ */
+const HarvestDetailView = ({ harvest, onBack }) => {
+    if (!harvest) return null;
+
+    // Helper to format field values properly
+    const formatValue = (value) => {
+        if (value === null || value === undefined || value === '') return 'Not provided';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'Not provided';
+        return String(value);
+    };
+
+    // Field sections for organized display - showing ALL available data
+    const sections = [
+        {
+            title: 'Harvest Details',
+            fields: [
+                { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
+                { label: 'Farmer Name', value: harvest.name || 'N/A' },
+                { label: 'Date of Delivery', value: harvest.date },
+                { label: 'Weight on Delivery', value: harvest.weight },
+                { label: 'Weight After Floating', value: harvest.weight_after_floating ? `${harvest.weight_after_floating} kg` : 'Not provided' },
+                { label: 'Location on Delivery', value: harvest.location_on_delivery || 'Not provided' },
+                { label: 'GPS Coordinates', value: harvest.gps_coordinates || 'Not captured' },
+                { label: 'Block', value: harvest.block || 'N/A' },
+                { label: 'Number of Bags', value: harvest.number_of_bags || 'N/A' },
+            ]
+        },
+        {
+            title: 'Coffee Quality',
+            fields: [
+                { label: 'Coffee Type/Grade', value: harvest.grade || harvest.coffee_type || 'N/A' },
+                { label: 'Cherry Color', value: harvest.cherry_color || harvest.cherry_colour || 'N/A' },
+                { label: 'Stage', value: harvest.stage || 'N/A' },
+            ]
+        },
+        {
+            title: 'Payment Information',
+            fields: [
+                { label: 'Price per Kg', value: harvest.price_per_kg ? `${harvest.price_per_kg} UGX` : 'N/A' },
+                { label: 'Amount Paid', value: harvest.amountPaid ? `${harvest.amountPaid} UGX` : 'N/A' },
+                { label: 'Paid By', value: harvest.paidBy || harvest.paid_by || harvest.who_paid || 'N/A' },
+            ]
+        },
+        {
+            title: 'Additional Information',
+            fields: [
+                { label: 'Recorder ID', value: harvest.recorder_id || 'N/A' },
+                { label: 'Timestamp', value: harvest.timestamp ? new Date(harvest.timestamp).toLocaleString() : 'N/A' },
+                { label: 'Sync Status', value: harvest.isSynced ? 'Synced' : 'Pending' },
+            ]
+        }
+    ];
+
+    return (
+        <View style={styles.detailViewContainer}>
+            {/* Header with back button */}
+            <View style={styles.detailHeader}>
+                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={CoffeeColors.DARK_BROWN} />
+                </TouchableOpacity>
+                <Text style={styles.detailHeaderTitle}>Harvest Details</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            {/* Scrollable content */}
+            <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
+                {/* Harvest Name and ID Card */}
+                <View style={styles.detailNameCard}>
+                    <Ionicons name="leaf" size={32} color={CoffeeColors.DARK_BROWN} style={{ marginBottom: 8 }} />
+                    <Text style={styles.detailFarmerName}>
+                        {harvest.name || 'Unknown Farmer'}
+                    </Text>
+                    <Text style={styles.detailFarmerId}>
+                        Harvest ID: {harvest.id || harvest.harvest_id || 'N/A'}
+                    </Text>
+                </View>
+
+                {/* Information Sections */}
+                {sections.map((section, sectionIndex) => (
+                    <View key={sectionIndex} style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>{section.title}</Text>
+                        {section.fields.map((field, fieldIndex) => (
+                            <View key={fieldIndex} style={styles.detailFieldRow}>
+                                <Text style={styles.detailFieldLabel}>{field.label}:</Text>
+                                <Text style={styles.detailFieldValue}>{formatValue(field.value)}</Text>
+                            </View>
+                        ))}
+                    </View>
+                ))}
+            </ScrollView>
+        </View>
+    );
+};
 
 export default function HarvestSummaryScreen({ route = {}, navigation }) {
     const [allRecords, setAllRecords] = useState([]);
@@ -46,6 +149,17 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterBlock, setFilterBlock] = useState(BLOCK_OPTIONS[0]);
     const [filterStatus, setFilterStatus] = useState(SYNC_STATUS_OPTIONS[0]);
+
+    // NEW: State for detail view
+    const [selectedHarvest, setSelectedHarvest] = useState(null);
+    const [viewMode, setViewMode] = useState('table'); // 'table' or 'detail'
+
+    // State for custom alert modal
+    const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
+
+    // State for success message with auto-dismiss
+    const [successMessage, setSuccessMessage] = useState('');
+    const successTimeoutRef = useRef(null);
 
     // Ref for synchronized scrolling
     const headerScrollRef = useRef(null);
@@ -196,6 +310,15 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         return unsubscribe;
     }, [navigation, loadAndSyncData]);
 
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (successTimeoutRef.current) {
+                clearTimeout(successTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const handleSyncPress = async () => {
         if (unsyncedCount > 0) {
             // If there are unsynced records, sync them
@@ -269,43 +392,67 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         navigation.navigate('HarvestForm', { editData: item });
     };
 
+    const showSuccessMessage = (message) => {
+        setSuccessMessage(message);
+        // Clear any existing timeout
+        if (successTimeoutRef.current) {
+            clearTimeout(successTimeoutRef.current);
+        }
+        // Auto-dismiss after 2.5 seconds
+        successTimeoutRef.current = setTimeout(() => {
+            setSuccessMessage('');
+        }, 2500);
+    };
+
     const handleDelete = (item) => {
-        Alert.alert(
-            'Delete Harvest Record',
-            `Are you sure you want to delete the harvest record for ${item.name}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAlertConfig({
+            visible: true,
+            title: 'Delete Harvest Record',
+            message: `Are you sure you want to delete the harvest record for ${item.name}?`,
+            type: 'warning',
+            buttons: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig({ ...alertConfig, visible: false })
+                },
                 {
                     text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
+                        setAlertConfig({ ...alertConfig, visible: false });
                         try {
-                            // Show loading indicator
-                            Alert.alert('Deleting', 'Removing harvest record...', [], { cancelable: false });
-
                             // Call delete API
                             const result = await deleteHarvestRecord(item.id);
 
-                            // Close loading alert
-                            Alert.alert('', '', [{ text: 'OK' }]);
-
                             if (result.success) {
-                                // Refresh the data
-                                await loadAndSyncData();
-                                Alert.alert('Success', 'Harvest record deleted successfully');
+                                // Show success message first
+                                showSuccessMessage('Harvest record deleted successfully');
+                                // Refresh the data after a brief delay
+                                setTimeout(() => {
+                                    loadAndSyncData();
+                                }, 1000);
                             } else {
-                                Alert.alert(
-                                    'Delete Failed',
-                                    `Failed to delete record. Status: ${result.status}. ${result.remoteData?.detail || ''}`
-                                );
+                                setAlertConfig({
+                                    visible: true,
+                                    title: 'Delete Failed',
+                                    message: `Failed to delete record. Status: ${result.status}. ${result.remoteData?.detail || ''}`,
+                                    type: 'error',
+                                    buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                                });
                             }
                         } catch (error) {
-                            Alert.alert('Error', `An error occurred while deleting: ${error.message}`);
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Error',
+                                message: `An error occurred while deleting: ${error.message}`,
+                                type: 'error',
+                                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                            });
                         }
                     }
                 }
             ]
-        );
+        });
     };
 
     const handleScroll = (event, index) => {
@@ -325,49 +472,93 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     };
 
     const renderRow = ({ item, index }) => (
-        <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.rowScrollView}
-            ref={(ref) => rowScrollRefs.current[index] = ref}
-            onScroll={(event) => handleScroll(event, index)}
-            scrollEventThrottle={16}
+        <TouchableOpacity
+            style={[styles.dataListItem, item.isSynced ? styles.syncedRow : styles.pendingRow]}
+            onPress={() => {
+                setSelectedHarvest(item);
+                setViewMode('detail');
+            }}
         >
-            <View style={[styles.row, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
-                {/* Display using the cleaned camelCase fields */}
-                <Text style={styles.cell}>{item.weight}</Text>
-                <Text style={styles.cell}>{item.block}</Text>
-                <Text style={styles.cell}>{item.date}</Text>
-                <Text style={styles.cell}>{item.name || 'N/A'}</Text>
-                <Text style={styles.cell}>{item.amountPaid ? `${item.amountPaid} UGX` : 'N/A'}</Text>
-                <Text style={styles.cell}>{item.paidBy || 'N/A'}</Text>
-                <View style={styles.statusCell}>
-                    <Ionicons
-                        name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
-                        size={16}
-                        color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
-                    />
-                    <Text style={[styles.cellText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN, marginLeft: 4 }]}>
-                        {item.isSynced ? 'Synced' : 'Pending'}
+            <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={styles.dataListItemTitle}>
+                        {item.name || 'N/A'}
+                        <Text style={styles.dataListItemUID}> ({item.id})</Text>
                     </Text>
+                    {/* Draft Badge - Shows only for incomplete draft records */}
+                    {item._isDraft && (
+                        <View style={styles.draftBadge}>
+                            <Text style={styles.draftBadgeText}>DRAFT</Text>
+                        </View>
+                    )}
                 </View>
-                {/* Action Buttons */}
-                <View style={styles.actionsCell}>
-                    <TouchableOpacity
-                        style={styles.editButton}
-                        onPress={() => handleEdit(item)}
-                    >
-                        <Ionicons name="create-outline" size={18} color={CoffeeColors.WHITE} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={() => handleDelete(item)}
-                    >
-                        <Ionicons name="trash-outline" size={18} color={CoffeeColors.WHITE} />
-                    </TouchableOpacity>
-                </View>
+                <Text style={styles.dataListItemSubtitle}>
+                    Weight: {item.weight} | Date: {item.date} | Paid: {item.amountPaid ? `${item.amountPaid} UGX` : 'N/A'}
+                </Text>
+                <Text style={styles.dataListItemSubtitle}>
+                    Block: {item.block} | Paid By: {item.paidBy || 'N/A'}
+                </Text>
+                {/* Show draft step if it's a draft */}
+                {item._isDraft && (
+                    <Text style={styles.draftStepText}>
+                        Saved at: {item._draftStepTitle || 'Unknown Step'}
+                    </Text>
+                )}
+                {/* Pending Status - Shows for submitted but unsynced records */}
+                {!item._isDraft && !item.isSynced && (
+                    <View style={styles.syncStatusInline}>
+                        <Ionicons name="cloud-upload-outline" size={14} color={CoffeeColors.LIGHT_BROWN} />
+                        <Text style={[styles.syncStatusText, { color: CoffeeColors.LIGHT_BROWN }]}>Pending</Text>
+                    </View>
+                )}
             </View>
-        </ScrollView>
+
+            {/* Edit, Sync Draft (if draft), Voucher (for harvests), and Delete Icon Buttons */}
+            <View style={styles.recordActions}>
+                {/* Sync Draft Button - Only shows for draft records */}
+                {item._isDraft && (
+                    <TouchableOpacity
+                        style={[styles.iconButton, styles.syncButton]}
+                        onPress={(e) => {
+                            e.stopPropagation(); // Prevent triggering the main onPress
+                            // handleSyncDraft(item); // Sync draft to database
+                        }}
+                    >
+                        <Ionicons name="cloud-upload-outline" size={20} color="#4CAF50" />
+                    </TouchableOpacity>
+                )}
+
+                {/* Voucher Button - Only shows for harvest records */}
+                <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={(e) => {
+                        e.stopPropagation(); // Prevent triggering the main onPress
+                        // onVoucher(item);
+                    }}
+                >
+                    <Ionicons name="document-text" size={20} color={CoffeeColors.DARK_BROWN} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={(e) => {
+                        e.stopPropagation(); // Prevent triggering the main onPress
+                        handleEdit(item, true); // Pass true to indicate edit mode vs view mode
+                    }}
+                >
+                    <Ionicons name="pencil" size={20} color={CoffeeColors.DARK_BROWN} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={(e) => {
+                        e.stopPropagation(); // Prevent triggering the main onPress
+                        handleDelete(item);
+                    }}
+                >
+                    <Ionicons name="trash" size={20} color={'#d32f2f' || '#d32f2f'} />
+                </TouchableOpacity>
+            </View>
+        </TouchableOpacity>
     );
 
     if (isLoading) {
@@ -379,98 +570,98 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         );
     }
 
+    // Handler for back press
+    const handleBackPress = () => {
+        if (viewMode === 'detail') {
+            setViewMode('table');
+            setSelectedHarvest(null);
+        } else {
+            navigation.goBack();
+        }
+    };
+
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <SimpleHeader title="Rugyeyo Harvests" unsyncedCount={unsyncedCount} onSync={handleSyncPress} />
+            <SimpleHeader
+                title="Rugyeyo Harvests"
+                unsyncedCount={unsyncedCount}
+                onSync={handleSyncPress}
+                onBackPress={handleBackPress}
+            />
+            {/* Success Message Banner */}
+            {successMessage ? (
+                <View style={styles.successBanner}>
+                    <Ionicons name="checkmark-circle" size={20} color={CoffeeColors.WHITE} style={{ marginRight: 8 }} />
+                    <Text style={styles.successText}>{successMessage}</Text>
+                </View>
+            ) : null}
+
             {/* Main scrollable content container */}
             <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <View style={styles.container}>
 
-                {/* Add New Harvest Button */}
-                <TouchableOpacity
-                    style={styles.addButton}
-                    onPress={() => navigation.navigate('HarvestForm')}
-                >
-                    <Ionicons name="add-circle" size={20} color={CoffeeColors.WHITE} />
-                    <Text style={styles.addButtonText}>Record New Harvest</Text>
-                </TouchableOpacity>
+                {viewMode === 'table' && (
+                    <>
+                        {/* Add New Harvest Button */}
+                        <TouchableOpacity
+                            style={styles.addButton}
+                            onPress={() => navigation.navigate('HarvestForm')}
+                        >
+                            <Ionicons name="add-circle" size={20} color={CoffeeColors.WHITE} />
+                            <Text style={styles.addButtonText}>Record New Harvest</Text>
+                        </TouchableOpacity>
 
-                {/* Sync Status Banner */}
-                <View style={styles.syncBanner}>
-                <Text style={styles.syncText}>{syncStatus}</Text>
-                <TouchableOpacity onPress={loadAndSyncData} style={{ marginLeft: 10 }}>
-                    <Ionicons name="reload-circle-sharp" size={24} color={CoffeeColors.WHITE} />
-                </TouchableOpacity>
-            </View>
+                        {/* Sync Status Banner */}
+                        <View style={styles.syncBanner}>
+                        <Text style={styles.syncText}>{syncStatus}</Text>
+                        <TouchableOpacity onPress={loadAndSyncData} style={{ marginLeft: 10 }}>
+                            <Ionicons name="reload-circle-sharp" size={24} color={CoffeeColors.WHITE} />
+                        </TouchableOpacity>
+                    </View>
 
-            {/* Search Bar */}
-            <TextInput
-                style={styles.searchBar}
-                placeholder="Search by recorder name or record ID..."
-                value={searchTerm}
-                onChangeText={setSearchTerm}
-            />
+                    {/* Export Button */}
+                    <TouchableOpacity
+                        style={styles.exportButton}
+                        onPress={exportToExcel}
+                        disabled={filteredData.length === 0}
+                    >
+                        <Ionicons name="download-outline" size={18} color={CoffeeColors.WHITE} />
+                        <Text style={styles.exportText}>Export {filteredData.length} Records to CSV</Text>
+                    </TouchableOpacity>
 
-            {/* Filters */}
-            <View style={styles.filtersContainer}>
-                <View style={{ flex: 1, marginRight: 10 }}>
-                    <CustomPicker
-                        selectedValue={filterBlock}
-                        onValueChange={setFilterBlock}
-                        items={BLOCK_OPTIONS}
+                    {/* Data Rows */}
+                    <FlatList
+                        data={filteredData}
+                        renderItem={renderRow}
+                        keyExtractor={(item, index) => item.id?.toString() || index.toString()}
+                        ListEmptyComponent={<Text style={styles.emptyText}>No harvest records found.</Text>}
+                        contentContainerStyle={{ paddingBottom: 100 }}
                     />
-                </View>
-                <View style={{ flex: 1 }}>
-                    <CustomPicker
-                        selectedValue={filterStatus}
-                        onValueChange={setFilterStatus}
-                        items={SYNC_STATUS_OPTIONS}
+                    </>
+                )}
+
+                {viewMode === 'detail' && selectedHarvest && (
+                    <HarvestDetailView
+                        harvest={selectedHarvest}
+                        onBack={() => {
+                            setSelectedHarvest(null);
+                            setViewMode('table');
+                        }}
                     />
-                </View>
-            </View>
-
-            {/* Export Button */}
-            <TouchableOpacity 
-                style={styles.exportButton} 
-                onPress={exportToExcel}
-                disabled={filteredData.length === 0}
-            >
-                <Ionicons name="download-outline" size={18} color={CoffeeColors.WHITE} />
-                <Text style={styles.exportText}>Export {filteredData.length} Records to CSV</Text>
-            </TouchableOpacity>
-
-            {/* Header */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={true}
-                ref={headerScrollRef}
-                onScroll={(event) => handleScroll(event, -1)}
-                scrollEventThrottle={16}
-            >
-                <View style={[styles.row, styles.headerRow]}>
-                    <Text style={styles.headerCell}>Weight</Text>
-                    <Text style={styles.headerCell}>Block</Text>
-                    <Text style={styles.headerCell}>Date</Text>
-                    <Text style={styles.headerCell}>Worker</Text>
-                    <Text style={styles.headerCell}>Amount Paid</Text>
-                    <Text style={styles.headerCell}>Paid By</Text>
-                    <Text style={styles.headerCell}>Status</Text>
-                    <Text style={styles.headerCell}>Actions</Text>
-                </View>
-            </ScrollView>
-
-            {/* Data Rows */}
-            <FlatList
-                data={filteredData}
-                renderItem={renderRow}
-                keyExtractor={(item, index) => item.id?.toString() || index.toString()}
-                ListEmptyComponent={<Text style={styles.emptyText}>No harvest records found matching your filters.</Text>}
-                contentContainerStyle={{ paddingBottom: 0 }}
-            />
+                )}
                 </View>
             </View>
             {/* BottomNav now part of layout, not floating */}
             <BottomNav activeScreen="Harvests" />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 }
@@ -479,7 +670,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: CoffeeColors.LIGHT_GRAY,
-        padding: 10,
+        padding: 15,
     },
     loadingContainer: {
         flex: 1,
@@ -596,11 +787,11 @@ const styles = StyleSheet.create({
         fontSize: 12,
         paddingHorizontal: 5,
     },
-    syncedRow: {
+    syncedRowOld: {
         borderLeftWidth: 5,
         borderLeftColor: CoffeeColors.MEDIUM_BROWN,
     },
-    pendingRow: {
+    pendingRowOld: {
         borderLeftWidth: 5,
         borderLeftColor: CoffeeColors.LIGHT_BROWN,
     },
@@ -651,7 +842,238 @@ const styles = StyleSheet.create({
         color: CoffeeColors.MEDIUM_BROWN,
         fontStyle: 'italic',
         fontFamily: Fonts.regular,
-    }
+    },
+    // --- Data List (Replaces Table) ---
+    dataListItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_GRAY_BG,
+        backgroundColor: CoffeeColors.WHITE,
+        borderRadius: 8,
+        marginBottom: 8,
+        paddingHorizontal: 15,
+        elevation: 2,
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    dataListItemTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.bold,
+    },
+    dataListItemUID: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontFamily: Fonts.semiBold,
+    },
+    dataListItemSubtitle: {
+        fontSize: 13,
+        color: CoffeeColors.GRAY_TEXT,
+        fontFamily: Fonts.regular,
+        marginTop: 4,
+    },
+    // --- Draft Styles ---
+    draftListItem: {
+        backgroundColor: 'rgba(255, 193, 7, 0.05)', // Subtle yellow background for draft items
+        borderLeftWidth: 4,
+        borderLeftColor: '#FFC107', // Amber/yellow color for draft indicator
+    },
+    draftBadge: {
+        backgroundColor: '#FFC107',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 4,
+        marginLeft: 4,
+    },
+    draftBadgeText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#fff',
+        fontFamily: Fonts.bold,
+    },
+    draftStepText: {
+        fontSize: 12,
+        color: '#FF9800',
+        fontFamily: Fonts.regular,
+        marginTop: 4,
+        fontStyle: 'italic',
+    },
+    // --- Pending (Submitted but Unsynced) Styles ---
+    pendingRow: {
+        backgroundColor: CoffeeColors.WHITE,
+        borderLeftWidth: 4,
+        borderLeftColor: CoffeeColors.LIGHT_BROWN, // Light brown for pending records
+    },
+    syncedRow: {
+        backgroundColor: CoffeeColors.WHITE,
+        borderLeftWidth: 4,
+        borderLeftColor: CoffeeColors.MEDIUM_BROWN,
+    },
+    syncStatusInline: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 6,
+    },
+    syncStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
+        marginLeft: 4,
+    },
+    recordActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginLeft: 12,
+    },
+    iconButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        elevation: 1,
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
+    },
+    syncButton: {
+        backgroundColor: '#E8F5E8',
+    },
+    // --- Farmer Detail View ---
+    detailViewContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        overflow: 'hidden',
+        elevation: 3,
+    },
+    detailHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        backgroundColor: CoffeeColors.DARK_BROWN,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_BROWN,
+    },
+    backButton: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: CoffeeColors.LIGHT_BROWN,
+        borderRadius: 20,
+    },
+    detailHeaderTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#fff',
+        fontFamily: Fonts.bold,
+        flex: 1,
+        textAlign: 'center',
+    },
+    detailScrollView: {
+        flex: 1,
+    },
+    detailContent: {
+        padding: 16,
+    },
+    detailNameCard: {
+        backgroundColor: '#fef5f0',
+        padding: 20,
+        borderRadius: 12,
+        marginBottom: 20,
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    detailFarmerName: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.bold,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    detailFarmerId: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontFamily: Fonts.semiBold,
+    },
+    detailSection: {
+        marginBottom: 24,
+        backgroundColor: CoffeeColors.LIGHT_GRAY_BG,
+        borderRadius: 10,
+        padding: 16,
+    },
+    detailSectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.bold,
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottomWidth: 2,
+        borderBottomColor: CoffeeColors.DARK_BROWN,
+    },
+    detailFieldRow: {
+        flexDirection: 'row',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_BROWN,
+    },
+    detailFieldLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: CoffeeColors.GRAY_TEXT,
+        fontFamily: Fonts.semiBold,
+        flex: 1,
+    },
+    detailFieldValue: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.regular,
+        flex: 2,
+        textAlign: 'right',
+    },
+    // --- Success Message Banner ---
+    successBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        backgroundColor: '#4CAF50',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#388E3C',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+    },
+    successText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: CoffeeColors.WHITE,
+        fontFamily: Fonts.semiBold,
+        flex: 1,
+    },
 });
 
 

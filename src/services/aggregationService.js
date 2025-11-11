@@ -300,6 +300,8 @@ export const fetchHarvests = async () => {
                 farmer_name: farmerName,
                 weight: Number(weight) || 0,
                 weight_on_delivery: Number(weight) || 0,
+                location_on_delivery: h.location_on_delivery ?? '',
+                gps_coordinates: h.gps_coordinates ?? '',
                 weight_after_floating: Number(h.weight_after_floating ?? h.after_floating ?? 0) || 0,
                 date: date,
                 date_of_delivery: date,
@@ -351,6 +353,8 @@ export const submitHarvest = async (data) => {
             name: data.name ?? data.farmer_name ?? '',
             // Schema expects integer weights - coerce/round
             weight_on_delivery: Number.isFinite(Number(data.weight_on_delivery)) ? Math.round(Number(data.weight_on_delivery)) : (data.weight_on_delivery ? parseInt(data.weight_on_delivery, 10) : 0),
+            location_on_delivery: data.location_on_delivery ?? '',
+            gps_coordinates: data.gps_coordinates ?? '',
             weight_after_floating: Number.isFinite(Number(data.weight_after_floating)) ? Math.round(Number(data.weight_after_floating)) : (data.weight_after_floating ? parseInt(data.weight_after_floating, 10) : 0),
             date_of_delivery: data.date_of_delivery ?? data.harvest_date ?? '',
             grade: data.grade ?? data.quality ?? '',

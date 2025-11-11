@@ -2,14 +2,16 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet, ScrollView,
-  Modal, TouchableOpacity, ActivityIndicator
+  Modal, TouchableOpacity, ActivityIndicator, Alert
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import SimpleHeader from '../../components/SimpleHeader';
 import BottomNav from '../../components/BottomNav';
 import CustomPicker from '../../components/CustomPicker';
+import MultiSelectPicker from '../../components/MultiSelectPicker';
 import CustomAlert from '../../components/CustomAlert';
 import CoffeeColors from '../../theme/colors';
 import Fonts from '../../theme/fonts';
@@ -44,7 +46,7 @@ const SuccessModal = ({ isVisible, message, blockId, onClose, onGoToSummary }) =
   >
     <View style={modalStyles.centeredView}>
       <View style={modalStyles.modalView}>
-        <Text style={modalStyles.modalTitle}>✅ Success!</Text>
+        <Text style={modalStyles.modalTitle}>Success!</Text>
         <Text style={modalStyles.modalText}>{message}</Text>
         {blockId && <Text style={modalStyles.modalTextSmall}>Block ID: {blockId}</Text>}
         <View style={modalStyles.buttonContainer}>
@@ -121,6 +123,7 @@ const initialFormState = {
   sourceSeedling: '',
   otherSourceSeedling: '',
   typeOfSeedling: '',
+  robustaSubtypes: [], // Array for multiple Robusta subtypes
   fertilizerType: '',
   fertilizerList: '',
   otherFertilizer: '',
@@ -139,11 +142,7 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
     updateField('typeCoffee', value);
     // Reset seedling type when coffee type changes
     updateField('typeOfSeedling', '');
-  };
-
-  const handleRobustaSubtypeChange = (value) => {
-    updateField('robustaSubtype', value);
-    updateField('typeOfSeedling', value ? `Robusta (${value})` : '');
+    updateField('robustaSubtypes', []);
   };
 
 
@@ -193,11 +192,19 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
       />
 
       {formData.typeCoffee === 'robusta' && (
-        <CustomPicker
-          label="Robusta Subtype"
-          selectedValue={formData.robustaSubtype}
-          onValueChange={handleRobustaSubtypeChange}
-          items={ROBUSTA_SUBTYPES}
+        <MultiSelectPicker
+          label="Robusta Subtypes (Select Multiple)"
+          selectedValues={formData.robustaSubtypes || []}
+          onValueChange={(updatedValues) => {
+            updateField('robustaSubtypes', updatedValues);
+            // Update typeOfSeedling with comma-separated subtypes
+            if (updatedValues.length > 0) {
+              updateField('typeOfSeedling', `Robusta (${updatedValues.join(', ')})`);
+            } else {
+              updateField('typeOfSeedling', '');
+            }
+          }}
+          items={ROBUSTA_SUBTYPES.filter(item => item.value !== '')}
         />
       )}
 
@@ -414,7 +421,7 @@ const Step3_StandardPractices = ({ formData, updateField }) => (
 
 // === STEPS ===
 const STEPS = [
-  { title: 'Tree Details', Component: Step1_TreeDetails, requiredFields: ['numTrees', 'typeCoffee', 'sourceSeedling'] },
+  { title: 'Tree Details', Component: Step1_TreeDetails, requiredFields: ['numTrees', 'typeCoffee', 'sourceSeedling', 'typeOfSeedling'] },
   { title: 'Fertilizers & Pesticides', Component: Step2_FertilizersPesticides, requiredFields: [] },
   { title: 'Standard Practices', Component: Step3_StandardPractices, requiredFields: [] }
 ];
@@ -428,6 +435,26 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [generatedBlockId, setGeneratedBlockId] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
+  const [alert, setAlert] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+    buttons: []
+  });
+
+  const showAlert = (title, message, type = 'info', buttons = []) => {
+    const defaultButtons = buttons.length > 0 ? buttons : [
+      { text: 'OK', onPress: () => setAlert({ ...alert, visible: false }) }
+    ];
+    setAlert({
+      visible: true,
+      title,
+      message,
+      type,
+      buttons: defaultButtons
+    });
+  };
 
   const updateField = useCallback((key, valueOrFn) => {
     setFormData(prev => ({
@@ -442,6 +469,15 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
       setIsEditMode(true);
       const blockData = route.params.blockData;
 
+      // Extract Robusta subtypes from typeOfSeedling field if present
+      // Format is "Robusta (KR1, KR2, ...)"
+      let robustaSubtypesArray = [];
+      const typeOfSeedling = blockData.type_of_seedling || '';
+      if (typeOfSeedling.startsWith('Robusta (') && typeOfSeedling.endsWith(')')) {
+        const subtypesString = typeOfSeedling.substring(9, typeOfSeedling.length - 1); // Extract between parentheses
+        robustaSubtypesArray = subtypesString.split(', ').map(s => s.trim()).filter(s => s.length > 0);
+      }
+
       // Pre-fill form with existing block data
       setFormData({
         numTrees: blockData.trees?.toString() || '',
@@ -451,6 +487,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         sourceSeedling: blockData.source || '',
         otherSourceSeedling: '',
         typeOfSeedling: blockData.type_of_seedling || '',
+        robustaSubtypes: robustaSubtypesArray,
         fertilizerType: blockData.fertilizers || '',
         fertilizerList: blockData.fertilizer_names || '',
         otherFertilizer: '',
@@ -494,6 +531,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         if (field === 'numTrees') return 'Number of Trees is required';
         if (field === 'typeCoffee') return 'Coffee Type is required';
         if (field === 'sourceSeedling') return 'Seedling Source is required';
+        if (field === 'typeOfSeedling') return 'Type of Seedling is required';
         if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
         return `${field} is required`;
       });
@@ -624,6 +662,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         if (field === 'numTrees') return 'Number of Trees is required';
         if (field === 'typeCoffee') return 'Coffee Type is required';
         if (field === 'sourceSeedling') return 'Seedling Source is required';
+        if (field === 'typeOfSeedling') return 'Type of Seedling is required';
         if (field === 'otherSourceSeedling') return 'Specify Source is required when "Other" is selected';
         return `${field} is required`;
       });
@@ -682,7 +721,14 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
 
       // Attempt to sync using ApiService (includes authentication)
       try {
-        const response = await ApiService.post('harvests/blocks/', payload);
+        let response;
+        if (isEditMode) {
+          // For edit mode, use PUT to update the existing block
+          response = await ApiService.put(`harvests/blocks/${blockId}/`, payload);
+        } else {
+          // For new blocks, use POST to create
+          response = await ApiService.post('harvests/blocks/', payload);
+        }
 
         // Success - response.data contains the result
         const syncedBlockId = response.data.block_id || blockId;
@@ -743,11 +789,36 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
     <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
       <SimpleHeader title={isEditMode ? "Edit Block" : "Block Registration"} />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <TouchableOpacity onPress={handleViewSummary} style={styles.navLink}>
-          <Text style={styles.navLinkText}>View Block Summary 📋</Text>
+        <TouchableOpacity onPress={handleViewSummary} style={styles.backToSummaryButton}>
+          <Ionicons name="arrow-back" size={18} color={CoffeeColors.MEDIUM_BROWN} style={styles.backToSummaryIcon} />
+          <Text style={styles.backToSummaryText}>Back to Block Summary</Text>
         </TouchableOpacity>
 
-        <Text style={styles.stepIndicator}>Step {currentStep + 1} of {STEPS.length}: {STEPS[currentStep].title}</Text>
+        {/* Step Indicator with Circles and Lines */}
+        <View style={stepStyles.indicatorContainer}>
+          <View style={stepStyles.stepConnectorLine} />
+          {STEPS.map((step, index) => (
+            <View key={index} style={stepStyles.stepWrapper}>
+              <View
+                style={[
+                  stepStyles.stepCircle,
+                  { backgroundColor: index === currentStep ? CoffeeColors.ACCENT : (index < currentStep ? CoffeeColors.PRIMARY_BROWN : CoffeeColors.LIGHT_BROWN) }
+                ]}
+              >
+                <Text style={stepStyles.stepText}>{index + 1}</Text>
+              </View>
+              <Text
+                style={[
+                  stepStyles.stepLabel,
+                  { color: index === currentStep ? CoffeeColors.DARK_BROWN : CoffeeColors.MEDIUM_BROWN }
+                ]}
+              >
+                {step.title}
+              </Text>
+            </View>
+          ))}
+        </View>
+
         <View style={styles.stepContainer}>
           <CurrentStepComponent formData={formData} updateField={updateField} />
         </View>
@@ -763,38 +834,51 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         />
 
         {/* Navigation Buttons - Inside ScrollView */}
-        <View style={styles.buttonGroup}>
-          {/* Always show back button - on step 0 it goes to summary, otherwise goes to previous step */}
+        <View style={styles.navigationContainer}>
+          <View style={styles.stepNav}>
+            {currentStep > 0 && (
+              <TouchableOpacity
+                style={styles.stepButton}
+                onPress={handleBack}
+                disabled={isLoading}
+              >
+                <Ionicons name="chevron-back" size={20} color={CoffeeColors.PRIMARY_BROWN} style={styles.prevButtonIcon} />
+                <Text style={styles.stepButtonText}>Previous</Text>
+              </TouchableOpacity>
+            )}
+            {!isLastStep && (
+              <TouchableOpacity
+                style={styles.stepButton}
+                onPress={handleNext}
+                disabled={isLoading}
+              >
+                <Text style={styles.stepButtonText}>Next</Text>
+                <Ionicons name="chevron-forward" size={20} color={CoffeeColors.PRIMARY_BROWN} style={styles.nextButtonIcon} />
+              </TouchableOpacity>
+            )}
+            {isLastStep && (
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleSubmit}
+                disabled={isLoading}
+              >
+                {isLoading ? <ActivityIndicator color={'#fff'} /> : (
+                  <Text style={styles.submitButtonText}>
+                    {isEditMode ? 'Update Block' : 'Submit Block'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Cancel Button - Available on all steps */}
           <TouchableOpacity
-            style={styles.backButton}
-            onPress={currentStep === 0 ? () => navigation.navigate('BlockSummary') : handleBack}
+            style={styles.cancelButton}
+            onPress={() => navigation.navigate('BlockSummary')}
             disabled={isLoading}
           >
-            <Text style={styles.backButtonText}>
-              {currentStep === 0 ? 'Cancel' : 'Back'}
-            </Text>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
-
-          {!isLastStep && (
-            <TouchableOpacity
-              style={styles.nextButton}
-              onPress={handleNext}
-              disabled={isLoading}
-            >
-              <Text style={styles.submitButtonText}>Next</Text>
-            </TouchableOpacity>
-          )}
-          {isLastStep && (
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={handleSubmit}
-              disabled={isLoading}
-            >
-              <Text style={styles.submitButtonText}>
-                {isLoading ? 'Submitting...' : (isEditMode ? 'Update Block' : 'Submit Block')}
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
       </ScrollView>
 
@@ -825,16 +909,21 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: CoffeeColors.DARK_BROWN,
   },
-  navLink: {
-    paddingBottom: 10,
-    marginBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: CoffeeColors.LIGHT_BROWN,
+  backToSummaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 0,
+    marginBottom: 20,
   },
-  navLinkText: {
+  backToSummaryIcon: {
+    marginRight: 6,
+  },
+  backToSummaryText: {
     color: CoffeeColors.MEDIUM_BROWN,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: Fonts.semiBold,
   },
   stepIndicator: {
     fontSize: 16,
@@ -929,45 +1018,70 @@ const styles = StyleSheet.create({
   },
 
   // Button Group for Footer
-  buttonGroup: {
+  navigationContainer: {
+    width: '100%',
+    marginTop: 20,
+    paddingHorizontal: 5,
+    gap: 12,
+  },
+  stepNav: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 15,
-    borderTopWidth: 1,
-    borderColor: CoffeeColors.LIGHT_BROWN,
-    backgroundColor: CoffeeColors.WHITE,
   },
-  nextButton: {
-    flex: 1,
-    backgroundColor: CoffeeColors.DARK_BROWN,
-    padding: 15,
-    borderRadius: 8,
+  stepButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+  stepButtonText: {
+    color: CoffeeColors.PRIMARY_BROWN,
+    fontWeight: 'bold',
+    fontFamily: Fonts.bold,
+    fontSize: 14,
+  },
+  prevButtonIcon: {
+    marginRight: 8,
+  },
+  nextButtonIcon: {
+    marginLeft: 8,
   },
   submitButton: {
-    flex: 1,
-    backgroundColor: CoffeeColors.DARK_BROWN,
-    padding: 15,
-    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  backButton: {
-    backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
-    padding: 15,
+    justifyContent: 'center',
+    padding: 12,
     borderRadius: 8,
-    marginRight: 10,
+    flex: 1,
+    backgroundColor: CoffeeColors.PRIMARY_BROWN,
+    marginHorizontal: 5,
   },
   submitButtonText: {
     color: '#fff',
-    fontSize: 16,
     fontWeight: 'bold',
     fontFamily: Fonts.bold,
   },
-  backButtonText: {
-    color: CoffeeColors.DARK_BROWN,
-    fontSize: 16,
+  cancelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
+    borderWidth: 1,
+    borderColor: CoffeeColors.PRIMARY_BROWN,
+  },
+  cancelButtonText: {
+    color: CoffeeColors.PRIMARY_BROWN,
     fontWeight: 'bold',
     fontFamily: Fonts.bold,
+    fontSize: 14,
   },
 });
 
@@ -1032,6 +1146,54 @@ const modalStyles = StyleSheet.create({
     fontFamily: Fonts.bold,
     textAlign: 'center',
     fontSize: 14,
+  },
+});
+
+// === STEP INDICATOR STYLES ===
+const stepStyles = StyleSheet.create({
+  indicatorContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 30,
+    paddingHorizontal: 5,
+    position: 'relative',
+  },
+  stepConnectorLine: {
+    position: 'absolute',
+    top: 17,
+    left: '16.67%',
+    right: '16.67%',
+    height: 2,
+    backgroundColor: CoffeeColors.LIGHT_BROWN,
+    zIndex: 0,
+  },
+  stepWrapper: {
+    alignItems: 'center',
+    width: '33.33%',
+    zIndex: 1,
+  },
+  stepCircle: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 5,
+    borderWidth: 2,
+    borderColor: CoffeeColors.CREAM,
+  },
+  stepText: {
+    color: CoffeeColors.WHITE,
+    fontWeight: 'bold',
+    fontFamily: Fonts.bold,
+    fontSize: 18,
+  },
+  stepLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
+    textAlign: 'center',
+    color: CoffeeColors.DARK_BROWN,
   },
 });
 

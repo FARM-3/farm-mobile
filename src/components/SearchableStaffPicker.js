@@ -60,7 +60,7 @@ const SearchableStaffPicker = ({
      * Filter staff based on search term
      */
     useEffect(() => {
-        if (searchTerm.trim() === '') {
+        if (!searchTerm || searchTerm.trim() === '') {
             setFilteredStaff(staffList);
         } else {
             const filtered = searchStaff(staffList, searchTerm);

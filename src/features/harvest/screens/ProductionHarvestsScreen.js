@@ -11,6 +11,7 @@ import {
     Alert,
     ActivityIndicator,
     TextInput,
+    ScrollView,
 } from 'react-native';
 import NetInfo from "@react-native-community/netinfo";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,14 +27,99 @@ import {
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 
+// ===============================================
+// === HARVEST DETAIL VIEW COMPONENT      ===
+// ===============================================
+
+/**
+ * HarvestDetailView - Mobile-friendly detail screen for viewing harvest information
+ * Displays all harvest data organized in logical sections with proper labels
+ */
+const HarvestDetailView = ({ harvest, onBack }) => {
+    if (!harvest) return null;
+
+    // Helper to format field values properly
+    const formatValue = (value) => {
+        if (value === null || value === undefined || value === '') return 'Not provided';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'Not provided';
+        return String(value);
+    };
+
+    // Field sections for organized display
+    const sections = [
+        {
+            title: 'Harvest Details',
+            fields: [
+                { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
+                { label: 'Worker Name', value: harvest.name || harvest.worker_name },
+                { label: 'Block ID', value: harvest.block || harvest.block_id },
+                { label: 'Date of Delivery', value: harvest.date },
+                { label: 'Weight on Delivery', value: harvest.weight ? `${harvest.weight} kg` : 'Not provided' },
+            ]
+        },
+        {
+            title: 'Payment Information',
+            fields: [
+                { label: 'Amount Paid', value: harvest.amountPaid ? `UGX ${Number(harvest.amountPaid).toLocaleString()}` : 'Not provided' },
+                { label: 'Paid By', value: harvest.paidBy || harvest.paid_by },
+            ]
+        }
+    ];
+
+    return (
+        <View style={styles.detailViewContainer}>
+            {/* Header with back button */}
+            <View style={styles.detailHeader}>
+                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color={CoffeeColors.DARK_BROWN} />
+                </TouchableOpacity>
+                <Text style={styles.detailHeaderTitle}>Harvest Details</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            {/* Scrollable content */}
+            <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
+                {/* Harvest ID Card */}
+                <View style={styles.detailNameCard}>
+                    <Text style={styles.detailFarmerName}>
+                        {harvest.name || harvest.worker_name || 'Unknown Worker'}
+                    </Text>
+                    <Text style={styles.detailFarmerId}>
+                        Harvest ID: {harvest.id || harvest.harvest_id || 'N/A'}
+                    </Text>
+                </View>
+
+                {/* Information Sections */}
+                {sections.map((section, sectionIndex) => (
+                    <View key={sectionIndex} style={styles.detailSection}>
+                        <Text style={styles.detailSectionTitle}>{section.title}</Text>
+                        {section.fields.map((field, fieldIndex) => (
+                            <View key={fieldIndex} style={styles.detailFieldRow}>
+                                <Text style={styles.detailFieldLabel}>{field.label}:</Text>
+                                <Text style={styles.detailFieldValue}>{formatValue(field.value)}</Text>
+                            </View>
+                        ))}
+                    </View>
+                ))}
+            </ScrollView>
+        </View>
+    );
+};
+
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
 export default function ProductionHarvestsScreen({ navigation }) {
     const [allRecords, setAllRecords] = useState([]);
     const [filteredData, setFilteredData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
     const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
     const [searchTerm, setSearchTerm] = useState('');
+
+    // State for detail view
+    const [selectedHarvest, setSelectedHarvest] = useState(null);
+    const [viewMode, setViewMode] = useState('table'); // 'table' or 'detail'
 
     /**
      * Load data from both local and remote sources (without auto-sync)
@@ -196,7 +282,95 @@ export default function ProductionHarvestsScreen({ navigation }) {
     };
 
     const handleViewDetails = (item) => {
-        navigation.navigate('HarvestDetails', { harvestData: item });
+        setSelectedHarvest(item);
+        setViewMode('detail');
+    };
+
+    const handleSyncPress = async () => {
+        console.log('[ProductionHarvests] Sync button pressed, isSyncing:', isSyncing);
+
+        if (isSyncing) {
+            console.warn('[ProductionHarvests] Sync already in progress, ignoring duplicate request');
+            return; // Prevent multiple concurrent syncs
+        }
+
+        setIsSyncing(true);
+        setSyncStatus("Syncing harvest records...");
+
+        try {
+            // Fetch current unsynced count
+            console.log('[ProductionHarvests] Fetching unsynced records...');
+            const unsyncedResult = await getUnsyncedRecords();
+            const unsyncedRecords = unsyncedResult.records || [];
+
+            console.log('[ProductionHarvests] Unsynced records found:', unsyncedRecords.length);
+            console.log('[ProductionHarvests] Records data:', JSON.stringify(unsyncedRecords, null, 2));
+
+            if (unsyncedRecords.length === 0) {
+                console.log('[ProductionHarvests] No unsynced records, marking as synced');
+                setSyncStatus("All records are synced ✓");
+                setIsSyncing(false);
+                return;
+            }
+
+            // Sync all records
+            console.log('[ProductionHarvests] Starting sync of', unsyncedRecords.length, 'records');
+            const result = await syncAllRecords();
+
+            console.log('[ProductionHarvests] Sync result:', {
+                syncedCount: result.syncedCount,
+                totalCount: result.totalCount,
+                failedCount: result.failedRecords?.length || 0,
+                failedRecords: result.failedRecords
+            });
+
+            if (result.syncedCount === result.totalCount && result.totalCount > 0) {
+                // All records synced successfully
+                setSyncStatus(`✓ Synced ${result.syncedCount} record${result.syncedCount !== 1 ? 's' : ''}`);
+                console.log('[ProductionHarvests] Sync successful, waiting 500ms before reload');
+                // Wait a brief moment for backend to process the records before reloading
+                await new Promise(resolve => setTimeout(resolve, 500));
+            } else if (result.syncedCount > 0 && result.failedRecords && result.failedRecords.length > 0) {
+                // Partial success
+                const failedCount = result.totalCount - result.syncedCount;
+                const errorMsg = result.failedRecords.map(f => `${f.id}: ${f.error || f.reason}`).join('; ');
+                setSyncStatus(`Partial: ${result.syncedCount}/${result.totalCount} synced. Failed: ${errorMsg}`);
+                console.warn('[ProductionHarvests] Partial sync result:', result.failedRecords);
+            } else if (result.syncedCount === 0 && result.failedRecords && result.failedRecords.length > 0) {
+                // All failed
+                const errorMsg = result.failedRecords.map(f => `${f.id}: ${f.error || f.reason}`).join('; ');
+                setSyncStatus(`Sync failed: ${errorMsg}`);
+                console.error('[ProductionHarvests] Sync failed with errors:', result.failedRecords);
+            } else {
+                setSyncStatus("Sync failed - check your connection and try again");
+                console.warn('[ProductionHarvests] Sync returned unexpected result:', result);
+            }
+
+            // Reload data to reflect sync status
+            console.log('[ProductionHarvests] Reloading data after sync');
+            await loadData();
+            console.log('[ProductionHarvests] Data reloaded successfully');
+
+        } catch (error) {
+            console.error('[ProductionHarvests] Sync error:', error);
+            setSyncStatus(`Sync error: ${error.message || 'Unknown error'}`);
+        } finally {
+            setIsSyncing(false);
+            console.log('[ProductionHarvests] Sync process completed, isSyncing set to false');
+        }
+    };
+
+    // Calculate unsynced count
+    const unsyncedCount = allRecords.filter(r => !r.isSynced).length;
+
+    // Handler for back press
+    const handleBackPress = () => {
+        if (viewMode === 'detail') {
+            setViewMode('table');
+            setSelectedHarvest(null);
+        } else {
+            navigation.goBack();
+        }
     };
 
     const renderHarvestCard = ({ item }) => {
@@ -236,6 +410,15 @@ export default function ProductionHarvestsScreen({ navigation }) {
                         style={styles.iconButton}
                         onPress={(e) => {
                             e.stopPropagation();
+                            navigation.navigate('PaymentVoucher', { harvestData: item });
+                        }}
+                    >
+                        <Ionicons name="document-text" size={20} color={CoffeeColors.PRIMARY_BROWN} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={styles.iconButton}
+                        onPress={(e) => {
+                            e.stopPropagation();
                             handleEdit(item);
                         }}
                     >
@@ -266,7 +449,13 @@ export default function ProductionHarvestsScreen({ navigation }) {
 
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
-            <SimpleHeader title="Rugyeyo Harvests" />
+            <SimpleHeader
+                title="Rugyeyo Harvests"
+                unsyncedCount={unsyncedCount}
+                onSync={handleSyncPress}
+                isSyncing={isSyncing}
+                onBackPress={handleBackPress}
+            />
 
             <View style={{ flex: 1 }}>
             <View style={styles.container}>
@@ -319,21 +508,33 @@ export default function ProductionHarvestsScreen({ navigation }) {
                 )}
 
                 {/* Harvest Records List */}
-                <FlatList
-                    data={filteredData}
-                    renderItem={renderHarvestCard}
-                    keyExtractor={(item, index) => `${item.id}_${item.isSynced}_${index}`}
-                    ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                            <Ionicons name="file-tray-outline" size={64} color={CoffeeColors.MEDIUM_BROWN} />
-                            <Text style={styles.emptyText}>No harvest records found</Text>
-                            {searchTerm && (
-                                <Text style={styles.emptySubtext}>Try adjusting your search</Text>
-                            )}
-                        </View>
-                    }
-                    contentContainerStyle={{ paddingBottom: 20 }}
-                />
+                {viewMode === 'table' && (
+                    <FlatList
+                        data={filteredData}
+                        renderItem={renderHarvestCard}
+                        keyExtractor={(item, index) => `${item.id}_${item.isSynced}_${index}`}
+                        ListEmptyComponent={
+                            <View style={styles.emptyContainer}>
+                                <Ionicons name="file-tray-outline" size={64} color={CoffeeColors.MEDIUM_BROWN} />
+                                <Text style={styles.emptyText}>No harvest records found</Text>
+                                {searchTerm && (
+                                    <Text style={styles.emptySubtext}>Try adjusting your search</Text>
+                                )}
+                            </View>
+                        }
+                        contentContainerStyle={{ paddingBottom: 20 }}
+                    />
+                )}
+
+                {viewMode === 'detail' && selectedHarvest && (
+                    <HarvestDetailView
+                        harvest={selectedHarvest}
+                        onBack={() => {
+                            setSelectedHarvest(null);
+                            setViewMode('table');
+                        }}
+                    />
+                )}
             </View>
             </View>
 
@@ -521,5 +722,107 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.regular,
         color: CoffeeColors.GRAY_TEXT,
         fontStyle: 'italic',
+    },
+    // --- Harvest Detail View ---
+    detailViewContainer: {
+        flex: 1,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        overflow: 'hidden',
+        elevation: 3,
+    },
+    detailHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        backgroundColor: CoffeeColors.DARK_BROWN,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_BROWN,
+    },
+    backButton: {
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: CoffeeColors.LIGHT_BROWN,
+        borderRadius: 20,
+    },
+    detailHeaderTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#fff',
+        fontFamily: Fonts.bold,
+        flex: 1,
+        textAlign: 'center',
+    },
+    detailScrollView: {
+        flex: 1,
+    },
+    detailContent: {
+        padding: 16,
+    },
+    detailNameCard: {
+        backgroundColor: '#fef5f0',
+        padding: 20,
+        borderRadius: 12,
+        marginBottom: 20,
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+    },
+    detailFarmerName: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.bold,
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    detailFarmerId: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontFamily: Fonts.semiBold,
+    },
+    detailSection: {
+        marginBottom: 24,
+        backgroundColor: CoffeeColors.LIGHT_GRAY_BG,
+        borderRadius: 10,
+        padding: 16,
+    },
+    detailSectionTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.bold,
+        marginBottom: 12,
+        paddingBottom: 8,
+        borderBottomWidth: 2,
+        borderBottomColor: CoffeeColors.DARK_BROWN,
+    },
+    detailFieldRow: {
+        flexDirection: 'row',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_BROWN,
+    },
+    detailFieldLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: CoffeeColors.GRAY_TEXT,
+        fontFamily: Fonts.semiBold,
+        flex: 1,
+    },
+    detailFieldValue: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.regular,
+        flex: 2,
+        textAlign: 'right',
     },
 });

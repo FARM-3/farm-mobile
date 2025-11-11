@@ -10,13 +10,28 @@ const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsy
 /**
  * Maps the UI payload (camelCase, internal flags) to the format expected by the backend API (snake_case, strings).
  *
- * API Schema POST: { "name": "string", "weight_on_delivery": integer, "date_of_delivery": "string", "price_per_kg": integer, "amount_paid": "string", "paid_by": "string" }
+ * API Schema POST: {
+ *   "name": "string",
+ *   "coffee_type": "string",
+ *   "weight_on_delivery": integer,
+ *   "date_of_delivery": "string",
+ *   "location_of_delivery": "string",
+ *   "gps_coordinates_delivery": "string",
+ *   "price_per_kg": integer,
+ *   "amount_paid": "string",
+ *   "paid_by": "string",
+ *   "harvest_id": "string"
+ * }
  *
  * @param {object} payload - The raw payload from the UI or the sync queue.
  * @returns {object} The API-ready payload.
  */
 const mapToApiPayload = (payload) => {
     const apiPayload = {};
+
+    // 0. Harvest ID (UI: id (string like "ED2810RA00") -> API: harvest_id (string))
+    // This is required by the API
+    apiPayload.harvest_id = payload.id;
 
     // 1. Date (UI: date (Date object/ISO string) -> API: date_of_delivery (YYYY-MM-DD string))
     let dateObj = payload.date;
@@ -41,15 +56,30 @@ const mapToApiPayload = (payload) => {
     // 3. Worker Name (UI: workerName (string) -> API: name (string))
     apiPayload.name = payload.workerName;
 
-    // 4. Price per Kg (UI: pricePerKg (Number) -> API: price_per_kg (integer))
+    // 4. Coffee Type (optional field - defaults to null in backend)
+    // Include as null to explicitly match backend model
+    apiPayload.coffee_type = payload.coffeeType || null;
+
+    // 5. Price per Kg (UI: pricePerKg (Number) -> API: price_per_kg (integer))
     apiPayload.price_per_kg = Math.round(Number(payload.pricePerKg));
 
-    // 5. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (string))
+    // 6. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (string))
     apiPayload.amount_paid = String(Number(payload.amountPaid).toFixed(2));
 
-    // 6. Paid By (UI: paidBy (string like "RF001") -> API: paid_by (string))
+    // 7. Paid By (UI: paidBy (string like "RF001") -> API: paid_by (string))
     // Keep as string - API expects staff ID strings like "RF001", "RF002", etc.
-    apiPayload.paid_by = payload.paidBy;
+    // Handle if paidBy is an object with id property
+    if (typeof payload.paidBy === 'object' && payload.paidBy && payload.paidBy.id) {
+        apiPayload.paid_by = payload.paidBy.id;
+    } else {
+        apiPayload.paid_by = String(payload.paidBy || '');
+    }
+
+    // 8. Location of Delivery (optional - auto-populated from GPS in backend)
+    apiPayload.location_of_delivery = payload.locationOfDelivery || null;
+
+    // 9. GPS Coordinates (optional - if device provides location)
+    apiPayload.gps_coordinates_delivery = payload.gpsCoordinates || null;
 
     return apiPayload;
 };

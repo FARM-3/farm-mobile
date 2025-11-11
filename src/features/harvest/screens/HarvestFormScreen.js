@@ -7,6 +7,11 @@ import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomPicker from '../../../components/CustomPicker';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
+import SearchableWorkerPicker from '../../../components/SearchableWorkerPicker';
+import CustomAlert from '../../../components/CustomAlert';
+import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
+import { fetchCurrentPrice } from '../../../services/priceService';
+
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue";
 
@@ -133,20 +138,25 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
         updateField('blockId', selectedId);
     };
 
+    // Handler for worker selection
+    const handleWorkerSelect = (worker) => {
+        console.log('[HarvestForm] Selected worker:', worker);
+        updateField('workerName', worker.displayName);
+        updateField('selectedWorker', worker);
+    };
+
     return (
         <View style={stepStyles.stepContainer}>
-            <Text style={styles.heading}>1. Worker & Block Details</Text>
+            <Text style={styles.heading}>1. Rugyeyo Staff & Block Details</Text>
 
-            <Text style={styles.label}>Worker Name</Text>
-            <TextInput
-                style={styles.input}
-                value={formData.workerName}
-                onChangeText={(t) => updateField('workerName', t)}
-                placeholder="Name of worker/deliverer"
-                autoCapitalize="words"
+            <SearchableWorkerPicker
+                label="Worker Name *"
+                selectedWorkerId={formData.workerName}
+                onWorkerSelect={handleWorkerSelect}
+                selectedWorker={formData.selectedWorker}
             />
 
-            <Text style={styles.label}>Date of Delivery</Text>
+            <Text style={styles.label}>Date of Delivery *</Text>
             <TouchableOpacity style={styles.dateButton} onPress={() => updateField('showDatePicker', true)} accessibilityLabel="Select date">
                 <Ionicons name="calendar-outline" size={20} color={CoffeeColors.DARK_BROWN} />
                 <Text style={{ marginLeft: 10, fontSize: 16, color: CoffeeColors.DARK_BROWN }}>
@@ -165,7 +175,7 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
             )}
 
             <CustomPicker
-                label="Block"
+                label="Block *"
                 selectedValue={formData.blockId}
                 onValueChange={handleBlockChange}
                 items={BLOCK_DATA}
@@ -181,46 +191,111 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
     );
 };
 
-const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
-    <View style={stepStyles.stepContainer}>
-        <Text style={styles.heading}>2. Delivery & Finance</Text>
+const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
+    const [productionPrice, setProductionPrice] = useState(null);
+    const [loadingPrice, setLoadingPrice] = useState(false);
+    const [priceRefreshKey, setPriceRefreshKey] = useState(0);
 
-        <Text style={styles.label}>Weight on Delivery (kg)</Text>
-        <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={formData.weight}
-            onChangeText={(t) => updateField('weight', t.replace(",", "."))}
-            placeholder="e.g. 12.5"
-        />
+    useEffect(() => {
+        const loadPrice = async () => {
+            setLoadingPrice(true);
+            try {
+                const price = await fetchCurrentPrice();
+                console.log('[HarvestForm] Fetched price:', price);
+                if (price) {
+                    setProductionPrice(price);
+                    // Auto-fill the price field if it's empty
+                    if (!formData.pricePerKg) {
+                        updateField('pricePerKg', String(price));
+                    }
+                } else {
+                    // Default price if no price is set in API
+                    setProductionPrice(3000);
+                    if (!formData.pricePerKg) {
+                        updateField('pricePerKg', '3000');
+                    }
+                }
+            } catch (error) {
+                console.error('[HarvestForm] Error fetching price:', error);
+                // Fallback to default price on error
+                setProductionPrice(3000);
+                if (!formData.pricePerKg) {
+                    updateField('pricePerKg', '3000');
+                }
+            } finally {
+                setLoadingPrice(false);
+            }
+        };
 
-        <Text style={styles.label}>Price per Kg (UGX)</Text>
-        <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={formData.pricePerKg}
-            onChangeText={(t) => updateField('pricePerKg', t.replace(",", "."))}
-            placeholder="e.g. 4000"
-        />
+        loadPrice();
+    }, [priceRefreshKey, formData.pricePerKg, updateField]);
 
-        <Text style={styles.label}>Amount Paid (UGX)</Text>
-        <TextInput
-            style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
-            keyboardType="numeric"
-            value={formData.amountPaid}
-            editable={false}
-            placeholder="Auto-calculated"
-        />
-        <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
+    return (
+        <View style={stepStyles.stepContainer}>
+            <Text style={styles.heading}>2. Delivery & Finance</Text>
 
-        <SearchableStaffPicker
-            label="Paid By"
-            selectedStaffId={formData.paidBy}
-            onStaffSelect={(staff) => updateField('paidBy', staff.id)}
-            selectedStaff={formData.selectedStaff}
-        />
-    </View>
-);
+            <Text style={styles.label}>Weight on Delivery (kg) *</Text>
+            <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={formData.weight}
+                onChangeText={(t) => updateField('weight', t.replace(",", "."))}
+                placeholder="e.g. 12.5"
+            />
+
+            <Text style={styles.label}>Price per Kg (UGX)</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.input, { flex: 1, backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
+                    {loadingPrice ? (
+                        <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
+                    ) : (
+                        <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
+                            {formData.pricePerKg || productionPrice || '3000'}
+                        </Text>
+                    )}
+                </View>
+                <TouchableOpacity
+                    style={{
+                        backgroundColor: CoffeeColors.PRIMARY_BROWN,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderRadius: 8,
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                    }}
+                    onPress={() => setPriceRefreshKey(prev => prev + 1)}
+                    disabled={loadingPrice}
+                >
+                    <Ionicons
+                        name={loadingPrice ? "hourglass" : "refresh"}
+                        size={20}
+                        color={CoffeeColors.WHITE}
+                    />
+                </TouchableOpacity>
+            </View>
+            <Text style={styles.helperText}>
+                Current production price from system settings. Tap refresh icon to update.
+            </Text>
+
+            <Text style={styles.label}>Amount Paid (UGX)</Text>
+            <TextInput
+                style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
+                keyboardType="numeric"
+                value={formData.amountPaid}
+                editable={false}
+                placeholder="Auto-calculated"
+            />
+            <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
+
+            <SearchableStaffPicker
+                label="Paid By *"
+                selectedStaffId={formData.paidBy}
+                onStaffSelect={(staff) => updateField('paidBy', staff.id)}
+                selectedStaff={formData.selectedStaff}
+            />
+        </View>
+    );
+};
 
 
 // --- MAIN FORM COMPONENT ---
@@ -234,6 +309,7 @@ const STEPS = [
 const initialFormState = {
     // Harvest Details
     workerName: "", // maps to Worker_name
+    selectedWorker: null, // Full worker object from SearchableWorkerPicker
     blockId: BLOCK_DATA[0].id, // Integer PK from blocks table
     weight: "", // maps to weight_on_delivery
     date: new Date(), // maps to date_of_delivery
@@ -255,6 +331,15 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editRecordId, setEditRecordId] = useState(null);
 
+    // Custom Alert state
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: [],
+    });
+
     // Initialize form with edit data if provided
     useEffect(() => {
         if (route.params?.editData) {
@@ -269,11 +354,12 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             setFormData(prev => ({
                 ...prev,
                 workerName: editData.name || editData.workerName || '',
+                selectedWorker: null, // Will be populated by SearchableWorkerPicker
                 blockId: editData.block || editData.blockId || BLOCK_DATA[0].id,
                 weight: String(editData.weight || ''),
                 date: dateObj,
-                pricePerKg: String(editData.pricePerKg || ''),
-                amountPaid: String(editData.amountPaid || ''),
+                pricePerKg: editData.pricePerKg ? formatNumberWithCommas(String(editData.pricePerKg)) : '',
+                amountPaid: editData.amountPaid ? formatNumberWithCommas(String(editData.amountPaid)) : '',
                 paidBy: editData.paidBy || '',
                 selectedStaff: null, // Will be populated by SearchableStaffPicker
                 generatedId: editData.id || prev.generatedId,
@@ -294,20 +380,35 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     // Auto-calculate amount paid when weight or pricePerKg changes
     useEffect(() => {
         const weight = Number(formData.weight) || 0;
-        const pricePerKg = Number(formData.pricePerKg) || 0;
+        const pricePerKg = parseFormattedNumber(formData.pricePerKg) || 0;
         const calculatedAmount = weight * pricePerKg;
 
         setFormData(prev => ({
             ...prev,
-            amountPaid: calculatedAmount > 0 ? calculatedAmount.toFixed(2) : ""
+            amountPaid: calculatedAmount > 0 ? formatNumberWithCommas(calculatedAmount.toFixed(2)) : ""
         }));
     }, [formData.weight, formData.pricePerKg]);
 
-    // Unified field updater
+    // Unified field updater with comma formatting for money fields
     const updateField = useCallback((key, value) => {
+        let processedValue = value;
+
+        // Handle money fields with comma formatting
+        if (key === 'pricePerKg') {
+            // Remove any non-numeric characters except decimal point
+            const cleaned = String(value).replace(/[^0-9.]/g, '');
+            // Prevent multiple decimal points
+            const parts = cleaned.split('.');
+            if (parts.length > 2) {
+                return; // Don't update if multiple decimal points
+            }
+            // Format with commas
+            processedValue = formatNumberWithCommas(cleaned);
+        }
+
         setFormData(prev => ({
             ...prev,
-            [key]: value,
+            [key]: processedValue,
         }));
     }, []);
 
@@ -336,7 +437,8 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             if (isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
                 return "Enter a valid weight (> 0 kg) on delivery.";
             }
-            if (formData.pricePerKg === "" || isNaN(Number(formData.pricePerKg)) || Number(formData.pricePerKg) <= 0) {
+            const pricePerKgValue = parseFormattedNumber(formData.pricePerKg);
+            if (formData.pricePerKg === "" || isNaN(pricePerKgValue) || pricePerKgValue <= 0) {
                 return "Enter a valid price per kg (> 0 UGX).";
             }
         }
@@ -347,7 +449,18 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     const handleNext = () => {
         const validationError = validateStep(currentStep);
         if (validationError) {
-            Alert.alert("Input Error", validationError); 
+            setAlertConfig({
+                title: "Input Error",
+                message: validationError,
+                type: 'warning',
+                buttons: [
+                    {
+                        text: "OK",
+                        onPress: () => setAlertVisible(false)
+                    }
+                ]
+            });
+            setAlertVisible(true);
             return;
         }
 
@@ -390,26 +503,41 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
 
             await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
 
-            Alert.alert(
-                "Draft Saved",
-                "Your harvest draft has been saved. You can continue filling it later.",
-                [
+            setAlertConfig({
+                title: "Draft Saved",
+                message: "Your harvest draft has been saved. You can continue filling it later.",
+                type: 'success',
+                buttons: [
                     {
                         text: "Continue Editing",
-                        style: "default"
+                        onPress: () => setAlertVisible(false)
                     },
                     {
                         text: "View Records",
-                        style: "default",
-                        onPress: () => navigation.navigate('Harvests')
+                        onPress: () => {
+                            setAlertVisible(false);
+                            navigation.navigate('Harvests');
+                        }
                     }
                 ]
-            );
+            });
+            setAlertVisible(true);
 
             console.log('[HarvestForm] Draft saved:', harvestDraft);
         } catch (error) {
             console.error('[HarvestForm] Draft save failed:', error);
-            Alert.alert("Error", "Failed to save draft. Please try again.");
+            setAlertConfig({
+                title: "Error",
+                message: "Failed to save draft. Please try again.",
+                type: 'error',
+                buttons: [
+                    {
+                        text: "OK",
+                        onPress: () => setAlertVisible(false)
+                    }
+                ]
+            });
+            setAlertVisible(true);
         } finally {
             setIsSaving(false);
         }
@@ -462,7 +590,18 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
 
         const err = validateStep(currentStep);
         if (err) {
-            Alert.alert("Validation Error", err);
+            setAlertConfig({
+                title: "Validation Error",
+                message: err,
+                type: 'warning',
+                buttons: [
+                    {
+                        text: "OK",
+                        onPress: () => setAlertVisible(false)
+                    }
+                ]
+            });
+            setAlertVisible(true);
             return;
         }
 
@@ -471,12 +610,12 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
         try {
             const harvestData = {
                 // Fields aligned with API schema
-                workerName: formData.workerName.trim(),
+                workerName: (formData.workerName || '').trim(),
                 blockId: formData.blockId, // Integer PK
                 weight: Number(formData.weight),
                 date: formData.date,
-                pricePerKg: Number(formData.pricePerKg),
-                amountPaid: Number(formData.amountPaid),
+                pricePerKg: parseFormattedNumber(formData.pricePerKg),
+                amountPaid: parseFormattedNumber(formData.amountPaid),
                 paidBy: formData.paidBy, // Integer PK (don't trim)
                 id: formData.generatedId,
 
@@ -498,13 +637,15 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 Alert.alert('', '', [{ text: 'OK' }]);
 
                 if (response.success) {
-                    Alert.alert(
-                        "Updated!",
-                        "Your harvest record has been updated successfully.",
-                        [
+                    setAlertConfig({
+                        title: "Updated!",
+                        message: "Your harvest record has been updated successfully.",
+                        type: 'success',
+                        buttons: [
                             {
                                 text: "OK",
                                 onPress: () => {
+                                    setAlertVisible(false);
                                     setFormData(initialFormState);
                                     setCurrentStep(0);
                                     setIsEditMode(false);
@@ -512,12 +653,21 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                                 }
                             }
                         ]
-                    );
+                    });
+                    setAlertVisible(true);
                 } else {
-                    Alert.alert(
-                        "Update Failed",
-                        `Failed to update record. Status: ${response.status}. ${response.remoteData?.detail || ''}`
-                    );
+                    setAlertConfig({
+                        title: "Update Failed",
+                        message: `Failed to update record. Status: ${response.status}. ${response.remoteData?.detail || ''}`,
+                        type: 'error',
+                        buttons: [
+                            {
+                                text: "OK",
+                                onPress: () => setAlertVisible(false)
+                            }
+                        ]
+                    });
+                    setAlertVisible(true);
                     setIsSaving(false);
                 }
             } else {
@@ -533,22 +683,24 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 setFormData(initialFormState);
                 setCurrentStep(0);
 
-                // Show success message
-                Alert.alert(
-                    "Saved Locally!",
-                    "Your harvest record has been saved locally and is ready to sync.",
-                    [
-                        {
-                            text: "OK",
-                            onPress: () => navigation.navigate('Harvests')
-                        }
-                    ]
-                );
+                // Auto-navigate to Payment Voucher
+                navigation.navigate('PaymentVoucher', { harvestData });
             }
 
         } catch (error) {
             console.error('[HarvestForm] Save failed:', error);
-            Alert.alert("Error", "Failed to save harvest. Please try again.");
+            setAlertConfig({
+                title: "Error",
+                message: "Failed to save harvest. Please try again.",
+                type: 'error',
+                buttons: [
+                    {
+                        text: "OK",
+                        onPress: () => setAlertVisible(false)
+                    }
+                ]
+            });
+            setAlertVisible(true);
             setIsSaving(false);
         }
     };
@@ -672,6 +824,15 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             </KeyboardAvoidingView>
             </View>
             <BottomNav activeScreen="Harvests" onNavigate={(screen) => navigation.navigate(screen)} />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertVisible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 }
@@ -920,4 +1081,9 @@ const stepStyles = StyleSheet.create({
     },
 });
 
+// Add this to clear the queue manually
+const clearQueue = async () => {
+    await AsyncStorage.removeItem('harvests_sync_queue');
+    console.log('Queue cleared!');
+};
 
