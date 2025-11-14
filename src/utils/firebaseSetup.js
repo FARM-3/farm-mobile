@@ -366,7 +366,14 @@ export const fetchHarvests = async () => {
 
         console.log('[firebaseSetup] Normalized harvest count:', normalized.length);
         if (normalized.length > 0) {
-            console.log('[firebaseSetup] First harvest sample:', normalized[0]);
+            console.log('[firebaseSetup] First harvest sample:', JSON.stringify(normalized[0], null, 2));
+        } else {
+            // Log the raw payload for debugging if no harvests were normalized
+            console.log('[firebaseSetup] Raw payload received (first item or total):',
+                payload && Array.isArray(payload) ? `Array with ${payload.length} items` : typeof payload);
+            if (payload && payload.length > 0) {
+                console.log('[firebaseSetup] Sample raw harvest:', JSON.stringify(payload[0], null, 2));
+            }
         }
         return normalized;
     } catch (error) {
@@ -390,10 +397,12 @@ export const submitHarvest = async (data) => {
         console.log('[firebaseSetup] Submitting harvest...');
         console.log('[firebaseSetup] Raw harvest data received:', data);
 
+        const harvestId = data.id || data.harvest_id || '';
+
         // Transform React Native form data to Django API format (/api/aggregation/farmer-harvest/)
         const apiPayload = {
             // REQUIRED: harvest_id field (unique identifier for this harvest)
-            harvest_id: data.id || data.harvest_id || '',
+            harvest_id: harvestId,
 
             // REQUIRED: name field (farmer identifier - farmer UID or name)
             name: data.farmer_uid || data.farmer_name || '',
@@ -406,6 +415,15 @@ export const submitHarvest = async (data) => {
 
             // OPTIONAL: date_of_delivery (when harvest was delivered)
             date_of_delivery: data.date_of_delivery || null,
+
+            // OPTIONAL: location_of_delivery
+            location_on_delivery: data.location_on_delivery || null,
+
+            // OPTIONAL: gps_coordinates
+            gps_coordinates_delivery: data.gps_coordinates || null,
+
+            // OPTIONAL: price_per_kg
+            price_per_kg: data.price_per_kg ? Number(data.price_per_kg) : null,
 
             // OPTIONAL: moisture_content (percentage, collected from form)
             moisture_content: data.moisture_content ? Number(data.moisture_content) : null,
@@ -422,8 +440,30 @@ export const submitHarvest = async (data) => {
 
         console.log('[firebaseSetup] Transformed API payload:', JSON.stringify(apiPayload, null, 2));
 
-        const response = await ApiService.post('aggregation/farmer-harvest/', apiPayload);
-        console.log('[firebaseSetup] Harvest submitted successfully');
+        // Check if harvest already exists (for re-sync scenarios)
+        let response;
+        try {
+            const existingCheck = await ApiService.get(`aggregation/farmer-harvest/${harvestId}/`);
+            if (existingCheck.status === 200) {
+                // Harvest exists, use PUT to update
+                console.log('[firebaseSetup] Harvest exists, updating...');
+                response = await ApiService.put(`aggregation/farmer-harvest/${harvestId}/`, apiPayload);
+                console.log('[firebaseSetup] Harvest updated successfully');
+            }
+        } catch (checkError) {
+            // Harvest doesn't exist (404) or other error, use POST to create
+            if (checkError.response?.status === 404) {
+                console.log('[firebaseSetup] Harvest does not exist, creating...');
+                response = await ApiService.post('aggregation/farmer-harvest/', apiPayload);
+                console.log('[firebaseSetup] Harvest created successfully');
+            } else {
+                // Some other error during check, try POST anyway
+                console.log('[firebaseSetup] Error checking harvest existence, trying POST...');
+                response = await ApiService.post('aggregation/farmer-harvest/', apiPayload);
+                console.log('[firebaseSetup] Harvest submitted successfully');
+            }
+        }
+
         return response.data;
     } catch (error) {
         console.error('[firebaseSetup] Error submitting harvest:');
@@ -591,18 +631,24 @@ export const updateHarvest = async (harvestId, data) => {
     try {
         console.log('[firebaseSetup] Updating harvest:', harvestId);
 
-        // Transform data to match Django API format (same as submitHarvest)
+        // Transform data to match Django API format
+        // IMPORTANT: Backend model only has these fields
         const apiPayload = {
-            id: data.id || data.harvest_id || harvestId,
+            // PRIMARY KEY - Required even for updates
+            harvest_id: harvestId,
+
+            // Required fields
             name: data.farmer_uid || data.name || '',
-            weight_on_delivery: Number(data.weight_on_delivery) || 0,
-            weight_after_floating: Number(data.weight_after_floating) || 0,
-            date_of_delivery: data.date_of_delivery || new Date().toISOString().split('T')[0],
-            grade: data.coffee_type || data.grade || '',
-            cherry_color: data.cherry_colour || data.cherry_color || 'Not specified',
-            stage: data.stage || 'Not specified',
-            amount_paid: String(data.amount_paid || '0'),
-            paid_by: data.paid_by || data.who_paid || '',
+
+            // Optional fields (matching backend model exactly)
+            coffee_type: data.coffee_type || null,
+            weight_on_delivery: data.weight_on_delivery ? Number(data.weight_on_delivery) : null,
+            date_of_delivery: data.date_of_delivery || null,
+            location_of_delivery: data.location_on_delivery || null,
+            gps_coordinates_delivery: data.gps_coordinates || data.gps_coordinates_delivery || null,
+            price_per_kg: data.price_per_kg ? Number(data.price_per_kg) : null,
+            amount_paid: data.amount_paid ? String(data.amount_paid) : null,
+            paid_by: data.paid_by || data.who_paid || null,
         };
 
         console.log('[firebaseSetup] Update API payload:', JSON.stringify(apiPayload, null, 2));

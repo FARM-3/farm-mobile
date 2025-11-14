@@ -27,6 +27,8 @@ import CustomAlert from '../../../components/CustomAlert';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
 import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
+import { fetchCurrentFarmerPrice } from '../../../services/priceService';
+import { syncAggregationRecords } from '../../../services/aggregationService';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
 
 // ================================================
@@ -1167,7 +1169,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '4,600', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1198,6 +1200,10 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     // State for validation errors
     const [farmerErrors, setFarmerErrors] = useState({});
     const [harvestErrors, setHarvestErrors] = useState({});
+
+    // State for current farmer price
+    const [currentFarmerPrice, setCurrentFarmerPrice] = useState(null);
+    const [isPriceLoading, setIsPriceLoading] = useState(false);
 
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
@@ -1293,7 +1299,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         }
     };
 
-    // Sync unsynced records
+    // Sync unsynced records - UPDATED to use syncAggregationRecords service
     const handleSyncRecords = async () => {
         setIsSyncing(true);
         try {
@@ -1308,7 +1314,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             const harvestDrafts = allHarvestRecords.filter(r => r._isDraft === true);
             const harvestPending = allHarvestRecords.filter(r => r._isDraft === false && r._isSynced !== true);
 
-            // Combine both drafts and pending for syncing (all unsyc ed records)
+            // Combine both drafts and pending for syncing (all unsynced records)
             const farmerRecordsToSync = [...farmerDrafts, ...farmerPending];
             const harvestRecordsToSync = [...harvestDrafts, ...harvestPending];
 
@@ -1316,60 +1322,60 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             console.log('[handleSyncRecords] Farmer records to sync:', farmerRecordsToSync.length, '(drafts:', farmerDrafts.length, ', pending:', farmerPending.length, ')');
             console.log('[handleSyncRecords] Harvest records to sync:', harvestRecordsToSync.length, '(drafts:', harvestDrafts.length, ', pending:', harvestPending.length, ')');
 
-            let successfullysynced = 0;
-            let failedSync = 0;
-            const failedDrafts = [];
+            // Use the new sync service that handles both CREATE and UPDATE
+            const syncResult = await syncAggregationRecords(farmerRecordsToSync, harvestRecordsToSync);
 
-            // Sync all farmer records (both drafts and pending) - track which ones succeed
-            const syncedFarmerIds = [];
-            for (const record of farmerRecordsToSync) {
-                try {
-                    console.log(`[handleSyncRecords] Syncing farmer: ${record.id}`);
-                    await submitFarmer(record);
-                    syncedFarmerIds.push(record.id);
-                    successfullysynced++;
-                    console.log(`[handleSyncRecords] ✓ Farmer synced: ${record.id}`);
-                } catch (e) {
-                    failedSync++;
-                    failedDrafts.push({ type: 'farmer', id: record.id, error: e.message });
-                    console.error('[handleSyncRecords] ✗ Error syncing farmer:', record.id, e.message);
-                }
-            }
-
-            // Sync all harvest records (both drafts and pending) - track which ones succeed
-            const syncedHarvestIds = [];
-            for (const record of harvestRecordsToSync) {
-                try {
-                    console.log(`[handleSyncRecords] Syncing harvest: ${record.id}`);
-                    await submitHarvest(record);
-                    syncedHarvestIds.push(record.id);
-                    successfullysynced++;
-                    console.log(`[handleSyncRecords] ✓ Harvest synced: ${record.id}`);
-                } catch (e) {
-                    failedSync++;
-                    failedDrafts.push({ type: 'harvest', id: record.id, error: e.message });
-                    console.error('[handleSyncRecords] ✗ Error syncing harvest:', record.id, e.message);
-                }
-            }
+            console.log(`[handleSyncRecords] Sync result:`, syncResult);
 
             // Only remove records that were successfully synced
-            console.log(`[handleSyncRecords] Successfully synced: ${successfullysynced}, Failed: ${failedSync}`);
+            if (syncResult.syncedFarmerIds.length > 0) {
+                console.log('[handleSyncRecords] Synced farmer IDs:', syncResult.syncedFarmerIds);
+                console.log('[handleSyncRecords] All farmer records IDs:', allFarmerRecords.map(d => ({ id: d.id, uid: d.uid, farmer_id: d.farmer_id, first_name: d.first_name })));
 
-            if (syncedFarmerIds.length > 0) {
-                const remainingFarmerRecords = allFarmerRecords.filter(d => !syncedFarmerIds.includes(d.id));
+                // Filter out synced records - check multiple ID fields for flexibility
+                const remainingFarmerRecords = allFarmerRecords.filter(d => {
+                    const isSynced = syncResult.syncedFarmerIds.includes(d.id) ||
+                                    syncResult.syncedFarmerIds.includes(d.uid) ||
+                                    syncResult.syncedFarmerIds.includes(d.farmer_id);
+
+                    if (!isSynced && d._isDraft === false) {
+                        // If it's marked as synced (not a draft) but not in our list, remove it anyway
+                        console.log('[handleSyncRecords] Force removing pending farmer:', d.id, d.first_name);
+                        return false;
+                    }
+
+                    return !isSynced;
+                });
+                console.log('[handleSyncRecords] Remaining farmer records after filter:', remainingFarmerRecords.length);
+                console.log('[handleSyncRecords] Removed records:', allFarmerRecords.length - remainingFarmerRecords.length);
+
                 if (remainingFarmerRecords.length > 0) {
                     await AsyncStorage.setItem('farmer_drafts', JSON.stringify(remainingFarmerRecords));
+                    console.log('[handleSyncRecords] Updated farmer_drafts with', remainingFarmerRecords.length, 'remaining records');
                 } else {
                     await AsyncStorage.removeItem('farmer_drafts');
+                    console.log('[handleSyncRecords] ✓ All farmer drafts removed from AsyncStorage');
                 }
             }
 
-            if (syncedHarvestIds.length > 0) {
-                const remainingHarvestRecords = allHarvestRecords.filter(d => !syncedHarvestIds.includes(d.id));
+            if (syncResult.syncedHarvestIds.length > 0) {
+                console.log('[handleSyncRecords] Synced harvest IDs:', syncResult.syncedHarvestIds);
+                console.log('[handleSyncRecords] All harvest records IDs:', allHarvestRecords.map(d => ({ id: d.id, harvest_id: d.harvest_id })));
+
+                // Filter out synced records - check multiple ID fields for flexibility
+                const remainingHarvestRecords = allHarvestRecords.filter(d => {
+                    const isSynced = syncResult.syncedHarvestIds.includes(d.id) ||
+                                    syncResult.syncedHarvestIds.includes(d.harvest_id);
+                    return !isSynced;
+                });
+                console.log('[handleSyncRecords] Remaining harvest records after filter:', remainingHarvestRecords.length);
+
                 if (remainingHarvestRecords.length > 0) {
                     await AsyncStorage.setItem('harvest_drafts', JSON.stringify(remainingHarvestRecords));
+                    console.log('[handleSyncRecords] Updated harvest_drafts with', remainingHarvestRecords.length, 'remaining records');
                 } else {
                     await AsyncStorage.removeItem('harvest_drafts');
+                    console.log('[handleSyncRecords] ✓ All harvest drafts removed from AsyncStorage');
                 }
             }
 
@@ -1378,23 +1384,23 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await countUnsyncedRecords();
 
             // Show alert based on sync results
-            if (failedSync === 0) {
+            if (syncResult.failedCount === 0) {
                 // All synced successfully
                 setAlertConfig({
                     visible: true,
-                    title: '✓ Sync Successful',
-                    message: `${successfullysynced} record${successfullysynced !== 1 ? 's have' : ' has'} been synced to the cloud successfully!`,
+                    title: 'Sync Successful',
+                    message: `${syncResult.syncedCount} record${syncResult.syncedCount !== 1 ? 's have' : ' has'} been synced to the cloud successfully!`,
                     type: 'success',
                     buttons: [
                         { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
                     ]
                 });
-            } else if (successfullysynced > 0) {
+            } else if (syncResult.syncedCount > 0) {
                 // Some synced, some failed
                 setAlertConfig({
                     visible: true,
-                    title: '⚠ Partial Sync',
-                    message: `Successfully synced ${successfullysynced} record${successfullysynced !== 1 ? 's' : ''}, but ${failedSync} record${failedSync !== 1 ? 's' : ''} failed. The failed records remain in your pending list.`,
+                    title: 'Partial Sync',
+                    message: `Successfully synced ${syncResult.syncedCount} record${syncResult.syncedCount !== 1 ? 's' : ''}, but ${syncResult.failedCount} record${syncResult.failedCount !== 1 ? 's' : ''} failed. The failed records remain in your pending list.`,
                     type: 'warning',
                     buttons: [
                         { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
@@ -1428,6 +1434,26 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             setIsSyncing(false);
         }
     };
+
+    // Fetch current farmer price when harvest tab is active
+    useEffect(() => {
+        if (activeTab === 'harvests') {
+            const fetchPrice = async () => {
+                setIsPriceLoading(true);
+                try {
+                    const price = await fetchCurrentFarmerPrice();
+                    setCurrentFarmerPrice(price);
+                    console.log('[AggregationScreen] Fetched current farmer price:', price);
+                } catch (error) {
+                    console.error('[AggregationScreen] Error fetching farmer price:', error);
+                    setCurrentFarmerPrice(null);
+                } finally {
+                    setIsPriceLoading(false);
+                }
+            };
+            fetchPrice();
+        }
+    }, [activeTab]);
 
     useEffect(() => {
         (async () => {
@@ -1474,8 +1500,11 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : '4,600', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
         }));
+
+        // Reset price loading state when resetting forms
+        setIsPriceLoading(false);
         setFarmerStep(0);
         setHarvestStep(0);
         setFarmerErrors({});
@@ -1540,8 +1569,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         setHarvestForm(p => {
             let processedValue = value;
 
-            // Handle money fields with comma formatting
+            // Handle money fields with comma formatting, but prevent editing price_per_kg if it's set from DB
             if (key === 'price_per_kg') {
+                // If price_per_kg is set from database, don't allow manual editing
+                if (currentFarmerPrice !== null && currentFarmerPrice !== undefined) {
+                    console.log('[Harvest Form] price_per_kg is read-only when set from database');
+                    return p; // Don't update if price is set from database
+                }
                 // Remove any non-numeric characters except decimal point
                 const cleaned = String(value).replace(/[^0-9.]/g, '');
                 // Prevent multiple decimal points
@@ -1580,7 +1614,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         // Validation
         if (!farmerForm.first_name || !farmerForm.contact || !userId) {
             console.error('[handleFarmerSubmit] Validation failed - missing required fields');
-            Alert.alert("Validation", "Please ensure First name, Contact, and User ID are present.");
+            setAlertConfig({
+                visible: true,
+                title: "Validation",
+                message: "Please ensure First name, Contact, and User ID are present.",
+                type: 'warning',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
             return;
         }
 
@@ -1642,7 +1682,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             console.error("[handleFarmerSubmit] Error details:", {
                 message: e.message,
             });
-            Alert.alert(`Save Failed`, e.message || `Failed to save farmer details locally.`);
+            setAlertConfig({
+                visible: true,
+                title: `Save Failed`,
+                message: e.message || `Failed to save farmer details locally.`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -1663,7 +1709,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         const currentStepData = steps[currentStepNum];
 
         if (!currentStepData) {
-            Alert.alert('Error', 'Unable to save draft. Step information not found.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Unable to save draft. Step information not found.',
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
             return;
         }
 
@@ -1734,7 +1786,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await countUnsyncedRecords();
         } catch (e) {
             console.error(`[handleSaveDraft] ❌ Error saving draft:`, e);
-            Alert.alert('Save Failed', e.message || `Failed to save ${type} draft.`);
+            setAlertConfig({
+                visible: true,
+                title: 'Save Failed',
+                message: e.message || `Failed to save ${type} draft.`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -1748,7 +1806,27 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         if (!harvestForm.farmer_uid || !harvestForm.weight_on_delivery || !harvestForm.price_per_kg || !userId) {
             console.error('[handleHarvestSubmit] Validation failed - missing required fields');
-            Alert.alert('Validation', 'Please fill Farmer UID, Weight, Price per Kg and ensure you are logged in.');
+            setAlertConfig({
+                visible: true,
+                title: 'Validation',
+                message: 'Please fill Farmer UID, Weight, Price per Kg and ensure you are logged in.',
+                type: 'warning',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
+            return;
+        }
+
+        // CRITICAL: Ensure farmer lookup completed successfully before submission
+        // This prevents sending just the farmer_uid to the backend instead of actual farmer name
+        if (!harvestForm.farmer_name || harvestForm.farmer_name.trim() === '') {
+            console.error('[handleHarvestSubmit] Farmer lookup incomplete - farmer_name is empty');
+            setAlertConfig({
+                visible: true,
+                title: 'Farmer Lookup Required',
+                message: `The farmer with UID "${harvestForm.farmer_uid}" could not be found in the system. Please verify the UID is correct and try again.`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
             return;
         }
 
@@ -1817,7 +1895,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 message: e.message,
             });
 
-            Alert.alert(`Save Failed`, e.message || `Failed to save harvest details locally.`);
+            setAlertConfig({
+                visible: true,
+                title: `Save Failed`,
+                message: e.message || `Failed to save harvest details locally.`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -1849,17 +1933,87 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             // Check for validation errors
             const hasErrors = isFarmer ? Object.values(farmerErrors).some(error => error) : Object.values(harvestErrors).some(error => error);
             if (hasErrors) {
-                Alert.alert("Input Error", "Please fix the validation errors before proceeding.");
+                setAlertConfig({
+                    visible: true,
+                    title: "Input Error",
+                    message: "Please fix the validation errors before proceeding.",
+                    type: 'error',
+                    buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                });
                 return;
             }
 
             // Basic required field validation for current step
-            const missingRequired = currentStepFields.fields.some(f =>
-                f.required && (!formData[f.key] || (typeof formData[f.key] === 'string' && formData[f.key].trim() === ''))
-            );
+            const missingRequired = currentStepFields.fields.some(f => {
+                if (!f.required) return false;
+
+                // Skip validation if field has a dependency that's not met
+                if (f.dependsOn) {
+                    const dependencyValue = formData[f.dependsOn.field];
+                    const dependencyMet = (f.dependsOn.value === true && dependencyValue === true) ||
+                                         (f.dependsOn.value === false && dependencyValue === false) ||
+                                         (typeof f.dependsOn.value === 'string' && String(dependencyValue) === String(f.dependsOn.value));
+
+                    if (!dependencyMet) {
+                        return false; // Skip validation if dependency not met
+                    }
+                }
+
+                const value = formData[f.key];
+
+                // Handle boolean fields (yes-no) - false is a valid value
+                if (typeof value === 'boolean') return false;
+
+                // Handle array fields (multi-select) - empty array is invalid
+                if (Array.isArray(value)) return value.length === 0;
+
+                // Handle string fields - empty or whitespace is invalid
+                if (typeof value === 'string') return value.trim() === '';
+
+                // Handle null/undefined
+                return !value;
+            });
 
             if (missingRequired) {
-                Alert.alert("Input Error", "Please fill all required fields in this step.");
+                // Find which required fields are missing
+                const missingFields = currentStepFields.fields
+                    .filter(f => f.required)
+                    .filter(f => {
+                        // Skip validation if field has a dependency that's not met
+                        if (f.dependsOn) {
+                            const dependencyValue = formData[f.dependsOn.field];
+                            const dependencyMet = (f.dependsOn.value === true && dependencyValue === true) ||
+                                                 (f.dependsOn.value === false && dependencyValue === false) ||
+                                                 (typeof f.dependsOn.value === 'string' && String(dependencyValue) === String(f.dependsOn.value));
+
+                            if (!dependencyMet) {
+                                return false; // Skip this field if dependency not met
+                            }
+                        }
+
+                        const value = formData[f.key];
+                        if (typeof value === 'boolean') return false;
+                        if (Array.isArray(value)) return value.length === 0;
+                        if (typeof value === 'string') return value.trim() === '';
+                        return !value;
+                    });
+
+                // Log detailed information for debugging
+                console.log('[handleNext] Missing required fields:', {
+                    step: currentStep + 1,
+                    stepTitle: currentStepFields.title,
+                    missingFields: missingFields.map(f => ({ key: f.key, label: f.label, value: formData[f.key] })),
+                    allRequiredFields: currentStepFields.fields.filter(f => f.required).map(f => ({ key: f.key, label: f.label, value: formData[f.key] }))
+                });
+
+                const missingFieldsText = missingFields.map(f => f.label).join(', ');
+                setAlertConfig({
+                    visible: true,
+                    title: "Missing Required Fields",
+                    message: `Please complete:\n\n${missingFieldsText}`,
+                    type: 'error',
+                    buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                });
                 return;
             }
 
@@ -1871,16 +2025,31 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                      setFormData('harvest_id', generateRecordId('PA'));
                 } else if (f.action === 'lookup' && !isFarmer && formData.farmer_uid) {
                     const farmerUID = formData.farmer_uid;
+                    console.log('[renderGroupedStepForm] Looking up farmer with UID:', farmerUID);
+                    console.log('[renderGroupedStepForm] Available farmers count:', farmersList?.length);
+
                     // Check for farmer_id (Django API), uid (legacy), or id (fallback)
                     const found = farmersList.find(f =>
                         String(f.farmer_id) === String(farmerUID) ||
                         String(f.uid) === String(farmerUID) ||
                         String(f.id) === String(farmerUID)
                     );
+
                     if (found) {
-                        setFormData('farmer_name', getFarmerDisplayName(found));
+                        const displayName = getFarmerDisplayName(found);
+                        console.log('[renderGroupedStepForm] ✓ Farmer found:', displayName);
+                        setFormData('farmer_name', displayName);
                     } else {
-                        Alert.alert('Farmer Not Found', 'No farmer with that UID was found in local records.');
+                        console.warn('[renderGroupedStepForm] ✗ Farmer NOT found with UID:', farmerUID);
+                        console.warn('[renderGroupedStepForm] Searched UIDs:', farmersList?.map(f => ({ farmer_id: f.farmer_id, uid: f.uid, id: f.id })));
+
+                        setAlertConfig({
+                            visible: true,
+                            title: 'Farmer Not Found',
+                            message: `No farmer with UID "${farmerUID}" was found in local records. Please verify the UID is correct.`,
+                            type: 'error',
+                            buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                        });
                     }
                 }
             });
@@ -2015,14 +2184,17 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             updateForm(field.key, processedValue);
                         };
 
+                        // Special handling for price_per_kg field - make it read-only when price is set from DB
+                        const isPriceReadOnly = field.key === 'price_per_kg' && !isFarmer && currentFarmerPrice !== null && currentFarmerPrice !== undefined;
+
                         const inputElement = (
                             <CustomInput
                                 key={field.key}
                                 label={`${field.label}${field.required ? ' *' : ''}`}
-                                value={fieldValue}
-                                onChangeText={field.readOnly ? null : handleTextChange}
+                                value={isPriceLoading && field.key === 'price_per_kg' && !isFarmer ? 'Loading...' : fieldValue}
+                                onChangeText={(isPriceReadOnly || field.readOnly) ? null : handleTextChange}
                                 keyboardType={field.keyboardType}
-                                editable={!field.readOnly}
+                                editable={!(isPriceReadOnly || field.readOnly)}
                                 placeholder={field.readOnly ? '' : (field.placeholder || `Enter ${field.label}`)}
                                 error={isFarmer ? farmerErrors[field.key] : harvestErrors[field.key]}
                             />
@@ -2106,6 +2278,26 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                 <View key={field.key}>
                                     {inputElement}
                                     <Text style={styles.helperText}>Auto-calculated: Weight × Price per Kg</Text>
+                                </View>
+                            );
+                        }
+
+                        // Show helper text for price_per_kg field when it's read-only
+                        if (field.key === 'price_per_kg' && !isFarmer && isPriceReadOnly) {
+                            return (
+                                <View key={field.key}>
+                                    {inputElement}
+                                    <Text style={styles.helperText}>Price fetched from database (latest price)</Text>
+                                </View>
+                            );
+                        }
+
+                        // Show helper text for price_per_kg field when no price is set
+                        if (field.key === 'price_per_kg' && !isFarmer && currentFarmerPrice === null && !isPriceLoading) {
+                            return (
+                                <View key={field.key}>
+                                    {inputElement}
+                                    <Text style={styles.helperText}>No price set in database - enter manually</Text>
                                 </View>
                             );
                         }
@@ -2198,13 +2390,37 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     const storageKey = 'farmer_drafts';
                     const existingDrafts = await AsyncStorage.getItem(storageKey);
                     const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
-                    const updatedDrafts = draftsArray.filter(d => d.id !== farmerId);
+                    const updatedDrafts = draftsArray.filter(d => d.id !== farmerId && d.uid !== farmerId && d.farmer_id !== farmerId);
                     await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
                     console.log('[handleDelete] Draft deleted from local storage');
                 } else {
-                    // Delete submitted farmer from API
-                    await deleteFarmer(farmerId);
-                    console.log('[handleDelete] Farmer deleted from API');
+                    // Try to delete submitted farmer from API
+                    try {
+                        await deleteFarmer(farmerId);
+                        console.log('[handleDelete] Farmer deleted from API');
+                    } catch (apiError) {
+                        // If API delete fails (404 or 500), also try to remove from AsyncStorage
+                        console.warn('[handleDelete] API delete failed, attempting to remove from local storage:', apiError.message);
+
+                        const storageKey = 'farmer_drafts';
+                        const existingDrafts = await AsyncStorage.getItem(storageKey);
+                        if (existingDrafts) {
+                            const draftsArray = JSON.parse(existingDrafts);
+                            const updatedDrafts = draftsArray.filter(d => d.id !== farmerId && d.uid !== farmerId && d.farmer_id !== farmerId);
+                            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
+                            console.log('[handleDelete] Removed from local storage as fallback');
+                        }
+
+                        // For 500 errors, just log a warning and treat as success (user sees it gone)
+                        if (apiError.response?.status === 500) {
+                            console.warn('[handleDelete] Backend error (500), but removed from local storage');
+                        } else if (apiError.response?.status !== 404) {
+                            // Re-throw if it's not 404 or 500
+                            throw apiError;
+                        } else {
+                            console.log('[handleDelete] Record not found in API (404), treating as successful deletion');
+                        }
+                    }
                 }
 
                 // Remove from local state immediately for better UX
@@ -2237,13 +2453,34 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     const storageKey = 'harvest_drafts';
                     const existingDrafts = await AsyncStorage.getItem(storageKey);
                     const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
-                    const updatedDrafts = draftsArray.filter(d => d.id !== harvestId);
+                    const updatedDrafts = draftsArray.filter(d => d.id !== harvestId && d.harvest_id !== harvestId);
                     await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
                     console.log('[handleDelete] Draft deleted from local storage');
                 } else {
-                    // Delete submitted harvest from API
-                    await deleteHarvest(harvestId);
-                    console.log('[handleDelete] Harvest deleted from API');
+                    // Try to delete from API first
+                    try {
+                        await deleteHarvest(harvestId);
+                        console.log('[handleDelete] Harvest deleted from API');
+                    } catch (apiError) {
+                        // If API delete fails (404 or 500), also try to remove from AsyncStorage
+                        console.warn('[handleDelete] API delete failed, attempting to remove from local storage:', apiError.message);
+
+                        const storageKey = 'harvest_drafts';
+                        const existingDrafts = await AsyncStorage.getItem(storageKey);
+                        if (existingDrafts) {
+                            const draftsArray = JSON.parse(existingDrafts);
+                            const updatedDrafts = draftsArray.filter(d => d.id !== harvestId && d.harvest_id !== harvestId);
+                            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
+                            console.log('[handleDelete] Removed from local storage as fallback');
+                        }
+
+                        // Re-throw the error if it's not a 404 (record not found)
+                        if (apiError.response?.status !== 404) {
+                            throw apiError;
+                        } else {
+                            console.log('[handleDelete] Record not found in API (404), treating as successful deletion');
+                        }
+                    }
                 }
 
                 // Remove from local state immediately for better UX
@@ -2270,10 +2507,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             }
         } catch (error) {
             console.error('[handleDelete] Delete failed:', error);
-            const errorMsg = error.response?.data?.detail
-                || error.response?.data?.message
-                || error.message
-                || 'Failed to delete record';
+
+            // Build user-friendly error message
+            let errorMsg = 'Failed to delete record.';
+            if (error.response?.status === 500) {
+                errorMsg = 'Server error occurred. The record may have been deleted. Please refresh and check.';
+            } else if (error.response?.status === 404) {
+                errorMsg = 'Record not found. It may have already been deleted.';
+            } else if (error.response?.data?.detail) {
+                errorMsg = error.response.data.detail;
+            } else if (error.response?.data?.message) {
+                errorMsg = error.response.data.message;
+            } else if (error.message) {
+                errorMsg = error.message;
+            }
 
             // Show error using CustomAlert
             setAlertConfig({
@@ -2283,7 +2530,15 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 type: 'error',
                 buttons: [
                     {
+                        text: 'Refresh',
+                        onPress: async () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                            await loadRecords();
+                        }
+                    },
+                    {
                         text: 'OK',
+                        style: 'cancel',
                         onPress: () => {
                             setAlertConfig(prev => ({ ...prev, visible: false }));
                         }
@@ -2399,7 +2654,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 number_of_bags: String(record.number_of_bags || ''),
                 date_of_delivery: record.date_of_delivery || '',
                 coffee_type: record.grade || record.coffee_type || '',
-                price_per_kg: record.price_per_kg ? formatNumberWithCommas(String(record.price_per_kg)) : '',
+                price_per_kg: record.price_per_kg ? formatNumberWithCommas(String(record.price_per_kg)) : (currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : ''),
                 amount_paid: record.amount_paid ? formatNumberWithCommas(String(record.amount_paid)) : '',
                 paid_by: record.paid_by || record.who_paid || '',
                 selectedStaff: null, // Will be set by SearchableStaffPicker

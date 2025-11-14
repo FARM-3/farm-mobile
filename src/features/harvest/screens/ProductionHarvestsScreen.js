@@ -22,10 +22,12 @@ import Fonts from '../../../theme/fonts';
 import {
     fetchAllHarvestRecords,
     getUnsyncedRecords,
-    syncAllRecords
+    syncAllRecords,
+    deleteHarvestRecord
 } from '../../../services/harvestRecord';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import CustomAlert from '../../../components/CustomAlert';
 
 // ===============================================
 // === HARVEST DETAIL VIEW COMPONENT      ===
@@ -52,7 +54,7 @@ const HarvestDetailView = ({ harvest, onBack }) => {
             title: 'Harvest Details',
             fields: [
                 { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
-                { label: 'Worker Name', value: harvest.name || harvest.worker_name },
+                { label: 'Worker Name', value: harvest.worker_name || 'Unknown Worker' },
                 { label: 'Block ID', value: harvest.block || harvest.block_id },
                 { label: 'Date of Delivery', value: harvest.date },
                 { label: 'Weight on Delivery', value: harvest.weight ? `${harvest.weight} kg` : 'Not provided' },
@@ -62,7 +64,7 @@ const HarvestDetailView = ({ harvest, onBack }) => {
             title: 'Payment Information',
             fields: [
                 { label: 'Amount Paid', value: harvest.amountPaid ? `UGX ${Number(harvest.amountPaid).toLocaleString()}` : 'Not provided' },
-                { label: 'Paid By', value: harvest.paidBy || harvest.paid_by },
+                { label: 'Paid By', value: harvest.paid_by || 'Not specified' },
             ]
         }
     ];
@@ -83,7 +85,7 @@ const HarvestDetailView = ({ harvest, onBack }) => {
                 {/* Harvest ID Card */}
                 <View style={styles.detailNameCard}>
                     <Text style={styles.detailFarmerName}>
-                        {harvest.name || harvest.worker_name || 'Unknown Worker'}
+                        {harvest.worker_name || 'Unknown Worker'}
                     </Text>
                     <Text style={styles.detailFarmerId}>
                         Harvest ID: {harvest.id || harvest.harvest_id || 'N/A'}
@@ -121,6 +123,15 @@ export default function ProductionHarvestsScreen({ navigation }) {
     const [selectedHarvest, setSelectedHarvest] = useState(null);
     const [viewMode, setViewMode] = useState('table'); // 'table' or 'detail'
 
+    // State for custom alert
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: []
+    });
+
     /**
      * Load data from both local and remote sources (without auto-sync)
      */
@@ -141,13 +152,15 @@ export default function ProductionHarvestsScreen({ navigation }) {
             if (remoteResponse.success && Array.isArray(remoteResponse.remoteData.results)) {
                 remoteRecords = remoteResponse.remoteData.results.map(r => ({
                     id: r.harvest_id || r.id,
-                    block: r.block_id || r.block_ID,
-                    name: r.worker_name || r.Worker_name,
+                    block: r.block_id || r.block_ID || r.block,
+                    name: r.name || r.worker_name || r.Worker_name || r.workerName || 'Unknown',
+                    worker_name: r.name || r.worker_name || r.Worker_name || r.workerName || 'Unknown',
                     isSynced: true,
-                    weight: `${r.weight_on_delivery} kg`,
-                    date: r.date_of_delivery,
-                    amountPaid: Number(r.amount_paid),
-                    paidBy: r.paid_by,
+                    weight: `${r.weight_on_delivery || r.weight || 0} kg`,
+                    date: r.date_of_delivery || r.date,
+                    amountPaid: Number(r.amount_paid || 0),
+                    paidBy: r.paid_by || r.who_paid || '',
+                    paid_by: r.paid_by || r.who_paid || '',
                 }));
             }
         } else {
@@ -159,13 +172,15 @@ export default function ProductionHarvestsScreen({ navigation }) {
         if (localResponse.success && Array.isArray(localResponse.records)) {
             localRecords = localResponse.records.map(r => ({
                 id: r.id,
-                block: r.blockId,
-                name: r.workerName,
+                block: r.blockId || r.block_id || r.block,
+                name: r.workerName || r.worker_name || r.name || 'Unknown',
+                worker_name: r.workerName || r.worker_name || r.name || 'Unknown',
                 isSynced: false,
-                weight: `${r.weight} kg`,
-                date: r.dateReadable || r.date.split('T')[0],
-                amountPaid: Number(r.amountPaid),
-                paidBy: r.paidBy,
+                weight: `${r.weight || 0} kg`,
+                date: r.dateReadable || (r.date ? r.date.split('T')[0] : ''),
+                amountPaid: Number(r.amountPaid || r.amount_paid || 0),
+                paidBy: r.paidBy || r.paid_by || r.who_paid || '',
+                paid_by: r.paidBy || r.paid_by || r.who_paid || '',
             }));
         }
 
@@ -234,51 +249,142 @@ export default function ProductionHarvestsScreen({ navigation }) {
     }, [navigation, loadData]);
 
     const handleEdit = (item) => {
-        Alert.alert(
-            'Edit Harvest',
-            'Edit functionality will be implemented soon.',
-            [{ text: 'OK' }]
-        );
+        // Navigate to harvest form screen with item data
+        navigation.navigate('HarvestForm', { 
+            harvest: item,
+            mode: 'edit'
+        });
     };
 
     const handleDelete = (item) => {
-        Alert.alert(
-            'Delete Harvest Record',
-            `Are you sure you want to delete the harvest record for ${item.name}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAlertConfig({
+            visible: true,
+            title: 'Delete Harvest Record',
+            message: `Are you sure you want to delete the harvest record for ${item.name}?\n\nThis action cannot be undone.`,
+            type: 'warning',
+            buttons: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig({ ...alertConfig, visible: false }),
+                    style: 'cancel'
+                },
                 {
                     text: 'Delete',
-                    style: 'destructive',
                     onPress: async () => {
-                        Alert.alert('Delete', 'Delete functionality will be implemented with API integration');
-                    }
+                        setAlertConfig({ ...alertConfig, visible: false });
+                        await performDelete(item);
+                    },
+                    style: 'destructive'
                 }
             ]
-        );
+        });
+    };
+
+    const performDelete = async (item) => {
+        try {
+            if (item.isSynced) {
+                // Record is synced, delete from server
+                const result = await deleteHarvestRecord(item.id);
+                if (result.success) {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Success',
+                        message: 'Harvest record deleted successfully',
+                        type: 'success',
+                        buttons: [{
+                            text: 'OK',
+                            onPress: () => {
+                                setAlertConfig({ ...alertConfig, visible: false });
+                                loadData();
+                            }
+                        }]
+                    });
+                } else {
+                    throw new Error('Failed to delete from server');
+                }
+            } else {
+                // Record is local only, remove from AsyncStorage
+                const { records } = await getUnsyncedRecords();
+                const updatedRecords = records.filter(r => r.id !== item.id);
+                await AsyncStorage.setItem('harvests_sync_queue', JSON.stringify(updatedRecords));
+
+                setAlertConfig({
+                    visible: true,
+                    title: 'Success',
+                    message: 'Local harvest record deleted successfully',
+                    type: 'success',
+                    buttons: [{
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig({ ...alertConfig, visible: false });
+                            loadData();
+                        }
+                    }]
+                });
+            }
+        } catch (error) {
+            console.error('[ProductionHarvests] Delete error:', error);
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: `Failed to delete harvest record: ${error.message}`,
+                type: 'error',
+                buttons: [{
+                    text: 'OK',
+                    onPress: () => setAlertConfig({ ...alertConfig, visible: false })
+                }]
+            });
+        }
     };
 
     const clearInvalidLocalRecords = async () => {
-        Alert.alert(
-            'Clear Invalid Records',
-            'This will remove all unsynced local records with old data format. Only use if you have sync errors. Continue?',
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAlertConfig({
+            visible: true,
+            title: 'Clear Invalid Records',
+            message: 'This will remove all unsynced local records with old data format. Only use if you have sync errors. Continue?',
+            type: 'warning',
+            buttons: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig({ ...alertConfig, visible: false }),
+                    style: 'cancel'
+                },
                 {
                     text: 'Clear',
-                    style: 'destructive',
                     onPress: async () => {
+                        setAlertConfig({ ...alertConfig, visible: false });
                         try {
                             await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify([]));
-                            Alert.alert('Success', 'Cleared all local unsynced records. You can now submit new records.');
-                            await loadData();
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Success',
+                                message: 'Cleared all local unsynced records. You can now submit new records.',
+                                type: 'success',
+                                buttons: [{
+                                    text: 'OK',
+                                    onPress: () => {
+                                        setAlertConfig({ ...alertConfig, visible: false });
+                                        loadData();
+                                    }
+                                }]
+                            });
                         } catch (error) {
-                            Alert.alert('Error', 'Failed to clear records: ' + error.message);
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Error',
+                                message: 'Failed to clear records: ' + error.message,
+                                type: 'error',
+                                buttons: [{
+                                    text: 'OK',
+                                    onPress: () => setAlertConfig({ ...alertConfig, visible: false })
+                                }]
+                            });
                         }
-                    }
+                    },
+                    style: 'destructive'
                 }
             ]
-        );
+        });
     };
 
     const handleViewDetails = (item) => {
@@ -539,6 +645,15 @@ export default function ProductionHarvestsScreen({ navigation }) {
             </View>
 
             <BottomNav activeScreen="Harvests" />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 }

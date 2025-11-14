@@ -65,8 +65,24 @@ class ApiService {
       async (error) => {
         const originalRequest = error.config;
 
-        // If 401 and we haven't tried to refresh yet
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Auth endpoints that should not trigger token refresh
+        const authEndpoints = [
+          'users/login/',
+          'users/token/refresh/',
+          'users/security-question/',
+          'users/reset-pin/',
+          'users/random-security-questions/',
+          'users/setup-security-answers/',
+          'users/verify-answers-reset-pin/',
+        ];
+
+        // Check if this is an auth endpoint
+        const isAuthEndpoint = authEndpoints.some(endpoint =>
+          originalRequest.url?.includes(endpoint)
+        );
+
+        // If 401 and we haven't tried to refresh yet, and NOT an auth endpoint
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
           if (this.isRefreshing) {
             // Queue the request while token is being refreshed
             return new Promise((resolve, reject) => {

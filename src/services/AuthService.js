@@ -161,12 +161,23 @@ class AuthService {
         user,
       };
     } catch (error) {
-      console.error('[AuthService] Get current user error:', error.response?.data || error.message);
+      console.error('[AuthService] Get current user error:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.message,
+        responseData: error.response?.data,
+        endpoint: '/users/me/'
+      });
 
       if (error.response?.status === 401) {
         // Token is invalid, clear and require re-login
         await ApiService.clearTokens();
         throw new Error('Session expired. Please login again.');
+      }
+
+      if (error.response?.status === 500) {
+        console.error('[AuthService] ⚠️  Backend server error (500) - the /users/me/ endpoint may have an issue');
+        throw new Error('Server error while fetching user info. Please try again later.');
       }
 
       throw new Error(error.message || 'Failed to get user information');

@@ -628,13 +628,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 // UPDATE MODE: Call the API to update the record
                 console.log('[HarvestForm] Updating harvest record:', editRecordId);
 
-                // Show loading
-                Alert.alert('Updating', 'Saving changes...', [], { cancelable: false });
-
                 const response = await updateHarvestRecord(editRecordId, harvestData);
-
-                // Close loading alert
-                Alert.alert('', '', [{ text: 'OK' }]);
 
                 if (response.success) {
                     setAlertConfig({
@@ -649,6 +643,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                                     setFormData(initialFormState);
                                     setCurrentStep(0);
                                     setIsEditMode(false);
+                                    setEditRecordId(null);
                                     navigation.navigate('Harvests');
                                 }
                             }
