@@ -44,9 +44,12 @@ class ApiService {
           config.url = String(config.url).replace(/^\/+/, '');
         }
 
-        // Log request
+        // Log request with full details for debugging
         const fullUrl = config.baseURL + (config.url || '');
-        console.log('[ApiService] Request:', config.method?.toUpperCase(), fullUrl);
+        console.log('[ApiService] 📤 Request:', config.method?.toUpperCase(), fullUrl, {
+          timeout: config.timeout,
+          hasAuth: !!config.headers.Authorization,
+        });
 
         return config;
       },
@@ -59,7 +62,9 @@ class ApiService {
     // Response interceptor - Handle token refresh on 401
     this.client.interceptors.response.use(
       (response) => {
-        console.log('[ApiService] Response:', response.status, response.config.url);
+        console.log('[ApiService] ✅ Response:', response.status, response.config.url, {
+          dataSize: JSON.stringify(response.data).length,
+        });
         return response;
       },
       async (error) => {
@@ -137,14 +142,39 @@ class ApiService {
           }
         }
 
-        // Log error details
+        // Log error details with comprehensive network diagnostics
         if (error.isAxiosError) {
-          console.error('[ApiService] Response error:', {
+          const errorDetails = {
             message: error.message,
             status: error.response?.status,
+            statusText: error.response?.statusText,
             url: error.config?.url,
+            baseURL: error.config?.baseURL,
+            method: error.config?.method,
             data: error.response?.data,
-          });
+            code: error.code, // ECONNREFUSED, ENOTFOUND, ETIMEDOUT, etc.
+          };
+
+          // Special handling for network-level errors (no response from server)
+          if (!error.response) {
+            errorDetails.isNetworkError = true;
+            errorDetails.networkErrorType = error.code || 'UNKNOWN';
+
+            if (error.code === 'ECONNREFUSED') {
+              errorDetails.diagnosis = 'Server refused connection - backend may be down or unreachable';
+            } else if (error.code === 'ENOTFOUND') {
+              errorDetails.diagnosis = 'Domain/IP not found - DNS resolution failed';
+            } else if (error.code === 'ETIMEDOUT') {
+              errorDetails.diagnosis = 'Request timeout - server not responding';
+            } else if (error.code === 'ECONNABORTED') {
+              errorDetails.diagnosis = 'Connection aborted - network connectivity issue';
+            }
+
+            console.error('[ApiService] 🌐 Network Error (no server response):', errorDetails);
+          } else {
+            // HTTP error response received
+            console.error('[ApiService] ❌ Response error:', errorDetails);
+          }
         }
 
         return Promise.reject(error);
