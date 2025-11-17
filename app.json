@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Rugyeyo-fmis",
-    "slug": "fmis-mobile",
+    "slug": "rugyeyo-farm-fmis-mobile",
     "jsEngine": "hermes",
     "version": "1.0.0",
     "orientation": "portrait",
