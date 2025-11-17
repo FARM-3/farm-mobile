@@ -4,8 +4,7 @@
 node_modules/
 
 # Expo
-# TEMPORARILY ENABLED for team sharing - revert after push
-# .expo/
+.expo/
 dist/
 web-build/
 expo-env.d.ts
@@ -39,6 +38,5 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-# TEMPORARILY ENABLED for team sharing - revert after push
 /ios
-# /android
+/android
