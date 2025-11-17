@@ -6,16 +6,18 @@ import {
     ScrollView,
     TouchableOpacity,
     Image,
-    Alert,
     Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
+import CustomAlert from '../../../components/CustomAlert';
 import { getStaffById } from '../../../services/staffService';
+import { parseFormattedNumber } from '../../../utils/numberFormatter';
 
 // Utility function to convert number to words
 const numberToWords = (num) => {
@@ -49,13 +51,20 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
     const { harvestData } = route.params || {};
     const [isGenerating, setIsGenerating] = useState(false);
     const [paidByName, setPaidByName] = useState('Staff Member');
+    const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
+
+    // Debug: Log the harvestData received
+    useEffect(() => {
+        console.log('[PaymentVoucher] Received harvestData:', JSON.stringify(harvestData, null, 2));
+    }, []);
 
     // Fetch staff name when component mounts
     useEffect(() => {
         const fetchStaffName = async () => {
-            if (harvestData?.paidBy) {
+            const paidById = harvestData?.paid_by || harvestData?.paidBy;
+            if (paidById) {
                 try {
-                    const staff = await getStaffById(harvestData.paidBy);
+                    const staff = await getStaffById(paidById);
                     if (staff) {
                         setPaidByName(staff.displayName);
                     }
@@ -66,7 +75,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
         };
 
         fetchStaffName();
-    }, [harvestData?.paidBy]);
+    }, [harvestData?.paid_by, harvestData?.paidBy]);
 
     // Generate simple unique voucher number
     const generateVoucherNumber = () => {
@@ -77,19 +86,24 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
 
     // Extract data from harvest record
     const voucherData = {
-        voucherNo: harvestData?.id || harvestData?.harvest_id || 'N/A',
+        voucherNo: harvestData?.harvest_id || harvestData?.id || 'N/A',
         voucherNumber: generateVoucherNumber(),
         paymentDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
         paidTo: harvestData?.farmer_name || harvestData?.workerName || harvestData?.farmer_uid || 'N/A',
-        harvestId: harvestData?.id || harvestData?.harvest_id || 'N/A',
+        harvestId: harvestData?.harvest_id || harvestData?.id || 'N/A',
         deliveryDate: harvestData?.dateReadable || (harvestData?.date_of_delivery ? new Date(harvestData.date_of_delivery).toLocaleDateString('en-GB') : (harvestData?.date ? new Date(harvestData.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'))),
         weight: `${harvestData?.weight_on_delivery || harvestData?.weight || 0} kg`,
         blockNo: harvestData?.blockId || 'N/A',
         pricePerKg: `UGX ${Number(harvestData?.price_per_kg || harvestData?.pricePerKg || 0).toLocaleString()}`,
-        amount: Number(harvestData?.amount_paid || harvestData?.amountPaid || 0),
+        amount: parseFormattedNumber(harvestData?.amount_paid || harvestData?.amountPaid || 0),
         paidBy: paidByName,
         paymentMethod: 'Mobile Money', // Can be made dynamic
+        coffeeType: harvestData?.coffee_type || 'Coffee',
     };
+
+    // Debug: Log constructed voucherData
+    console.log('[PaymentVoucher] Constructed voucherData:', JSON.stringify(voucherData, null, 2));
+    console.log('[PaymentVoucher] Raw values - harvest_id:', harvestData?.harvest_id, 'weight_on_delivery:', harvestData?.weight_on_delivery, 'amount_paid:', harvestData?.amount_paid);
 
     const amountInWords = numberToWords(Math.floor(voucherData.amount));
 
@@ -131,28 +145,28 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
             margin-bottom: 10px;
         }
         .logo {
-            width: 60px;
-            height: 60px;
-            margin-right: 15px;
+            width: 50px;
+            height: 50px;
+            margin-right: 12px;
         }
         .company-info h1 {
             color: #8B4513;
-            font-size: 28px;
-            margin-bottom: 5px;
+            font-size: 20px;
+            margin-bottom: 4px;
             font-weight: bold;
         }
         .company-info p {
             color: #666;
-            font-size: 12px;
-            line-height: 1.6;
+            font-size: 11px;
+            line-height: 1.5;
         }
         .voucher-number {
             text-align: right;
         }
         .voucher-number h2 {
             color: #8B4513;
-            font-size: 22px;
-            margin-bottom: 5px;
+            font-size: 16px;
+            margin-bottom: 4px;
             font-weight: bold;
         }
         .voucher-number p {
@@ -361,7 +375,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
         <div class="voucher-details">
             <div class="detail-row">
                 <div class="detail-label">Payment For:</div>
-                <div class="detail-value">Coffee Cherry Harvest</div>
+                <div class="detail-value">${voucherData.coffeeType} Coffee Harvest</div>
             </div>
         </div>
 
@@ -390,34 +404,60 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
     const handleGeneratePDF = async () => {
         try {
             setIsGenerating(true);
+            console.log('[PaymentVoucher] Starting PDF generation...');
 
             const html = generateHTML();
-            const { uri } = await Print.printToFileAsync({ html });
+            console.log('[PaymentVoucher] HTML generated, creating PDF...');
 
-            Alert.alert(
-                'PDF Generated',
-                'Your payment voucher has been generated successfully!',
-                [
-                    {
-                        text: 'Share',
-                        onPress: async () => {
-                            if (await Sharing.isAvailableAsync()) {
-                                await Sharing.shareAsync(uri);
-                            }
+            const { uri } = await Print.printToFileAsync({ html });
+            console.log('[PaymentVoucher] PDF created at:', uri);
+
+            // Generate filename with harvest ID and timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+            const harvestId = harvestData?.harvest_id || harvestData?.id || 'voucher';
+            const filename = `Voucher_${harvestId}_${timestamp}.pdf`;
+
+            // Just share the PDF directly - works on all platforms
+            console.log('[PaymentVoucher] Sharing PDF...');
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(uri, {
+                    mimeType: 'application/pdf',
+                    dialogTitle: 'Save or Share Voucher',
+                    UTI: 'com.adobe.pdf'
+                });
+
+                setAlertConfig({
+                    visible: true,
+                    title: 'PDF Generated',
+                    message: `Voucher generated successfully!\nYou can save it from the share menu.`,
+                    type: 'success',
+                    buttons: [
+                        {
+                            text: 'OK',
+                            onPress: () => setAlertConfig({ ...alertConfig, visible: false })
                         }
-                    },
-                    {
-                        text: 'Print',
-                        onPress: async () => {
-                            await Print.printAsync({ uri });
-                        }
-                    },
-                    { text: 'OK' }
-                ]
-            );
+                    ]
+                });
+            } else {
+                console.warn('[PaymentVoucher] Sharing not available');
+                setAlertConfig({
+                    visible: true,
+                    title: 'PDF Generated',
+                    message: `PDF generated but sharing is not available on this device.`,
+                    type: 'warning',
+                    buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                });
+            }
         } catch (error) {
-            console.error('PDF generation error:', error);
-            Alert.alert('Error', 'Failed to generate PDF. Please try again.');
+            console.error('[PaymentVoucher] PDF generation error:', error);
+            console.error('[PaymentVoucher] Error stack:', error.stack);
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: `Failed to generate PDF:\n${error.message || 'Unknown error'}`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
         } finally {
             setIsGenerating(false);
         }
@@ -499,7 +539,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                     <View style={styles.section}>
                         <DetailRow
                             label="Payment For"
-                            value="Coffee Cherry Harvest"
+                            value={`${voucherData.coffeeType} Coffee Harvest`}
                         />
                     </View>
 
@@ -524,11 +564,11 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                         disabled={isGenerating}
                     >
                         {isGenerating ? (
-                            <Text style={styles.primaryButtonText}>Downloading...</Text>
+                            <Text style={styles.primaryButtonText}>Saving PDF...</Text>
                         ) : (
                             <>
-                                <Ionicons name="download" size={20} color="white" />
-                                <Text style={styles.primaryButtonText}>Download Voucher</Text>
+                                <Ionicons name="document-text" size={20} color="white" />
+                                <Text style={styles.primaryButtonText}>Save as PDF</Text>
                             </>
                         )}
                     </TouchableOpacity>
@@ -542,6 +582,15 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 };
@@ -607,23 +656,23 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     companyName: {
-        fontSize: 24,
+        fontSize: 18,
         fontWeight: 'bold',
         color: CoffeeColors.PRIMARY_BROWN,
         fontFamily: Fonts.bold,
-        marginBottom: 4,
+        marginBottom: 3,
     },
     companySubtitle: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#666',
         marginBottom: 2,
     },
     companyAddress: {
-        fontSize: 11,
+        fontSize: 10,
         color: '#666',
     },
     companyContact: {
-        fontSize: 10,
+        fontSize: 9,
         color: '#666',
         marginTop: 2,
     },

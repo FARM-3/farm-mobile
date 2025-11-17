@@ -8,7 +8,6 @@ import {
     FlatList,
     TouchableOpacity,
     StyleSheet,
-    Alert,
     ActivityIndicator,
     TextInput,
     ScrollView,
@@ -20,12 +19,14 @@ import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import {
-    fetchAllHarvestRecords,
-    getUnsyncedRecords,
-    syncAllRecords
-} from '../../../services/harvestRecord';
+    fetchAllProductionHarvestRecords,
+    getUnsyncedProductionRecords,
+    syncAllProductionRecords,
+    deleteProductionHarvestRecord
+} from '../../../services/productionHarvestService';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import CustomAlert from '../../../components/CustomAlert';
 
 // ===============================================
 // === HARVEST DETAIL VIEW COMPONENT      ===
@@ -52,7 +53,7 @@ const HarvestDetailView = ({ harvest, onBack }) => {
             title: 'Harvest Details',
             fields: [
                 { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
-                { label: 'Worker Name', value: harvest.name || harvest.worker_name },
+                { label: 'Worker Name', value: harvest.worker_name || 'Unknown Worker' },
                 { label: 'Block ID', value: harvest.block || harvest.block_id },
                 { label: 'Date of Delivery', value: harvest.date },
                 { label: 'Weight on Delivery', value: harvest.weight ? `${harvest.weight} kg` : 'Not provided' },
@@ -62,7 +63,7 @@ const HarvestDetailView = ({ harvest, onBack }) => {
             title: 'Payment Information',
             fields: [
                 { label: 'Amount Paid', value: harvest.amountPaid ? `UGX ${Number(harvest.amountPaid).toLocaleString()}` : 'Not provided' },
-                { label: 'Paid By', value: harvest.paidBy || harvest.paid_by },
+                { label: 'Paid By', value: harvest.paid_by || 'Not specified' },
             ]
         }
     ];
@@ -83,7 +84,7 @@ const HarvestDetailView = ({ harvest, onBack }) => {
                 {/* Harvest ID Card */}
                 <View style={styles.detailNameCard}>
                     <Text style={styles.detailFarmerName}>
-                        {harvest.name || harvest.worker_name || 'Unknown Worker'}
+                        {harvest.worker_name || 'Unknown Worker'}
                     </Text>
                     <Text style={styles.detailFarmerId}>
                         Harvest ID: {harvest.id || harvest.harvest_id || 'N/A'}
@@ -107,7 +108,7 @@ const HarvestDetailView = ({ harvest, onBack }) => {
     );
 };
 
-const SYNC_QUEUE_KEY = "harvests_sync_queue";
+const SYNC_QUEUE_KEY = "production_harvests_sync_queue";
 
 export default function ProductionHarvestsScreen({ navigation }) {
     const [allRecords, setAllRecords] = useState([]);
@@ -116,10 +117,21 @@ export default function ProductionHarvestsScreen({ navigation }) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncStatus, setSyncStatus] = useState("Checking connectivity and syncing...");
     const [searchTerm, setSearchTerm] = useState('');
+    const [searchSuggestions, setSearchSuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
     // State for detail view
     const [selectedHarvest, setSelectedHarvest] = useState(null);
     const [viewMode, setViewMode] = useState('table'); // 'table' or 'detail'
+
+    // State for custom alert
+    const [alertConfig, setAlertConfig] = useState({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: []
+    });
 
     /**
      * Load data from both local and remote sources (without auto-sync)
@@ -137,17 +149,31 @@ export default function ProductionHarvestsScreen({ navigation }) {
             setSyncStatus("Online: Tap the sync icon to upload pending records.");
 
             // Fetch remote data (no auto-sync)
-            const remoteResponse = await fetchAllHarvestRecords();
-            if (remoteResponse.success && Array.isArray(remoteResponse.remoteData.results)) {
-                remoteRecords = remoteResponse.remoteData.results.map(r => ({
-                    id: r.harvest_id || r.id,
-                    block: r.block_id || r.block_ID,
-                    name: r.worker_name || r.Worker_name,
+            const remoteResponse = await fetchAllProductionHarvestRecords();
+            console.log('[ProductionHarvests] Remote response:', JSON.stringify(remoteResponse, null, 2));
+
+            if (remoteResponse.success) {
+                // Handle paginated response: API returns { count, next, previous, results: [...] }
+                const remoteData = Array.isArray(remoteResponse.remoteData)
+                    ? remoteResponse.remoteData
+                    : (remoteResponse.remoteData?.results || []);
+
+                console.log('[ProductionHarvests] Extracted remoteData count:', remoteData.length);
+
+                remoteRecords = remoteData.map(r => ({
+                    id: r.harvest_id,
+                    harvest_id: r.harvest_id,
+                    block: r.block_id,
+                    block_id: r.block_id,
+                    name: r.worker_name || 'Unknown',
+                    worker_name: r.worker_name || 'Unknown',
                     isSynced: true,
-                    weight: `${r.weight_on_delivery} kg`,
+                    weight: `${r.weight_on_delivery || 0}`,
                     date: r.date_of_delivery,
-                    amountPaid: Number(r.amount_paid),
-                    paidBy: r.paid_by,
+                    amountPaid: Number(r.amount_paid || 0),
+                    amount_paid: Number(r.amount_paid || 0),
+                    paidBy: r.paid_by || '',
+                    paid_by: r.paid_by || '',
                 }));
             }
         } else {
@@ -155,17 +181,19 @@ export default function ProductionHarvestsScreen({ navigation }) {
         }
 
         // Fetch local data (always fetch, regardless of connectivity)
-        const localResponse = await getUnsyncedRecords();
+        const localResponse = await getUnsyncedProductionRecords();
         if (localResponse.success && Array.isArray(localResponse.records)) {
             localRecords = localResponse.records.map(r => ({
                 id: r.id,
-                block: r.blockId,
-                name: r.workerName,
+                block: r.blockId || r.block_id || r.block,
+                name: r.workerName || r.worker_name || r.name || 'Unknown',
+                worker_name: r.workerName || r.worker_name || r.name || 'Unknown',
                 isSynced: false,
-                weight: `${r.weight} kg`,
-                date: r.dateReadable || r.date.split('T')[0],
-                amountPaid: Number(r.amountPaid),
-                paidBy: r.paidBy,
+                weight: `${r.weight || 0} kg`,
+                date: r.dateReadable || (r.date ? r.date.split('T')[0] : ''),
+                amountPaid: Number(r.amountPaid || r.amount_paid || 0),
+                paidBy: r.paidBy || r.paid_by || r.who_paid || '',
+                paid_by: r.paidBy || r.paid_by || r.who_paid || '',
             }));
         }
 
@@ -203,6 +231,70 @@ export default function ProductionHarvestsScreen({ navigation }) {
         setIsLoading(false);
     }, []);
 
+    // Generate search suggestions when search term changes
+    useEffect(() => {
+        if (searchTerm && searchTerm.length >= 2) {
+            const lowerSearch = searchTerm.toLowerCase();
+
+            // Get unique suggestions from worker names, IDs, and blocks
+            const suggestions = [];
+            const seenSuggestions = new Set();
+
+            allRecords.forEach(record => {
+                // Worker name suggestions
+                if (record.name && record.name.toLowerCase().includes(lowerSearch)) {
+                    const suggestion = {
+                        type: 'name',
+                        value: record.name,
+                        label: record.name,
+                        icon: 'person'
+                    };
+                    const key = `name-${record.name}`;
+                    if (!seenSuggestions.has(key)) {
+                        suggestions.push(suggestion);
+                        seenSuggestions.add(key);
+                    }
+                }
+
+                // Harvest ID suggestions
+                if (record.id && record.id.toString().toLowerCase().includes(lowerSearch)) {
+                    const suggestion = {
+                        type: 'id',
+                        value: record.id,
+                        label: `ID: ${record.id}`,
+                        icon: 'barcode'
+                    };
+                    const key = `id-${record.id}`;
+                    if (!seenSuggestions.has(key)) {
+                        suggestions.push(suggestion);
+                        seenSuggestions.add(key);
+                    }
+                }
+
+                // Block suggestions
+                if (record.block && record.block.toLowerCase().includes(lowerSearch)) {
+                    const suggestion = {
+                        type: 'block',
+                        value: record.block,
+                        label: `Block: ${record.block}`,
+                        icon: 'grid'
+                    };
+                    const key = `block-${record.block}`;
+                    if (!seenSuggestions.has(key)) {
+                        suggestions.push(suggestion);
+                        seenSuggestions.add(key);
+                    }
+                }
+            });
+
+            setSearchSuggestions(suggestions.slice(0, 5)); // Limit to 5 suggestions
+            setShowSuggestions(suggestions.length > 0);
+        } else {
+            setSearchSuggestions([]);
+            setShowSuggestions(false);
+        }
+    }, [searchTerm, allRecords]);
+
     // Search filtering
     useEffect(() => {
         let result = allRecords;
@@ -234,51 +326,142 @@ export default function ProductionHarvestsScreen({ navigation }) {
     }, [navigation, loadData]);
 
     const handleEdit = (item) => {
-        Alert.alert(
-            'Edit Harvest',
-            'Edit functionality will be implemented soon.',
-            [{ text: 'OK' }]
-        );
+        // Navigate to harvest form screen with item data
+        navigation.navigate('HarvestForm', { 
+            harvest: item,
+            mode: 'edit'
+        });
     };
 
     const handleDelete = (item) => {
-        Alert.alert(
-            'Delete Harvest Record',
-            `Are you sure you want to delete the harvest record for ${item.name}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAlertConfig({
+            visible: true,
+            title: 'Delete Harvest Record',
+            message: `Are you sure you want to delete the harvest record for ${item.name}?\n\nThis action cannot be undone.`,
+            type: 'warning',
+            buttons: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig({ ...alertConfig, visible: false }),
+                    style: 'cancel'
+                },
                 {
                     text: 'Delete',
-                    style: 'destructive',
                     onPress: async () => {
-                        Alert.alert('Delete', 'Delete functionality will be implemented with API integration');
-                    }
+                        setAlertConfig({ ...alertConfig, visible: false });
+                        await performDelete(item);
+                    },
+                    style: 'destructive'
                 }
             ]
-        );
+        });
+    };
+
+    const performDelete = async (item) => {
+        try {
+            if (item.isSynced) {
+                // Record is synced, delete from server
+                const result = await deleteProductionHarvestRecord(item.id);
+                if (result.success) {
+                    setAlertConfig({
+                        visible: true,
+                        title: 'Success',
+                        message: 'Harvest record deleted successfully',
+                        type: 'success',
+                        buttons: [{
+                            text: 'OK',
+                            onPress: () => {
+                                setAlertConfig({ ...alertConfig, visible: false });
+                                loadData();
+                            }
+                        }]
+                    });
+                } else {
+                    throw new Error('Failed to delete from server');
+                }
+            } else {
+                // Record is local only, remove from AsyncStorage
+                const { records } = await getUnsyncedProductionRecords();
+                const updatedRecords = records.filter(r => r.id !== item.id);
+                await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
+
+                setAlertConfig({
+                    visible: true,
+                    title: 'Success',
+                    message: 'Local harvest record deleted successfully',
+                    type: 'success',
+                    buttons: [{
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig({ ...alertConfig, visible: false });
+                            loadData();
+                        }
+                    }]
+                });
+            }
+        } catch (error) {
+            console.error('[ProductionHarvests] Delete error:', error);
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: `Failed to delete harvest record: ${error.message}`,
+                type: 'error',
+                buttons: [{
+                    text: 'OK',
+                    onPress: () => setAlertConfig({ ...alertConfig, visible: false })
+                }]
+            });
+        }
     };
 
     const clearInvalidLocalRecords = async () => {
-        Alert.alert(
-            'Clear Invalid Records',
-            'This will remove all unsynced local records with old data format. Only use if you have sync errors. Continue?',
-            [
-                { text: 'Cancel', style: 'cancel' },
+        setAlertConfig({
+            visible: true,
+            title: 'Clear Invalid Records',
+            message: 'This will remove all unsynced local records with old data format. Only use if you have sync errors. Continue?',
+            type: 'warning',
+            buttons: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertConfig({ ...alertConfig, visible: false }),
+                    style: 'cancel'
+                },
                 {
                     text: 'Clear',
-                    style: 'destructive',
                     onPress: async () => {
+                        setAlertConfig({ ...alertConfig, visible: false });
                         try {
                             await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify([]));
-                            Alert.alert('Success', 'Cleared all local unsynced records. You can now submit new records.');
-                            await loadData();
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Success',
+                                message: 'Cleared all local unsynced records. You can now submit new records.',
+                                type: 'success',
+                                buttons: [{
+                                    text: 'OK',
+                                    onPress: () => {
+                                        setAlertConfig({ ...alertConfig, visible: false });
+                                        loadData();
+                                    }
+                                }]
+                            });
                         } catch (error) {
-                            Alert.alert('Error', 'Failed to clear records: ' + error.message);
+                            setAlertConfig({
+                                visible: true,
+                                title: 'Error',
+                                message: 'Failed to clear records: ' + error.message,
+                                type: 'error',
+                                buttons: [{
+                                    text: 'OK',
+                                    onPress: () => setAlertConfig({ ...alertConfig, visible: false })
+                                }]
+                            });
                         }
-                    }
+                    },
+                    style: 'destructive'
                 }
             ]
-        );
+        });
     };
 
     const handleViewDetails = (item) => {
@@ -300,7 +483,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
         try {
             // Fetch current unsynced count
             console.log('[ProductionHarvests] Fetching unsynced records...');
-            const unsyncedResult = await getUnsyncedRecords();
+            const unsyncedResult = await getUnsyncedProductionRecords();
             const unsyncedRecords = unsyncedResult.records || [];
 
             console.log('[ProductionHarvests] Unsynced records found:', unsyncedRecords.length);
@@ -315,7 +498,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
 
             // Sync all records
             console.log('[ProductionHarvests] Starting sync of', unsyncedRecords.length, 'records');
-            const result = await syncAllRecords();
+            const result = await syncAllProductionRecords();
 
             console.log('[ProductionHarvests] Sync result:', {
                 syncedCount: result.syncedCount,
@@ -457,7 +640,8 @@ export default function ProductionHarvestsScreen({ navigation }) {
                 onBackPress={handleBackPress}
             />
 
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, position: 'relative' }}>
+                {viewMode === 'table' && (
             <View style={styles.container}>
                 {/* Sync Status Banner */}
                 <View style={styles.syncBanner}>
@@ -467,20 +651,48 @@ export default function ProductionHarvestsScreen({ navigation }) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Search Bar */}
-                <View style={styles.searchContainer}>
-                    <Ionicons name="search-outline" size={20} color={CoffeeColors.MEDIUM_BROWN} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search by worker name, ID, or block..."
-                        value={searchTerm}
-                        onChangeText={setSearchTerm}
-                        placeholderTextColor={CoffeeColors.GRAY_TEXT}
-                    />
-                    {searchTerm.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchTerm('')}>
-                            <Ionicons name="close-circle" size={20} color={CoffeeColors.MEDIUM_BROWN} />
-                        </TouchableOpacity>
+                {/* Search Bar with Autocomplete */}
+                <View style={styles.searchWrapper}>
+                    <View style={styles.searchContainer}>
+                        <Ionicons name="search-outline" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search by worker name, ID, or block..."
+                            value={searchTerm}
+                            onChangeText={(text) => {
+                                setSearchTerm(text);
+                                setShowSuggestions(true);
+                            }}
+                            onFocus={() => searchTerm.length >= 2 && setShowSuggestions(true)}
+                            placeholderTextColor={CoffeeColors.GRAY_TEXT}
+                        />
+                        {searchTerm.length > 0 && (
+                            <TouchableOpacity onPress={() => {
+                                setSearchTerm('');
+                                setShowSuggestions(false);
+                            }}>
+                                <Ionicons name="close-circle" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {/* Autocomplete Suggestions Dropdown */}
+                    {showSuggestions && searchSuggestions.length > 0 && (
+                        <View style={styles.suggestionsContainer}>
+                            {searchSuggestions.map((suggestion, index) => (
+                                <TouchableOpacity
+                                    key={index}
+                                    style={styles.suggestionItem}
+                                    onPress={() => {
+                                        setSearchTerm(suggestion.value);
+                                        setShowSuggestions(false);
+                                    }}
+                                >
+                                    <Ionicons name={suggestion.icon} size={16} color={CoffeeColors.MEDIUM_BROWN} />
+                                    <Text style={styles.suggestionText}>{suggestion.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     )}
                 </View>
 
@@ -508,22 +720,22 @@ export default function ProductionHarvestsScreen({ navigation }) {
                 )}
 
                 {/* Harvest Records List */}
-                {viewMode === 'table' && (
-                    <FlatList
-                        data={filteredData}
-                        renderItem={renderHarvestCard}
-                        keyExtractor={(item, index) => `${item.id}_${item.isSynced}_${index}`}
-                        ListEmptyComponent={
-                            <View style={styles.emptyContainer}>
-                                <Ionicons name="file-tray-outline" size={64} color={CoffeeColors.MEDIUM_BROWN} />
-                                <Text style={styles.emptyText}>No harvest records found</Text>
-                                {searchTerm && (
-                                    <Text style={styles.emptySubtext}>Try adjusting your search</Text>
-                                )}
-                            </View>
-                        }
-                        contentContainerStyle={{ paddingBottom: 20 }}
-                    />
+                <FlatList
+                    data={filteredData}
+                    renderItem={renderHarvestCard}
+                    keyExtractor={(item, index) => `${item.id}_${item.isSynced}_${index}`}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="file-tray-outline" size={64} color={CoffeeColors.MEDIUM_BROWN} />
+                            <Text style={styles.emptyText}>No harvest records found</Text>
+                            {searchTerm && (
+                                <Text style={styles.emptySubtext}>Try adjusting your search</Text>
+                            )}
+                        </View>
+                    }
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                />
+            </View>
                 )}
 
                 {viewMode === 'detail' && selectedHarvest && (
@@ -536,9 +748,17 @@ export default function ProductionHarvestsScreen({ navigation }) {
                     />
                 )}
             </View>
-            </View>
 
             <BottomNav activeScreen="Harvests" />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 }
@@ -576,6 +796,11 @@ const styles = StyleSheet.create({
         flexShrink: 1,
         fontFamily: Fonts.regular,
     },
+    searchWrapper: {
+        position: 'relative',
+        zIndex: 1000,
+        marginBottom: 12,
+    },
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -583,7 +808,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         paddingVertical: 10,
         borderRadius: 8,
-        marginBottom: 12,
         borderWidth: 1,
         borderColor: CoffeeColors.LIGHT_BROWN,
     },
@@ -591,6 +815,38 @@ const styles = StyleSheet.create({
         flex: 1,
         marginLeft: 10,
         fontSize: 16,
+        color: CoffeeColors.DARK_BROWN,
+        fontFamily: Fonts.regular,
+    },
+    suggestionsContainer: {
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        right: 0,
+        backgroundColor: CoffeeColors.WHITE,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: CoffeeColors.LIGHT_BROWN,
+        marginTop: 4,
+        maxHeight: 200,
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 5,
+        zIndex: 1001,
+    },
+    suggestionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 15,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+    },
+    suggestionText: {
+        marginLeft: 10,
+        fontSize: 15,
         color: CoffeeColors.DARK_BROWN,
         fontFamily: Fonts.regular,
     },
@@ -652,7 +908,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         marginBottom: 10,
         borderLeftWidth: 4,
-        borderLeftColor: CoffeeColors.MEDIUM_BROWN,
+        borderLeftColor: CoffeeColors.PRIMARY_BROWN,
         shadowColor: CoffeeColors.DARK_BROWN,
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
@@ -725,11 +981,13 @@ const styles = StyleSheet.create({
     },
     // --- Harvest Detail View ---
     detailViewContainer: {
-        flex: 1,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         backgroundColor: '#fff',
-        borderRadius: 10,
-        overflow: 'hidden',
-        elevation: 3,
+        zIndex: 2000,
     },
     detailHeader: {
         flexDirection: 'row',
@@ -790,7 +1048,7 @@ const styles = StyleSheet.create({
     },
     detailSection: {
         marginBottom: 24,
-        backgroundColor: CoffeeColors.LIGHT_GRAY_BG,
+        backgroundColor: CoffeeColors.LIGHT_GRAY,
         borderRadius: 10,
         padding: 16,
     },

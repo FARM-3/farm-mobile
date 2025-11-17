@@ -255,18 +255,20 @@ class SyncService {
 
     if (tableName === 'harvests') {
       return {
-        id: record.server_id || record.id,
-        name: record.farmer_name || '',
-        weight_on_delivery: Math.round(Number(record.weight) || 0),
-        weight_after_floating: 0,
-        date_of_delivery: record.harvest_date || '',
-        grade: record.quality || '',
-        cherry_color: 'Red',
-        stage: 'fresh_cherry',
-        amount_paid: '0',
-        paid_by: 'System',
-        recorder_id: null,
-        timestamp: Date.now(),
+        id: record.harvest_id || record.server_id || record.id,
+        name: record.farmer_name || record.worker_name || record.name || '',
+        weight_on_delivery: Math.round(Number(record.weight) || Number(record.weight_on_delivery) || 0),
+        location_on_delivery: record.location_on_delivery || record.location || '',
+        gps_coordinates: record.gps_coordinates || record.gps || '',
+        weight_after_floating: Math.round(Number(record.weight_after_floating) || 0),
+        date_of_delivery: record.harvest_date || record.date_of_delivery || record.date || '',
+        grade: record.quality || record.grade || '',
+        cherry_color: record.cherry_colour || record.cherry_color || record.cherryColor || '',
+        stage: record.stage || '',
+        amount_paid: record.amount_paid ? String(record.amount_paid) : (record.amountPaid ? String(record.amountPaid) : '0'),
+        paid_by: record.paid_by || record.who_paid || record.paidBy || '',
+        recorder_id: record.recorder_id || null,
+        timestamp: record.timestamp || Date.now(),
       };
     }
 

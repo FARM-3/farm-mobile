@@ -19,7 +19,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../theme/colors';
 import Fonts from '../theme/fonts';
-import { fetchAllStaff, searchStaff } from '../services/staffService';
+import { fetchAllStaff, searchStaff, refreshStaffList } from '../services/staffService';
 
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
 const DARK_BROWN = CoffeeColors.DARK_BROWN;
@@ -71,13 +71,13 @@ const SearchableStaffPicker = ({
     /**
      * Fetch staff from API or cache
      */
-    const loadStaffData = async () => {
+    const loadStaffData = async (forceRefresh = false) => {
         setIsLoading(true);
         setError(null);
 
         try {
-            console.log('[SearchableStaffPicker] Loading staff data...');
-            const result = await fetchAllStaff(true); // Use cache
+            console.log('[SearchableStaffPicker] Loading staff data...', forceRefresh ? '(force refresh)' : '');
+            const result = forceRefresh ? await refreshStaffList() : await fetchAllStaff(true); // Use cache unless force refresh
 
             console.log('[SearchableStaffPicker] API Response:', {
                 success: result.success,
@@ -206,7 +206,7 @@ const SearchableStaffPicker = ({
                     <Text style={styles.emptyText}>{error}</Text>
                     <TouchableOpacity
                         style={styles.retryButton}
-                        onPress={loadStaffData}
+                        onPress={() => loadStaffData(true)} // Force refresh on retry
                     >
                         <Text style={styles.retryButtonText}>Retry</Text>
                     </TouchableOpacity>
@@ -285,18 +285,35 @@ const SearchableStaffPicker = ({
                         {/* Modal Header */}
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>{label}</Text>
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setModalVisible(false);
-                                    setSearchTerm('');
-                                }}
-                            >
-                                <Ionicons
-                                    name="close"
-                                    size={24}
-                                    color={DARK_BROWN}
-                                />
-                            </TouchableOpacity>
+                            <View style={styles.modalHeaderActions}>
+                                {/* Refresh button to reload staff from API */}
+                                <TouchableOpacity
+                                    onPress={() => loadStaffData(true)}
+                                    style={styles.refreshButton}
+                                    disabled={isLoading}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons
+                                        name="refresh"
+                                        size={20}
+                                        color={isLoading ? MEDIUM_BROWN : DARK_BROWN}
+                                    />
+                                </TouchableOpacity>
+                                {/* Close button */}
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        setModalVisible(false);
+                                        setSearchTerm('');
+                                    }}
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                >
+                                    <Ionicons
+                                        name="close"
+                                        size={24}
+                                        color={DARK_BROWN}
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         {/* Search Input */}
@@ -436,6 +453,14 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
         borderBottomWidth: 1,
         borderBottomColor: BORDER_LIGHT,
+    },
+    modalHeaderActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    refreshButton: {
+        padding: 8,
     },
     modalTitle: {
         fontSize: 16,

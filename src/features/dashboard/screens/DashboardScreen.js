@@ -22,6 +22,7 @@ import { syncAllRecords, getUnsyncedRecords } from '../../../services/harvestRec
 import BottomNav from '../../../components/BottomNav';
 import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
 import { getCurrentWeather, isWeatherDataStale } from '../../../services/WeatherService';
+import { fetchActivities } from '../../../services/ActivityService';
 
 // Primary brown color and its shades
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
@@ -117,23 +118,12 @@ const DashboardScreen = ({ navigation }) => {
       const blocksData = await AsyncStorage.getItem('blocks_sync_queue');
       const blocks = blocksData ? JSON.parse(blocksData) : [];
 
-      // Fetch recent activities from backend
+      // Fetch recent activities using ActivityService
       let recentActivities = [];
       try {
-        const apiUrl = await AsyncStorage.getItem('apiUrl') || 'http://localhost:8000/api';
-        const token = await AsyncStorage.getItem('auth_token');
-
-        const activitiesResponse = await fetch(`${apiUrl}/activities/?limit=10`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (activitiesResponse.ok) {
-          const activitiesData = await activitiesResponse.json();
-          recentActivities = activitiesData.results || activitiesData;
+        const activitiesResponse = await fetchActivities(10);
+        if (activitiesResponse.success) {
+          recentActivities = activitiesResponse.activities;
           console.log('[Dashboard] Fetched activities:', recentActivities.length);
         }
       } catch (activityError) {

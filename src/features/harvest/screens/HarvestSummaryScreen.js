@@ -21,11 +21,11 @@ import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import {
-    fetchAllHarvestRecords,
-    getUnsyncedRecords,
-    syncAllRecords,
-    deleteHarvestRecord
-} from '../../../services/harvestRecord';
+    fetchAllProductionHarvestRecords,
+    getUnsyncedProductionRecords,
+    syncAllProductionRecords,
+    deleteProductionHarvestRecord
+} from '../../../services/productionHarvestService';
 // Import shared components
 import SimpleHeader from '../../../components/SimpleHeader';
 import CustomPicker from '../../../components/CustomPicker';
@@ -169,6 +169,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
      * Primary function to fetch, sync, and combine all data sources.
      */
     const loadAndSyncData = useCallback(async () => {
+        console.log('[HarvestSummary] ===== loadAndSyncData START =====');
         setIsLoading(true);
         let remoteRecords = [];
         let localRecords = [];
@@ -176,12 +177,13 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         // 1. Checking Internet Connectivity
         const netState = await NetInfo.fetch();
         const isConnected = netState.isConnected && netState.isInternetReachable;
+        console.log('[HarvestSummary] isConnected:', isConnected);
 
         if (isConnected) {
             setSyncStatus("Online: Initiating data synchronization.");
 
             // 2. Attempting Sync
-            const syncResult = await syncAllRecords();
+            const syncResult = await syncAllProductionRecords();
             console.log('[HarvestSummary] Sync result:', syncResult);
 
             if (syncResult.totalCount > 0) {
@@ -201,40 +203,56 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
             }
             
             // 3. Fetching Remote Data
-            const remoteResponse = await fetchAllHarvestRecords();
-            if (remoteResponse.success && Array.isArray(remoteResponse.remoteData.results)) {
+            const remoteResponse = await fetchAllProductionHarvestRecords();
+            console.log('[HarvestSummary] Remote response:', JSON.stringify(remoteResponse, null, 2));
+            console.log('[HarvestSummary] Remote response.remoteData type:', typeof remoteResponse.remoteData);
+            console.log('[HarvestSummary] Is array?', Array.isArray(remoteResponse.remoteData));
+
+            if (remoteResponse.success) {
+                // Handle paginated response: API returns { count, next, previous, results: [...] }
+                const remoteData = Array.isArray(remoteResponse.remoteData)
+                    ? remoteResponse.remoteData
+                    : (remoteResponse.remoteData?.results || []);
+
+                console.log('[HarvestSummary] Extracted remoteData:', JSON.stringify(remoteData, null, 2));
+
                 // Maping remote data (snake_case) to local data structure (camelCase)
-                 remoteRecords = remoteResponse.remoteData.results.map(r => ({
-                     // Map ALL API fields to local camelCase structure
-                     id: r.id,
-                     block: r.block_ID,
-                     name: r.Worker_name,
-                     isSynced: true,
-
-
-                     weight: `${r.weight_on_delivery} kg`,
-                     date: r.date_of_delivery,
-                     amountPaid: Number(r.amount_paid),
-                     paidBy: r.paid_by,
-                 }));
+                remoteRecords = remoteData.map(r => ({
+                    // Map ALL API fields to local camelCase structure
+                    id: r.harvest_id,
+                    harvest_id: r.harvest_id,
+                    block: r.block_id,
+                    block_id: r.block_id,
+                    name: r.worker_name,
+                    worker_name: r.worker_name,
+                    isSynced: true,
+                    weight: `${r.weight_on_delivery || 0} kg`,
+                    date: r.date_of_delivery,
+                    amountPaid: Number(r.amount_paid || 0),
+                    amount_paid: Number(r.amount_paid || 0),
+                    paidBy: r.paid_by || 'Unknown',
+                    paid_by: r.paid_by || 'Unknown',
+                }));
             }
         } else {
             setSyncStatus("Offline Mode: Data saved locally. Sync will occur when online.");
         }
         
         // 4. Fetching Local Data (always fetch, regardless of connectivity)
-        const localResponse = await getUnsyncedRecords();
+        const localResponse = await getUnsyncedProductionRecords();
         if (localResponse.success && Array.isArray(localResponse.records)) {
             // Maping local data and format for display consistency with remote data
             localRecords = localResponse.records.map(r => ({
                 id: r.id,
-                block: r.blockId,
-                name: r.workerName,
+                block: r.blockId || r.block_id || r.block || 'Unknown',
+                name: r.workerName || r.worker_name || r.name || 'Unknown',
+                worker_name: r.workerName || r.worker_name || r.name || 'Unknown',
                 isSynced: false,
-                weight: `${r.weight} kg`,
-                date: r.dateReadable || r.date.split('T')[0],
-                amountPaid: Number(r.amountPaid),
-                paidBy: r.paidBy,
+                weight: `${r.weight || 0} kg`,
+                date: r.dateReadable || (r.date ? r.date.split('T')[0] : 'Unknown'),
+                amountPaid: Number(r.amountPaid || r.amount_paid || 0),
+                paidBy: r.paidBy || r.paid_by || r.who_paid || 'Unknown',
+                paid_by: r.paidBy || r.paid_by || r.who_paid || 'Unknown',
             }));
         }
 
@@ -264,8 +282,14 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
         const pendingRecords = finalRecords.filter(r => !r.isSynced);
         setUnsyncedCount(pendingRecords.length);
 
+        console.log('[HarvestSummary] Final remoteRecords count:', remoteRecords.length);
+        console.log('[HarvestSummary] Final localRecords count:', localRecords.length);
+        console.log('[HarvestSummary] Final combined records count:', finalRecords.length);
+        console.log('[HarvestSummary] Final records:', JSON.stringify(finalRecords, null, 2));
+
         setAllRecords(finalRecords);
         setIsLoading(false);
+        console.log('[HarvestSummary] ===== loadAndSyncData END =====');
     }, []);
 
     // --- Filtering & Searching Logic ---
@@ -422,7 +446,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                         setAlertConfig({ ...alertConfig, visible: false });
                         try {
                             // Call delete API
-                            const result = await deleteHarvestRecord(item.id);
+                            const result = await deleteProductionHarvestRecord(item.id);
 
                             if (result.success) {
                                 // Show success message first

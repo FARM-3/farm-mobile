@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const STAFF_CACHE_KEY = 'staff_cache';
 const STAFF_CACHE_EXPIRY_KEY = 'staff_cache_expiry';
-const CACHE_DURATION_MS = 3600000; // 1 hour cache
+const CACHE_DURATION_MS = 600000; // 10 minutes cache (reduced from 1 hour for more frequent updates)
 
 /**
  * Formats staff name from API response
@@ -36,10 +36,22 @@ const formatStaffName = (staff) => {
 };
 
 /**
+ * Force refresh staff list from API (bypasses cache)
+ * Use this after adding/updating staff in the database
+ * @returns {Promise} { success: boolean, staff: Array }
+ */
+export const refreshStaffList = async () => {
+    console.log('[staffService] Force refreshing staff list from API (bypassing cache)...');
+    await clearStaffCache();
+    return fetchAllStaff(false); // Skip cache on refresh
+};
+
+/**
  * Fetches all staff members from the API
  * Includes caching to reduce API calls
  *
- * @returns {Promise} { success: boolean, staff: Array, cachedAt?: timestamp }
+ * @param {boolean} useCache - Whether to use cached data (default: true)
+ * @returns {Promise} { success: boolean, staff: Array, fromCache?: boolean }
  */
 export const fetchAllStaff = async (useCache = true) => {
     try {
