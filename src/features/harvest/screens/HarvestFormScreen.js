@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUnsyncedRecords, postHarvestRecord, removeRecordFromQueue, updateHarvestRecord } from '../../../services/harvestRecord';
+import { getUnsyncedProductionRecords, postProductionHarvestRecord, removeProductionRecordFromQueue, updateProductionHarvestRecord } from '../../../services/productionHarvestService';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomPicker from '../../../components/CustomPicker';
@@ -13,7 +13,7 @@ import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../.
 import { fetchCurrentPrice } from '../../../services/priceService';
 
 
-const SYNC_QUEUE_KEY = "harvests_sync_queue";
+const SYNC_QUEUE_KEY = "production_harvests_sync_queue";
 
 import {
     View,
@@ -58,47 +58,58 @@ function formatDateForDisplay(d) {
 }
 
 /**
- * Get the next sequential harvest ID suffix (A00, A01, ... A99, B00, ... Z99)
- * Stores counter in localStorage to persist across sessions
- * @returns {string} The suffix like "A00", "A01", "B00", etc.
+ * Get the next sequential harvest ID suffix (A0, A1, ... Z9)
+ * Uses AsyncStorage to persist counter across sessions (offline-first)
+ * Format: A0-Z9 (26 letters × 10 digits = 260 combinations, then resets)
+ * @returns {Promise<string>} The suffix like "A0", "A1", ..., "Z9"
  */
-const getNextHarvestSequentialSuffix = () => {
+const getNextHarvestSequentialSuffix = async () => {
     try {
         let counter = 0;
 
-        // Try to retrieve from localStorage
-        if (typeof localStorage !== 'undefined') {
-            const stored = localStorage.getItem('harvestFormIdCounter');
-            counter = stored ? parseInt(stored, 10) : 0;
-        }
+        // Try to retrieve from AsyncStorage (mobile-first approach, works offline)
+        const stored = await AsyncStorage.getItem('harvestSequentialCounter');
+        counter = stored ? parseInt(stored, 10) : 0;
 
         // Increment counter for next use
         const nextCounter = counter + 1;
 
-        // Store for next time
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('harvestFormIdCounter', String(nextCounter));
-        }
+        // Store for next time (persists across sessions and app restarts)
+        await AsyncStorage.setItem('harvestSequentialCounter', String(nextCounter));
 
-        // Convert counter to Letter+Numbers format (A00 to Z99)
-        const letterIndex = Math.floor(counter / 100) % 26;
-        const numberPart = counter % 100;
+        // Convert counter to Letter+Number format (A0 to Z9)
+        // 26 letters (A-Z) × 10 numbers (0-9) = 260 total, then resets
+        const position = counter % 260;
+        const letterIndex = Math.floor(position / 10); // 0-25 (A-Z)
+        const numberPart = position % 10; // 0-9
 
-        const letter = String.fromCharCode(65 + letterIndex);
-        const numbers = String(numberPart).padStart(2, '0');
+        const letter = String.fromCharCode(65 + letterIndex); // 65 is ASCII for 'A'
+        const number = numberPart.toString();
 
-        return `${letter}${numbers}`;
+        return `${letter}${number}`;
     } catch (error) {
         console.warn('Error getting harvest sequential suffix, using fallback:', error);
-        return 'A00';
+        return 'A0';
     }
 };
 
-function generateHarvestId(workerName = '', date = new Date()) {
+/**
+ * Generates a unique Production Harvest ID offline (offline-first app)
+ * Format: XX + DDMM + P + LN
+ * - XX: First 2 letters of worker name (uppercase)
+ * - DDMM: Day and month of delivery date
+ * - P: Production indicator (hardcoded - represents Rugyeyo production)
+ * - LN: Sequential code A0-Z9
+ *
+ * @param {string} workerName - Name of the worker
+ * @param {Date} date - Date of delivery
+ * @returns {Promise<string>} The generated harvest ID
+ */
+const generateHarvestId = async (workerName = '', date = new Date()) => {
     // Ensure workerName is a string
     const nameStr = String(workerName || '');
 
-    // Get first two letters of worker name (not initials)
+    // Get first two letters of worker name (uppercase)
     const cleanName = nameStr.trim().toUpperCase().replace(/[^A-Z]/g, '');
     const firstTwoLetters = cleanName.substring(0, 2).padEnd(2, 'X');
 
@@ -106,11 +117,12 @@ function generateHarvestId(workerName = '', date = new Date()) {
     const dd = String(date.getDate()).padStart(2, "0");
     const mm = String(date.getMonth() + 1).padStart(2, "0");
 
-    // Get next sequential suffix (A00 to Z99)
-    const suffix = getNextHarvestSequentialSuffix();
+    // Get next sequential suffix (A0 to Z9)
+    const suffix = await getNextHarvestSequentialSuffix();
 
-    return `${firstTwoLetters}${dd}${mm}R${suffix}`;
-}
+    // Format: XX + DDMM + P + LN
+    return `${firstTwoLetters}${dd}${mm}P${suffix}`;
+};
 
 // --- STATIC OPTIONS (Aligned with API schema) ---
 // Block IDs must match the enum values from the API schema
@@ -201,34 +213,29 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
             setLoadingPrice(true);
             try {
                 const price = await fetchCurrentPrice();
-                console.log('[HarvestForm] Fetched price:', price);
-                if (price) {
+                console.log('[HarvestForm] Fetched production price:', price);
+                if (price !== null && price !== undefined) {
                     setProductionPrice(price);
-                    // Auto-fill the price field if it's empty
+                    // Auto-fill the price field only if it's empty
                     if (!formData.pricePerKg) {
                         updateField('pricePerKg', String(price));
                     }
                 } else {
-                    // Default price if no price is set in API
-                    setProductionPrice(3000);
-                    if (!formData.pricePerKg) {
-                        updateField('pricePerKg', '3000');
-                    }
+                    // No price set in database - don't set any default
+                    console.log('[HarvestForm] No production price set in database');
+                    setProductionPrice(null);
                 }
             } catch (error) {
-                console.error('[HarvestForm] Error fetching price:', error);
-                // Fallback to default price on error
-                setProductionPrice(3000);
-                if (!formData.pricePerKg) {
-                    updateField('pricePerKg', '3000');
-                }
+                console.error('[HarvestForm] Error fetching production price:', error);
+                // On error, don't set any default - let field remain empty/editable
+                setProductionPrice(null);
             } finally {
                 setLoadingPrice(false);
             }
         };
 
         loadPrice();
-    }, [priceRefreshKey, formData.pricePerKg, updateField]);
+    }, [priceRefreshKey]);
 
     return (
         <View style={stepStyles.stepContainer}>
@@ -243,17 +250,34 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
                 placeholder="e.g. 12.5"
             />
 
-            <Text style={styles.label}>Price per Kg (UGX)</Text>
+            <Text style={styles.label}>Price per Kg (UGX) *</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={[styles.input, { flex: 1, backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
-                    {loadingPrice ? (
-                        <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
-                    ) : (
-                        <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
-                            {formData.pricePerKg || productionPrice || '3000'}
-                        </Text>
-                    )}
-                </View>
+                {productionPrice !== null ? (
+                    // Price is set in database - show as read-only with the fetched price
+                    <View style={[styles.input, { flex: 1, backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
+                        {loadingPrice ? (
+                            <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
+                        ) : (
+                            <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
+                                {formData.pricePerKg || productionPrice}
+                            </Text>
+                        )}
+                    </View>
+                ) : (
+                    // No price in database - make field editable
+                    <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        keyboardType="numeric"
+                        value={formData.pricePerKg}
+                        onChangeText={(value) => {
+                            // Remove any non-numeric characters except decimal point
+                            const cleaned = value.replace(/[^0-9.]/g, '');
+                            updateField('pricePerKg', cleaned);
+                        }}
+                        placeholder="Enter price per kg"
+                        editable={!loadingPrice}
+                    />
+                )}
                 <TouchableOpacity
                     style={{
                         backgroundColor: CoffeeColors.PRIMARY_BROWN,
@@ -273,9 +297,15 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
                     />
                 </TouchableOpacity>
             </View>
-            <Text style={styles.helperText}>
-                Current production price from system settings. Tap refresh icon to update.
-            </Text>
+            {productionPrice !== null ? (
+                <Text style={styles.helperText}>
+                    Price fetched from database (latest production price). Tap refresh to update.
+                </Text>
+            ) : (
+                <Text style={styles.helperText}>
+                    No price set in database - enter manually or tap refresh to check again.
+                </Text>
+            )}
 
             <Text style={styles.label}>Amount Paid (UGX)</Text>
             <TextInput
@@ -320,7 +350,7 @@ const initialFormState = {
 
     // System fields
     showDatePicker: false,
-    generatedId: generateHarvestId(new Date()), // Local ID for tracking
+    generatedId: '', // Will be set by useEffect
 };
 
 
@@ -371,10 +401,16 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
 
     // Update generated ID when worker name or date changes
     useEffect(() => {
-        setFormData(prev => ({
-            ...prev,
-            generatedId: generateHarvestId(prev.workerName, prev.date)
-        }));
+        const generateId = async () => {
+            const newId = await generateHarvestId(formData.workerName, formData.date);
+            setFormData(prev => ({
+                ...prev,
+                generatedId: newId
+            }));
+        };
+        if (formData.workerName && formData.date) {
+            generateId();
+        }
     }, [formData.workerName, formData.date]);
 
     // Auto-calculate amount paid when weight or pricePerKg changes
@@ -546,11 +582,11 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     const handleSyncNow = async (harvestData) => {
         try {
             console.log('[HarvestForm] Syncing to backend now...');
-            const response = await postHarvestRecord(harvestData);
+            const response = await postProductionHarvestRecord(harvestData);
 
             if (response.success) {
                 // Remove from local queue since it's synced
-                await removeRecordFromQueue(harvestData.id);
+                await removeProductionRecordFromQueue(harvestData.id);
                 Alert.alert(
                     "Success!",
                     "Harvest record saved and synced to cloud successfully.",
@@ -628,7 +664,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 // UPDATE MODE: Call the API to update the record
                 console.log('[HarvestForm] Updating harvest record:', editRecordId);
 
-                const response = await updateHarvestRecord(editRecordId, harvestData);
+                const response = await updateProductionHarvestRecord(editRecordId, harvestData);
 
                 if (response.success) {
                     setAlertConfig({
@@ -667,7 +703,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 }
             } else {
                 // CREATE MODE: Save to local storage for offline sync
-                const { records: currentRecords } = await getUnsyncedRecords();
+                const { records: currentRecords } = await getUnsyncedProductionRecords();
                 const updatedRecords = [...currentRecords, harvestData];
                 await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
 

@@ -21,11 +21,11 @@ import { Ionicons } from '@expo/vector-icons';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import {
-    fetchAllHarvestRecords,
-    getUnsyncedRecords,
-    syncAllRecords,
-    deleteHarvestRecord
-} from '../../../services/harvestRecord';
+    fetchAllProductionHarvestRecords,
+    getUnsyncedProductionRecords,
+    syncAllProductionRecords,
+    deleteProductionHarvestRecord
+} from '../../../services/productionHarvestService';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomPicker from '../../../components/CustomPicker';
@@ -57,19 +57,19 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
         if (isConnected) {
             setSyncStatus("Online: Initiating data synchronization.");
 
-            const syncResult = await syncAllRecords();
+            const syncResult = await syncAllProductionRecords();
             if (syncResult.totalCount > 0) {
                 setSyncStatus(`Sync complete! ${syncResult.syncedCount} of ${syncResult.totalCount} records uploaded.`);
             } else {
                 setSyncStatus("Online: No pending records to sync.");
             }
 
-            const remoteResponse = await fetchAllHarvestRecords();
-            if (remoteResponse.success && Array.isArray(remoteResponse.remoteData.results)) {
-                remoteRecords = remoteResponse.remoteData.results.map(r => ({
-                    id: r.id,
-                    block: r.block_ID,
-                    name: r.Worker_name,
+            const remoteResponse = await fetchAllProductionHarvestRecords();
+            if (remoteResponse.success && Array.isArray(remoteResponse.remoteData)) {
+                remoteRecords = remoteResponse.remoteData.map(r => ({
+                    id: r.harvest_id,
+                    block: r.block_id,
+                    name: r.worker_name,
                     isSynced: true,
                     weight: `${r.weight_on_delivery} kg`,
                     date: r.date_of_delivery,
@@ -81,7 +81,7 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
             setSyncStatus("Offline Mode: Data saved locally. Sync will occur when online.");
         }
 
-        const localResponse = await getUnsyncedRecords();
+        const localResponse = await getUnsyncedProductionRecords();
         if (localResponse.success && Array.isArray(localResponse.records)) {
             localRecords = localResponse.records.map(r => ({
                 id: r.id,
@@ -207,7 +207,7 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
                             Alert.alert('Deleting', 'Removing harvest record...', [], { cancelable: false });
 
                             // Call delete API
-                            const result = await deleteHarvestRecord(item.id);
+                            const result = await deleteProductionHarvestRecord(item.id);
 
                             // Close loading alert
                             Alert.alert('', '', [{ text: 'OK' }]);
