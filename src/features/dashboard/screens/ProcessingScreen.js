@@ -16,32 +16,32 @@ export default function ProcessingScreen({ navigation }) {
   const processes = [
     {
       id: 1,
-      name: 'Fermenting',
-      icon: '☕',
+      name: 'Quality Control', // Updated from Fermenting
+      icon: '📋', // Changed to Clipboard (Standard for QC/Inspection)
       lastRecorded: 'Last Recorded by Sarah',
       time: '10:30 AM',
-      screen: 'Fermenting',
+      screen: 'QualityControl',
     },
     {
       id: 2,
-      name: 'Washing',
-      icon: '💧',
+      name: 'Processing Type', // Updated from Washing
+      icon: '⚙️', // Changed to Gear (Standard for Processing/Operations)
       lastRecorded: 'Last Recorded by Sarah',
       time: '09:00 AM',
-      screen: 'Washing',
+      screen: 'ProcessingType',
     },
     {
       id: 3,
-      name: 'Sundrying',
-      icon: '☀️',
+      name: 'Drying', // Updated from Sundrying
+      icon: '♨️', // Changed to Heat waves (Standard for Industrial Drying)
       lastRecorded: 'Last Recorded by Emily',
       time: '02:00 PM',
-      screen: 'Sundrying',
+      screen: 'Drying',
     },
     {
       id: 4,
-      name: 'Bagging',
-      icon: '🎒',
+      name: 'Bagging', // Name maintained
+      icon: '📦', // Changed to Package/Box (Standard for Logistics/Bagging)
       lastRecorded: 'Last Recorded by Michael',
       time: '04:30 PM',
       screen: 'Bagging',
