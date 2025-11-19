@@ -16,11 +16,14 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
+
+const FERMENTING_STORAGE_KEY = 'fermenting_records';
 
 // Utility function to format date for API (YYYY-MM-DD)
 function formatDateForApi(d) {
@@ -116,11 +119,38 @@ export default function FermentingFormScreen({ navigation, route = {} }) {
     // Auto-generate processing ID when start date changes
     useEffect(() => {
         if (!isEditMode) {
-            const newId = generateProcessingId(formData.start_date, 0);
-            setFormData(prev => ({
-                ...prev,
-                processing_id: newId
-            }));
+            const generateUniqueId = async () => {
+                try {
+                    // Load existing records to determine next sequence number
+                    const existingData = await AsyncStorage.getItem(FERMENTING_STORAGE_KEY);
+                    const existingRecords = existingData ? JSON.parse(existingData) : [];
+
+                    // Filter records with same date prefix
+                    const dateStr = formatDateForApi(formData.start_date).replace(/-/g, '');
+                    const sameDate = existingRecords.filter(record =>
+                        record.processing_id && record.processing_id.startsWith(`FERM-${dateStr}`)
+                    );
+
+                    // Calculate next sequence number
+                    const nextSeq = sameDate.length;
+                    const newId = generateProcessingId(formData.start_date, nextSeq);
+
+                    setFormData(prev => ({
+                        ...prev,
+                        processing_id: newId
+                    }));
+                } catch (error) {
+                    console.error('[FermentingForm] Error generating ID:', error);
+                    // Fallback to timestamp-based ID
+                    const newId = `FERM-${Date.now()}`;
+                    setFormData(prev => ({
+                        ...prev,
+                        processing_id: newId
+                    }));
+                }
+            };
+
+            generateUniqueId();
         }
     }, [formData.start_date, isEditMode]);
 
@@ -203,16 +233,26 @@ export default function FermentingFormScreen({ navigation, route = {} }) {
                 days: formData.days,
                 weight: Number(formData.weight),
                 processing_id: formData.processing_id,
+                created_at: new Date().toISOString(),
+                isSynced: false,
             };
 
+            // Load existing records
+            const existingData = await AsyncStorage.getItem(FERMENTING_STORAGE_KEY);
+            const existingRecords = existingData ? JSON.parse(existingData) : [];
+
             if (isEditMode && editRecordId) {
-                // TODO: Implement update API call
-                // const response = await updateFermentingRecord(editRecordId, fermentingData);
-                console.log('[FermentingForm] Update data:', fermentingData);
+                // Update existing record
+                const updatedRecords = existingRecords.map(record =>
+                    record.processing_id === editRecordId ? { ...record, ...fermentingData } : record
+                );
+                await AsyncStorage.setItem(FERMENTING_STORAGE_KEY, JSON.stringify(updatedRecords));
+                console.log('[FermentingForm] Updated record:', fermentingData);
             } else {
-                // TODO: Implement create API call
-                // const response = await createFermentingRecord(fermentingData);
-                console.log('[FermentingForm] Create data:', fermentingData);
+                // Add new record
+                existingRecords.push(fermentingData);
+                await AsyncStorage.setItem(FERMENTING_STORAGE_KEY, JSON.stringify(existingRecords));
+                console.log('[FermentingForm] Created record:', fermentingData);
             }
 
             // Reset form
@@ -408,14 +448,6 @@ export default function FermentingFormScreen({ navigation, route = {} }) {
                                 {isEditMode ? 'Update Record' : 'Submit Record'}
                             </Text>
                         )}
-                    </TouchableOpacity>
-
-                    {/* Back Button */}
-                    <TouchableOpacity
-                        style={styles.backButtonLink}
-                        onPress={() => navigation.navigate('FermentingSummary')}
-                    >
-                        <Text style={styles.backButtonText}>Back to Fermenting Records</Text>
                     </TouchableOpacity>
 
                     <View style={{ height: 100 }} />

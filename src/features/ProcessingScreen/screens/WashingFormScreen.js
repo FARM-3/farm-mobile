@@ -16,11 +16,14 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
+
+const WASHING_STORAGE_KEY = 'washing_records';
 
 // Utility function to format date for API (YYYY-MM-DD)
 function formatDateForApi(d) {
@@ -103,11 +106,38 @@ export default function WashingFormScreen({ navigation, route = {} }) {
     // Auto-generate processing ID when date changes
     useEffect(() => {
         if (!isEditMode) {
-            const newId = generateProcessingId(formData.date, 0);
-            setFormData(prev => ({
-                ...prev,
-                processing_id: newId
-            }));
+            const generateUniqueId = async () => {
+                try {
+                    // Load existing records to determine next sequence number
+                    const existingData = await AsyncStorage.getItem(WASHING_STORAGE_KEY);
+                    const existingRecords = existingData ? JSON.parse(existingData) : [];
+
+                    // Filter records with same date prefix
+                    const dateStr = formatDateForApi(formData.date).replace(/-/g, '');
+                    const sameDate = existingRecords.filter(record =>
+                        record.processing_id && record.processing_id.startsWith(`WASH-${dateStr}`)
+                    );
+
+                    // Calculate next sequence number
+                    const nextSeq = sameDate.length;
+                    const newId = generateProcessingId(formData.date, nextSeq);
+
+                    setFormData(prev => ({
+                        ...prev,
+                        processing_id: newId
+                    }));
+                } catch (error) {
+                    console.error('[WashingForm] Error generating ID:', error);
+                    // Fallback to timestamp-based ID
+                    const newId = `WASH-${Date.now()}`;
+                    setFormData(prev => ({
+                        ...prev,
+                        processing_id: newId
+                    }));
+                }
+            };
+
+            generateUniqueId();
         }
     }, [formData.date, isEditMode]);
 
@@ -166,16 +196,26 @@ export default function WashingFormScreen({ navigation, route = {} }) {
                 date: formatDateForApi(formData.date),
                 weight: Number(formData.weight),
                 processing_id: formData.processing_id,
+                created_at: new Date().toISOString(),
+                isSynced: false,
             };
 
+            // Load existing records
+            const existingData = await AsyncStorage.getItem(WASHING_STORAGE_KEY);
+            const existingRecords = existingData ? JSON.parse(existingData) : [];
+
             if (isEditMode && editRecordId) {
-                // TODO: Implement update API call
-                // const response = await updateWashingRecord(editRecordId, washingData);
-                console.log('[WashingForm] Update data:', washingData);
+                // Update existing record
+                const updatedRecords = existingRecords.map(record =>
+                    record.processing_id === editRecordId ? { ...record, ...washingData } : record
+                );
+                await AsyncStorage.setItem(WASHING_STORAGE_KEY, JSON.stringify(updatedRecords));
+                console.log('[WashingForm] Updated record:', washingData);
             } else {
-                // TODO: Implement create API call
-                // const response = await createWashingRecord(washingData);
-                console.log('[WashingForm] Create data:', washingData);
+                // Add new record
+                existingRecords.push(washingData);
+                await AsyncStorage.setItem(WASHING_STORAGE_KEY, JSON.stringify(existingRecords));
+                console.log('[WashingForm] Created record:', washingData);
             }
 
             // Reset form
@@ -341,14 +381,6 @@ export default function WashingFormScreen({ navigation, route = {} }) {
                                 {isEditMode ? 'Update Record' : 'Submit Record'}
                             </Text>
                         )}
-                    </TouchableOpacity>
-
-                    {/* Back Button */}
-                    <TouchableOpacity
-                        style={styles.backButtonLink}
-                        onPress={() => navigation.navigate('WashingSummary')}
-                    >
-                        <Text style={styles.backButtonText}>Back to Washing Records</Text>
                     </TouchableOpacity>
 
                     <View style={{ height: 100 }} />

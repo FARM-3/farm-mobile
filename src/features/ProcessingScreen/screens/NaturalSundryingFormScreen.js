@@ -16,11 +16,14 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
+
+const SUNDRYING_STORAGE_KEY = 'natural_sundrying_records';
 
 // Utility function to format date for API (YYYY-MM-DD)
 function formatDateForApi(d) {
@@ -103,11 +106,38 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
     // Auto-generate processing ID when start date changes
     useEffect(() => {
         if (!isEditMode) {
-            const newId = generateProcessingId(formData.start_date, 0);
-            setFormData(prev => ({
-                ...prev,
-                processing_id: newId
-            }));
+            const generateUniqueId = async () => {
+                try {
+                    // Load existing records to determine next sequence number
+                    const existingData = await AsyncStorage.getItem(SUNDRYING_STORAGE_KEY);
+                    const existingRecords = existingData ? JSON.parse(existingData) : [];
+
+                    // Filter records with same date prefix
+                    const dateStr = formatDateForApi(formData.start_date).replace(/-/g, '');
+                    const sameDate = existingRecords.filter(record =>
+                        record.processing_id && record.processing_id.startsWith(`SUND-${dateStr}`)
+                    );
+
+                    // Calculate next sequence number
+                    const nextSeq = sameDate.length;
+                    const newId = generateProcessingId(formData.start_date, nextSeq);
+
+                    setFormData(prev => ({
+                        ...prev,
+                        processing_id: newId
+                    }));
+                } catch (error) {
+                    console.error('[NaturalSundryingForm] Error generating ID:', error);
+                    // Fallback to timestamp-based ID
+                    const newId = `SUND-${Date.now()}`;
+                    setFormData(prev => ({
+                        ...prev,
+                        processing_id: newId
+                    }));
+                }
+            };
+
+            generateUniqueId();
         }
     }, [formData.start_date, isEditMode]);
 
@@ -166,16 +196,26 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
                 start_date: formatDateForApi(formData.start_date),
                 weight: Number(formData.weight),
                 processing_id: formData.processing_id,
+                created_at: new Date().toISOString(),
+                isSynced: false,
             };
 
+            // Load existing records
+            const existingData = await AsyncStorage.getItem(SUNDRYING_STORAGE_KEY);
+            const existingRecords = existingData ? JSON.parse(existingData) : [];
+
             if (isEditMode && editRecordId) {
-                // TODO: Implement update API call
-                // const response = await updateNaturalSundryingRecord(editRecordId, sundryingData);
-                console.log('[NaturalSundryingForm] Update data:', sundryingData);
+                // Update existing record
+                const updatedRecords = existingRecords.map(record =>
+                    record.processing_id === editRecordId ? { ...record, ...sundryingData } : record
+                );
+                await AsyncStorage.setItem(SUNDRYING_STORAGE_KEY, JSON.stringify(updatedRecords));
+                console.log('[NaturalSundryingForm] Updated record:', sundryingData);
             } else {
-                // TODO: Implement create API call
-                // const response = await createNaturalSundryingRecord(sundryingData);
-                console.log('[NaturalSundryingForm] Create data:', sundryingData);
+                // Add new record
+                existingRecords.push(sundryingData);
+                await AsyncStorage.setItem(SUNDRYING_STORAGE_KEY, JSON.stringify(existingRecords));
+                console.log('[NaturalSundryingForm] Created record:', sundryingData);
             }
 
             // Reset form
@@ -343,14 +383,6 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
                         )}
                     </TouchableOpacity>
 
-                    {/* Back Button */}
-                    <TouchableOpacity
-                        style={styles.backButtonLink}
-                        onPress={() => navigation.navigate('NaturalSundryingSummary')}
-                    >
-                        <Text style={styles.backButtonText}>Back to Sundrying Records</Text>
-                    </TouchableOpacity>
-
                     <View style={{ height: 100 }} />
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -436,7 +468,7 @@ const styles = StyleSheet.create({
     },
     submitButton: {
         marginTop: 24,
-        backgroundColor: '#FF9800',
+        backgroundColor: CoffeeColors.ACCENT,
         padding: 16,
         borderRadius: 10,
         alignItems: 'center',

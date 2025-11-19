@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,39 +12,74 @@ import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import AuthService from '../../../services/AuthService';
 
 export default function ProcessingScreen({ navigation }) {
+  const [userName, setUserName] = useState('User');
+
+  // Fetch logged-in user on component mount
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const user = await AuthService.getStoredUser();
+        if (user) {
+          // Use name, first_name, username, or default to 'User'
+          const displayName = user.name || user.first_name || user.username || 'User';
+          setUserName(displayName);
+        }
+      } catch (error) {
+        console.error('[ProcessingScreen] Error fetching user:', error);
+      }
+    };
+
+    fetchUser();
+  }, []);
+
+  // Helper function to format current time
+  const getCurrentTime = () => {
+    const now = new Date();
+    let hours = now.getHours();
+    const minutes = now.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // Handle midnight (0 hours)
+    const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+    return `${hours}:${minutesStr} ${ampm}`;
+  };
+
+  const currentTime = getCurrentTime();
+
   const processes = [
     {
       id: 1,
       name: 'Quality Control',
       icon: 'clipboard-check-outline',
-      lastRecorded: 'Last Recorded by Sarah',
-      time: '10:30 AM',
+      lastRecorded: `Last Recorded by ${userName}`,
+      time: currentTime,
       screen: 'QualityControl',
     },
     {
       id: 2,
       name: 'Processing Type',
       icon: 'cog-outline',
-      lastRecorded: 'Last Recorded by Sarah',
-      time: '09:00 AM',
+      lastRecorded: `Last Recorded by ${userName}`,
+      time: currentTime,
       screen: 'ProcessingType',
     },
     {
       id: 3,
       name: 'Drying',
       icon: 'weather-sunny',
-      lastRecorded: 'Last Recorded by Emily',
-      time: '02:00 PM',
+      lastRecorded: `Last Recorded by ${userName}`,
+      time: currentTime,
       screen: 'Drying',
     },
     {
       id: 4,
       name: 'Bagging',
       icon: 'package-variant-closed',
-      lastRecorded: 'Last Recorded by Michael',
-      time: '04:30 PM',
+      lastRecorded: `Last Recorded by ${userName}`,
+      time: currentTime,
       screen: 'Bagging',
     },
   ];
@@ -52,13 +87,14 @@ export default function ProcessingScreen({ navigation }) {
   const handleCardPress = (process) => {
     console.log('[ProcessingScreen] Card pressed:', process.name, 'Screen:', process.screen);
 
-    if (process.screen === 'QualityControl') {
+    // Navigate to available screens, show "Coming Soon" for others
+    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType') {
       try {
-        console.log('[ProcessingScreen] Navigating to QualityControl screen...');
+        console.log('[ProcessingScreen] Navigating to', process.screen, 'screen...');
         navigation.navigate(process.screen);
       } catch (error) {
         console.error('[ProcessingScreen] Navigation error:', error);
-        Alert.alert('Error', 'Failed to navigate to Quality Control screen');
+        Alert.alert('Error', `Failed to navigate to ${process.name} screen`);
       }
     } else {
       Alert.alert(
@@ -66,15 +102,6 @@ export default function ProcessingScreen({ navigation }) {
         `The ${process.name} feature is currently under development.`,
         [{ text: 'OK' }]
       );
-    }
-  };
-
-  const handleCardPress = (process) => {
-    // Navigate to ProcessingType screen if available, otherwise show coming soon
-    if (process.screen === 'ProcessingType') {
-      navigation.navigate(process.screen);
-    } else {
-      handleComingSoon(process.name);
     }
   };
 

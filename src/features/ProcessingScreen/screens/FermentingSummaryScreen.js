@@ -12,10 +12,13 @@ import {
     ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+
+const FERMENTING_STORAGE_KEY = 'fermenting_records';
 
 // Detailed view component for a fermenting record
 const FermentingDetailView = ({ record, onBack }) => {
@@ -94,14 +97,21 @@ export default function FermentingSummaryScreen({ navigation }) {
     const loadRecords = useCallback(async () => {
         setIsLoading(true);
         try {
-            // TODO: Implement API call to fetch fermenting records
-            // const response = await fetchFermentingRecords();
-            // setRecords(response.data);
-
-            // Placeholder data for now
-            setRecords([]);
+            // Load records from AsyncStorage
+            const storedData = await AsyncStorage.getItem(FERMENTING_STORAGE_KEY);
+            if (storedData) {
+                const parsedRecords = JSON.parse(storedData);
+                // Sort by created_at descending (newest first)
+                parsedRecords.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                setRecords(parsedRecords);
+                console.log('[FermentingSummary] Loaded', parsedRecords.length, 'records');
+            } else {
+                setRecords([]);
+                console.log('[FermentingSummary] No records found');
+            }
         } catch (error) {
             console.error('[FermentingSummary] Error loading records:', error);
+            setRecords([]);
         } finally {
             setIsLoading(false);
         }

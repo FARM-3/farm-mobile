@@ -12,10 +12,13 @@ import {
     ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+
+const SUNDRYING_STORAGE_KEY = 'natural_sundrying_records';
 
 // Detailed view component for a natural sundrying record
 const NaturalSundryingDetailView = ({ record, onBack }) => {
@@ -92,14 +95,21 @@ export default function NaturalSundryingSummaryScreen({ navigation }) {
     const loadRecords = useCallback(async () => {
         setIsLoading(true);
         try {
-            // TODO: Implement API call to fetch natural sundrying records
-            // const response = await fetchNaturalSundryingRecords();
-            // setRecords(response.data);
-
-            // Placeholder data for now
-            setRecords([]);
+            // Load records from AsyncStorage
+            const storedData = await AsyncStorage.getItem(SUNDRYING_STORAGE_KEY);
+            if (storedData) {
+                const parsedRecords = JSON.parse(storedData);
+                // Sort by created_at descending (newest first)
+                parsedRecords.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                setRecords(parsedRecords);
+                console.log('[NaturalSundryingSummary] Loaded', parsedRecords.length, 'records');
+            } else {
+                setRecords([]);
+                console.log('[NaturalSundryingSummary] No records found');
+            }
         } catch (error) {
             console.error('[NaturalSundryingSummary] Error loading records:', error);
+            setRecords([]);
         } finally {
             setIsLoading(false);
         }
@@ -249,7 +259,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#FF9800',
+        backgroundColor: CoffeeColors.ACCENT,
         padding: 12,
         borderRadius: 8,
         marginBottom: 10,

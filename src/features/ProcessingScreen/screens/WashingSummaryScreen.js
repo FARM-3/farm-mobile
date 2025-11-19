@@ -12,10 +12,13 @@ import {
     ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+
+const WASHING_STORAGE_KEY = 'washing_records';
 
 // Detailed view component for a washing record
 const WashingDetailView = ({ record, onBack }) => {
@@ -92,14 +95,21 @@ export default function WashingSummaryScreen({ navigation }) {
     const loadRecords = useCallback(async () => {
         setIsLoading(true);
         try {
-            // TODO: Implement API call to fetch washing records
-            // const response = await fetchWashingRecords();
-            // setRecords(response.data);
-
-            // Placeholder data for now
-            setRecords([]);
+            // Load records from AsyncStorage
+            const storedData = await AsyncStorage.getItem(WASHING_STORAGE_KEY);
+            if (storedData) {
+                const parsedRecords = JSON.parse(storedData);
+                // Sort by created_at descending (newest first)
+                parsedRecords.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                setRecords(parsedRecords);
+                console.log('[WashingSummary] Loaded', parsedRecords.length, 'records');
+            } else {
+                setRecords([]);
+                console.log('[WashingSummary] No records found');
+            }
         } catch (error) {
             console.error('[WashingSummary] Error loading records:', error);
+            setRecords([]);
         } finally {
             setIsLoading(false);
         }
