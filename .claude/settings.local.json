@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm start:*)"
+      "Bash(npm start:*)",
+      "Bash(eas --version:*)",
+      "Bash(eas build:*)",
+      "Bash(eas init:*)"
     ],
     "deny": [],
     "ask": []

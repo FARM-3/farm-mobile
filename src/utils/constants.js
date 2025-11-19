@@ -82,6 +82,7 @@ export const SEEDLING_TYPES = [...ROBUSTA_TYPES, ...ARABICA_TYPES];
 export const GRADES = ['A', 'B', 'C', 'D'];
 export const CHERRY_COLORS = ['Red', 'Yellow', 'Green'];
 export const STAGES = ['dried', 'fresh_cherry'];
+export const LOCATION_ON_DELIVERY_OPTIONS = ['Rugyeyo Farm', 'Other'];
 
 export const PICKER_MAP = {
     district: DISTRICTS,
@@ -97,6 +98,7 @@ export const PICKER_MAP = {
     all_your_trees: YES_NO_OPTIONS,
     spacing: SPACING_OPTIONS,
     practices: STANDARD_PRACTICES,
+    location_on_delivery: LOCATION_ON_DELIVERY_OPTIONS,
 };
 
 export default {

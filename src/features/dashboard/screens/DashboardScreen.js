@@ -21,6 +21,8 @@ import SyncService from '../../../services/SyncService';
 import { syncAllRecords, getUnsyncedRecords } from '../../../services/harvestRecord';
 import BottomNav from '../../../components/BottomNav';
 import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
+import { getCurrentWeather, isWeatherDataStale } from '../../../services/WeatherService';
+import { fetchActivities } from '../../../services/ActivityService';
 
 // Primary brown color and its shades
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
@@ -51,6 +53,16 @@ const DashboardScreen = ({ navigation }) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
+  // Weather state
+  const [weather, setWeather] = useState({
+    location: 'Kampala',
+    temperature: 24,
+    condition: 'Partly Cloudy',
+    humidity: 76,
+    icon: 'partly-sunny',
+    loading: true,
+  });
+
   // Animation values for header collapse
   const scrollY = useRef(new Animated.Value(0)).current;
   const lastScrollY = useRef(0);
@@ -61,9 +73,22 @@ const DashboardScreen = ({ navigation }) => {
       loadUserName();
       loadDashboardData();
       loadSyncStatus();
+      loadWeatherData();
     });
     return unsubscribe;
   }, [navigation]);
+
+  // Auto-refresh weather every 30 minutes
+  useEffect(() => {
+    loadWeatherData();
+
+    const weatherRefreshInterval = setInterval(() => {
+      console.log('[Dashboard] Auto-refreshing weather data...');
+      loadWeatherData();
+    }, 30 * 60 * 1000); // 30 minutes
+
+    return () => clearInterval(weatherRefreshInterval);
+  }, []);
 
   const loadUserName = async () => {
     try {
@@ -93,6 +118,18 @@ const DashboardScreen = ({ navigation }) => {
       const blocksData = await AsyncStorage.getItem('blocks_sync_queue');
       const blocks = blocksData ? JSON.parse(blocksData) : [];
 
+      // Fetch recent activities using ActivityService
+      let recentActivities = [];
+      try {
+        const activitiesResponse = await fetchActivities(10);
+        if (activitiesResponse.success) {
+          recentActivities = activitiesResponse.activities;
+          console.log('[Dashboard] Fetched activities:', recentActivities.length);
+        }
+      } catch (activityError) {
+        console.warn('[Dashboard] Could not fetch activities:', activityError.message);
+      }
+
       setStats({
         farmers: farmers.length,
         harvests: harvests.length,
@@ -105,6 +142,7 @@ const DashboardScreen = ({ navigation }) => {
         aggregationHarvest: harvests[0] || null,
         harvest: productionResponse.remoteData?.results?.[0] || null,
         block: blocks[0] || null,
+        activities: recentActivities,
         loading: false,
       });
     } catch (error) {
@@ -133,6 +171,34 @@ const DashboardScreen = ({ navigation }) => {
       setSyncStatus({ pending: records.length });
     } catch (error) {
       console.error('[Dashboard] Error loading sync status:', error);
+    }
+  };
+
+  const loadWeatherData = async () => {
+    try {
+      console.log('[Dashboard] Loading weather data...');
+      setWeather(prev => ({ ...prev, loading: true }));
+
+      const weatherData = await getCurrentWeather();
+
+      setWeather({
+        location: weatherData.location,
+        country: weatherData.country,
+        temperature: weatherData.temperature,
+        condition: weatherData.condition,
+        description: weatherData.description,
+        humidity: weatherData.humidity,
+        icon: weatherData.icon,
+        windSpeed: weatherData.windSpeed,
+        timestamp: weatherData.timestamp,
+        isFallback: weatherData.isFallback,
+        loading: false,
+      });
+
+      console.log('[Dashboard] Weather loaded:', `${weatherData.location} - ${weatherData.temperature}°C`);
+    } catch (error) {
+      console.error('[Dashboard] Error loading weather:', error);
+      setWeather(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -230,12 +296,12 @@ const DashboardScreen = ({ navigation }) => {
   const quickActions = [
     {
       label: 'Record Harvest',
-      sublabel: 'Own production',
+      sublabel: 'Rugyeyo Harvest',
       color: PRIMARY_BROWN,
       screen: 'HarvestForm',
     },
     {
-      label: 'Buy Coffee',
+      label: 'Bought Coffee',
       sublabel: 'From farmers',
       color: PRIMARY_BROWN,
       screen: 'Aggregation',
@@ -262,9 +328,11 @@ const DashboardScreen = ({ navigation }) => {
         <LinearGradient colors={[DARK_BROWN, '#7a3f1a', '#8B4513']} style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
-              <View style={styles.avatarIcon}>
-                <Ionicons name="leaf" size={20} color="#fff" />
-              </View>
+              <Image
+                source={require('../../../assets/rugyeyo_logo.png')}
+                style={styles.loadingLogo}
+                resizeMode="contain"
+              />
               <View>
                 <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
                 <Text style={styles.headerSubtitle}>Hello, {userName}</Text>
@@ -345,18 +413,38 @@ const DashboardScreen = ({ navigation }) => {
 
         {/* Weather Widget */}
         <View style={styles.weatherCardContainer}>
-          <View style={styles.weatherCard}>
+          <TouchableOpacity
+            style={styles.weatherCard}
+            onPress={loadWeatherData}
+            activeOpacity={0.7}
+          >
             <View style={styles.weatherContent}>
-              <View>
-                <Text style={styles.weatherLocation}>Kampala, Central Region</Text>
-                <Text style={styles.weatherTemp}>24°C</Text>
-                <Text style={styles.weatherCondition}>Partly Cloudy • Humidity 76%</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.weatherLocation}>
+                  {weather.loading ? 'Loading...' : `${weather.location}${weather.country ? ', ' + weather.country : ''}`}
+                </Text>
+                <Text style={styles.weatherTemp}>
+                  {weather.loading ? '--°C' : `${weather.temperature}°C`}
+                </Text>
+                <Text style={styles.weatherCondition}>
+                  {weather.loading
+                    ? 'Fetching weather...'
+                    : `${weather.condition} • Humidity ${weather.humidity}%`
+                  }
+                </Text>
+                {weather.isFallback && !weather.loading && (
+                  <Text style={styles.weatherFallbackNote}>Tap to refresh</Text>
+                )}
               </View>
               <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
-                <Ionicons name="partly-sunny" size={28} color={PRIMARY_BROWN} />
+                {weather.loading ? (
+                  <ActivityIndicator size="small" color={PRIMARY_BROWN} />
+                ) : (
+                  <Ionicons name={weather.icon} size={28} color={PRIMARY_BROWN} />
+                )}
               </LinearGradient>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       </Animated.View>
 
@@ -397,7 +485,7 @@ const DashboardScreen = ({ navigation }) => {
           <View style={styles.statCard}>
             <View style={styles.statContent}>
               <View style={styles.statTextContainer}>
-                <Text style={styles.statLabel}>Active Blocks</Text>
+                <Text style={styles.statLabel}>Tasks</Text>
                 <Text style={styles.statValue}>{stats.blocks}</Text>
                 <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>8.5 hectares</Text>
               </View>
@@ -449,49 +537,42 @@ const DashboardScreen = ({ navigation }) => {
         {/* Recent Activity */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <TouchableOpacity>
-            <Text style={styles.viewAllText}>View All</Text>
+          <TouchableOpacity onPress={loadDashboardData}>
+            <Text style={styles.viewAllText}>Refresh</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.recentActivityCard}>
-          <View style={styles.activityItem}>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>New harvest recorded</Text>
-              <Text style={styles.activitySubtitle}>150 kg coffee beans from Block A</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>45 minutes ago</Text>
+          {/* Recent Activities from Backend */}
+          {lastRecords.activities && lastRecords.activities.length > 0 ? (
+            lastRecords.activities.map((activity, index) => (
+              <View key={activity.id || index}>
+                <View style={styles.activityItem}>
+                  <View style={styles.activityContent}>
+                    <Text style={styles.activityTitle}>
+                      {activity.object_repr || 'Activity'} - {activity.action}
+                    </Text>
+                    <Text style={styles.activitySubtitle}>
+                      By: <Text style={{ fontWeight: '600' }}>{activity.user_name || 'Unknown User'}</Text>
+                    </Text>
+                    <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>
+                      {getTimeAgo(activity.timestamp)}
+                    </Text>
+                  </View>
+                </View>
+                {index < lastRecords.activities.length - 1 && (
+                  <View style={styles.activityDivider} />
+                )}
+              </View>
+            ))
+          ) : (
+            <View style={styles.activityItem}>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityTitle}>No recent activity</Text>
+                <Text style={styles.activitySubtitle}>Start by recording harvests or adding farmers</Text>
+              </View>
             </View>
-          </View>
-
-          <View style={styles.activityDivider} />
-
-          <View style={styles.activityItem}>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Farmer registration</Text>
-              <Text style={styles.activitySubtitle}>John Mugisha added to network</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>2 hours ago</Text>
-            </View>
-          </View>
-
-          <View style={styles.activityDivider} />
-
-          <View style={styles.activityItem}>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Processing completed</Text>
-              <Text style={styles.activitySubtitle}>Batch #247 - Drying stage finished</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>5 hours ago</Text>
-            </View>
-          </View>
-
-          <View style={styles.activityDivider} />
-
-          <View style={styles.activityItem}>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityTitle}>Quality check completed</Text>
-              <Text style={styles.activitySubtitle}>Grade A certification • by Sarah</Text>
-              <Text style={[styles.activityTime, { color: PRIMARY_BROWN }]}>7 hours ago</Text>
-            </View>
-          </View>
+          )}
         </View>
       </Animated.ScrollView>
       </View>
@@ -528,6 +609,11 @@ const styles = StyleSheet.create({
     fontWeight: Fonts.weights.semiBold,
     fontFamily: Fonts.semiBold,
   },
+  loadingLogo: {
+    width: 40,
+    height: 40,
+    marginRight: 12,
+  },
   headerContainer: {
     position: 'absolute',
     top: 0,
@@ -558,18 +644,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    gap: 1,
+    gap: 8,
   },
   headerLogo: {
-    width: 100,
-    height: 100,
+    width: 80,
+    height: 80,
   },
   rugyeyoText: {
-    fontSize: Fonts.sizes.massive,
+    fontSize: Fonts.sizes.extraLarge,
     fontWeight: Fonts.weights.bold,
     fontFamily: Fonts.bold,
     color: '#fff',
-    maxWidth: '70%',
+    flexShrink: 0,
   },
   headerGreeting: {
     flex: 1,
@@ -679,6 +765,13 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.small,
     color: CoffeeColors.GRAY_TEXT,
     fontFamily: Fonts.regular,
+  },
+  weatherFallbackNote: {
+    fontSize: 10,
+    color: CoffeeColors.PRIMARY_BROWN,
+    fontFamily: Fonts.regular,
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   weatherIcon: {
     width: 56,

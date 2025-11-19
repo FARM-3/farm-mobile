@@ -2,15 +2,18 @@ import React, { useState, useEffect, useCallback } from "react";
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUnsyncedRecords, postHarvestRecord, removeRecordFromQueue, updateHarvestRecord } from '../../../services/harvestRecord';
+import { getUnsyncedProductionRecords, postProductionHarvestRecord, removeProductionRecordFromQueue, updateProductionHarvestRecord } from '../../../services/productionHarvestService';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomPicker from '../../../components/CustomPicker';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import SearchableWorkerPicker from '../../../components/SearchableWorkerPicker';
 import CustomAlert from '../../../components/CustomAlert';
+import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
+import { fetchCurrentPrice } from '../../../services/priceService';
 
-const SYNC_QUEUE_KEY = "harvests_sync_queue";
+
+const SYNC_QUEUE_KEY = "production_harvests_sync_queue";
 
 import {
     View,
@@ -55,47 +58,58 @@ function formatDateForDisplay(d) {
 }
 
 /**
- * Get the next sequential harvest ID suffix (A00, A01, ... A99, B00, ... Z99)
- * Stores counter in localStorage to persist across sessions
- * @returns {string} The suffix like "A00", "A01", "B00", etc.
+ * Get the next sequential harvest ID suffix (A0, A1, ... Z9)
+ * Uses AsyncStorage to persist counter across sessions (offline-first)
+ * Format: A0-Z9 (26 letters × 10 digits = 260 combinations, then resets)
+ * @returns {Promise<string>} The suffix like "A0", "A1", ..., "Z9"
  */
-const getNextHarvestSequentialSuffix = () => {
+const getNextHarvestSequentialSuffix = async () => {
     try {
         let counter = 0;
 
-        // Try to retrieve from localStorage
-        if (typeof localStorage !== 'undefined') {
-            const stored = localStorage.getItem('harvestFormIdCounter');
-            counter = stored ? parseInt(stored, 10) : 0;
-        }
+        // Try to retrieve from AsyncStorage (mobile-first approach, works offline)
+        const stored = await AsyncStorage.getItem('harvestSequentialCounter');
+        counter = stored ? parseInt(stored, 10) : 0;
 
         // Increment counter for next use
         const nextCounter = counter + 1;
 
-        // Store for next time
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('harvestFormIdCounter', String(nextCounter));
-        }
+        // Store for next time (persists across sessions and app restarts)
+        await AsyncStorage.setItem('harvestSequentialCounter', String(nextCounter));
 
-        // Convert counter to Letter+Numbers format (A00 to Z99)
-        const letterIndex = Math.floor(counter / 100) % 26;
-        const numberPart = counter % 100;
+        // Convert counter to Letter+Number format (A0 to Z9)
+        // 26 letters (A-Z) × 10 numbers (0-9) = 260 total, then resets
+        const position = counter % 260;
+        const letterIndex = Math.floor(position / 10); // 0-25 (A-Z)
+        const numberPart = position % 10; // 0-9
 
-        const letter = String.fromCharCode(65 + letterIndex);
-        const numbers = String(numberPart).padStart(2, '0');
+        const letter = String.fromCharCode(65 + letterIndex); // 65 is ASCII for 'A'
+        const number = numberPart.toString();
 
-        return `${letter}${numbers}`;
+        return `${letter}${number}`;
     } catch (error) {
         console.warn('Error getting harvest sequential suffix, using fallback:', error);
-        return 'A00';
+        return 'A0';
     }
 };
 
-function generateHarvestId(workerName = '', date = new Date()) {
+/**
+ * Generates a unique Production Harvest ID offline (offline-first app)
+ * Format: XX + DDMM + P + LN
+ * - XX: First 2 letters of worker name (uppercase)
+ * - DDMM: Day and month of delivery date
+ * - P: Production indicator (hardcoded - represents Rugyeyo production)
+ * - LN: Sequential code A0-Z9
+ *
+ * @param {string} workerName - Name of the worker
+ * @param {Date} date - Date of delivery
+ * @returns {Promise<string>} The generated harvest ID
+ */
+const generateHarvestId = async (workerName = '', date = new Date()) => {
     // Ensure workerName is a string
     const nameStr = String(workerName || '');
 
-    // Get first two letters of worker name (not initials)
+    // Get first two letters of worker name (uppercase)
     const cleanName = nameStr.trim().toUpperCase().replace(/[^A-Z]/g, '');
     const firstTwoLetters = cleanName.substring(0, 2).padEnd(2, 'X');
 
@@ -103,11 +117,12 @@ function generateHarvestId(workerName = '', date = new Date()) {
     const dd = String(date.getDate()).padStart(2, "0");
     const mm = String(date.getMonth() + 1).padStart(2, "0");
 
-    // Get next sequential suffix (A00 to Z99)
-    const suffix = getNextHarvestSequentialSuffix();
+    // Get next sequential suffix (A0 to Z9)
+    const suffix = await getNextHarvestSequentialSuffix();
 
-    return `${firstTwoLetters}${dd}${mm}R${suffix}`;
-}
+    // Format: XX + DDMM + P + LN
+    return `${firstTwoLetters}${dd}${mm}P${suffix}`;
+};
 
 // --- STATIC OPTIONS (Aligned with API schema) ---
 // Block IDs must match the enum values from the API schema
@@ -144,16 +159,16 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
 
     return (
         <View style={stepStyles.stepContainer}>
-            <Text style={styles.heading}>1. Worker & Block Details</Text>
+            <Text style={styles.heading}>1. Rugyeyo Staff & Block Details</Text>
 
             <SearchableWorkerPicker
-                label="Worker Name"
+                label="Worker Name *"
                 selectedWorkerId={formData.workerName}
                 onWorkerSelect={handleWorkerSelect}
                 selectedWorker={formData.selectedWorker}
             />
 
-            <Text style={styles.label}>Date of Delivery</Text>
+            <Text style={styles.label}>Date of Delivery *</Text>
             <TouchableOpacity style={styles.dateButton} onPress={() => updateField('showDatePicker', true)} accessibilityLabel="Select date">
                 <Ionicons name="calendar-outline" size={20} color={CoffeeColors.DARK_BROWN} />
                 <Text style={{ marginLeft: 10, fontSize: 16, color: CoffeeColors.DARK_BROWN }}>
@@ -172,7 +187,7 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
             )}
 
             <CustomPicker
-                label="Block"
+                label="Block *"
                 selectedValue={formData.blockId}
                 onValueChange={handleBlockChange}
                 items={BLOCK_DATA}
@@ -188,46 +203,129 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
     );
 };
 
-const Step2_DeliveryAndFinance = ({ formData, updateField }) => (
-    <View style={stepStyles.stepContainer}>
-        <Text style={styles.heading}>2. Delivery & Finance</Text>
+const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
+    const [productionPrice, setProductionPrice] = useState(null);
+    const [loadingPrice, setLoadingPrice] = useState(false);
+    const [priceRefreshKey, setPriceRefreshKey] = useState(0);
 
-        <Text style={styles.label}>Weight on Delivery (kg)</Text>
-        <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={formData.weight}
-            onChangeText={(t) => updateField('weight', t.replace(",", "."))}
-            placeholder="e.g. 12.5"
-        />
+    useEffect(() => {
+        const loadPrice = async () => {
+            setLoadingPrice(true);
+            try {
+                const price = await fetchCurrentPrice();
+                console.log('[HarvestForm] Fetched production price:', price);
+                if (price !== null && price !== undefined) {
+                    setProductionPrice(price);
+                    // Auto-fill the price field only if it's empty
+                    if (!formData.pricePerKg) {
+                        updateField('pricePerKg', String(price));
+                    }
+                } else {
+                    // No price set in database - don't set any default
+                    console.log('[HarvestForm] No production price set in database');
+                    setProductionPrice(null);
+                }
+            } catch (error) {
+                console.error('[HarvestForm] Error fetching production price:', error);
+                // On error, don't set any default - let field remain empty/editable
+                setProductionPrice(null);
+            } finally {
+                setLoadingPrice(false);
+            }
+        };
 
-        <Text style={styles.label}>Price per Kg (UGX)</Text>
-        <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            value={formData.pricePerKg}
-            onChangeText={(t) => updateField('pricePerKg', t.replace(",", "."))}
-            placeholder="e.g. 4000"
-        />
+        loadPrice();
+    }, [priceRefreshKey]);
 
-        <Text style={styles.label}>Amount Paid (UGX)</Text>
-        <TextInput
-            style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
-            keyboardType="numeric"
-            value={formData.amountPaid}
-            editable={false}
-            placeholder="Auto-calculated"
-        />
-        <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
+    return (
+        <View style={stepStyles.stepContainer}>
+            <Text style={styles.heading}>2. Delivery & Finance</Text>
 
-        <SearchableStaffPicker
-            label="Paid By"
-            selectedStaffId={formData.paidBy}
-            onStaffSelect={(staff) => updateField('paidBy', staff.id)}
-            selectedStaff={formData.selectedStaff}
-        />
-    </View>
-);
+            <Text style={styles.label}>Weight on Delivery (kg) *</Text>
+            <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                value={formData.weight}
+                onChangeText={(t) => updateField('weight', t.replace(",", "."))}
+                placeholder="e.g. 12.5"
+            />
+
+            <Text style={styles.label}>Price per Kg (UGX) *</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {productionPrice !== null ? (
+                    // Price is set in database - show as read-only with the fetched price
+                    <View style={[styles.input, { flex: 1, backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
+                        {loadingPrice ? (
+                            <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
+                        ) : (
+                            <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
+                                {formData.pricePerKg || productionPrice}
+                            </Text>
+                        )}
+                    </View>
+                ) : (
+                    // No price in database - make field editable
+                    <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        keyboardType="numeric"
+                        value={formData.pricePerKg}
+                        onChangeText={(value) => {
+                            // Remove any non-numeric characters except decimal point
+                            const cleaned = value.replace(/[^0-9.]/g, '');
+                            updateField('pricePerKg', cleaned);
+                        }}
+                        placeholder="Enter price per kg"
+                        editable={!loadingPrice}
+                    />
+                )}
+                <TouchableOpacity
+                    style={{
+                        backgroundColor: CoffeeColors.PRIMARY_BROWN,
+                        paddingHorizontal: 16,
+                        paddingVertical: 12,
+                        borderRadius: 8,
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                    }}
+                    onPress={() => setPriceRefreshKey(prev => prev + 1)}
+                    disabled={loadingPrice}
+                >
+                    <Ionicons
+                        name={loadingPrice ? "hourglass" : "refresh"}
+                        size={20}
+                        color={CoffeeColors.WHITE}
+                    />
+                </TouchableOpacity>
+            </View>
+            {productionPrice !== null ? (
+                <Text style={styles.helperText}>
+                    Price fetched from database (latest production price). Tap refresh to update.
+                </Text>
+            ) : (
+                <Text style={styles.helperText}>
+                    No price set in database - enter manually or tap refresh to check again.
+                </Text>
+            )}
+
+            <Text style={styles.label}>Amount Paid (UGX)</Text>
+            <TextInput
+                style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
+                keyboardType="numeric"
+                value={formData.amountPaid}
+                editable={false}
+                placeholder="Auto-calculated"
+            />
+            <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
+
+            <SearchableStaffPicker
+                label="Paid By *"
+                selectedStaffId={formData.paidBy}
+                onStaffSelect={(staff) => updateField('paidBy', staff.id)}
+                selectedStaff={formData.selectedStaff}
+            />
+        </View>
+    );
+};
 
 
 // --- MAIN FORM COMPONENT ---
@@ -252,7 +350,7 @@ const initialFormState = {
 
     // System fields
     showDatePicker: false,
-    generatedId: generateHarvestId(new Date()), // Local ID for tracking
+    generatedId: '', // Will be set by useEffect
 };
 
 
@@ -290,8 +388,8 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 blockId: editData.block || editData.blockId || BLOCK_DATA[0].id,
                 weight: String(editData.weight || ''),
                 date: dateObj,
-                pricePerKg: String(editData.pricePerKg || ''),
-                amountPaid: String(editData.amountPaid || ''),
+                pricePerKg: editData.pricePerKg ? formatNumberWithCommas(String(editData.pricePerKg)) : '',
+                amountPaid: editData.amountPaid ? formatNumberWithCommas(String(editData.amountPaid)) : '',
                 paidBy: editData.paidBy || '',
                 selectedStaff: null, // Will be populated by SearchableStaffPicker
                 generatedId: editData.id || prev.generatedId,
@@ -303,29 +401,50 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
 
     // Update generated ID when worker name or date changes
     useEffect(() => {
-        setFormData(prev => ({
-            ...prev,
-            generatedId: generateHarvestId(prev.workerName, prev.date)
-        }));
+        const generateId = async () => {
+            const newId = await generateHarvestId(formData.workerName, formData.date);
+            setFormData(prev => ({
+                ...prev,
+                generatedId: newId
+            }));
+        };
+        if (formData.workerName && formData.date) {
+            generateId();
+        }
     }, [formData.workerName, formData.date]);
 
     // Auto-calculate amount paid when weight or pricePerKg changes
     useEffect(() => {
         const weight = Number(formData.weight) || 0;
-        const pricePerKg = Number(formData.pricePerKg) || 0;
+        const pricePerKg = parseFormattedNumber(formData.pricePerKg) || 0;
         const calculatedAmount = weight * pricePerKg;
 
         setFormData(prev => ({
             ...prev,
-            amountPaid: calculatedAmount > 0 ? calculatedAmount.toFixed(2) : ""
+            amountPaid: calculatedAmount > 0 ? formatNumberWithCommas(calculatedAmount.toFixed(2)) : ""
         }));
     }, [formData.weight, formData.pricePerKg]);
 
-    // Unified field updater
+    // Unified field updater with comma formatting for money fields
     const updateField = useCallback((key, value) => {
+        let processedValue = value;
+
+        // Handle money fields with comma formatting
+        if (key === 'pricePerKg') {
+            // Remove any non-numeric characters except decimal point
+            const cleaned = String(value).replace(/[^0-9.]/g, '');
+            // Prevent multiple decimal points
+            const parts = cleaned.split('.');
+            if (parts.length > 2) {
+                return; // Don't update if multiple decimal points
+            }
+            // Format with commas
+            processedValue = formatNumberWithCommas(cleaned);
+        }
+
         setFormData(prev => ({
             ...prev,
-            [key]: value,
+            [key]: processedValue,
         }));
     }, []);
 
@@ -354,7 +473,8 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             if (isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
                 return "Enter a valid weight (> 0 kg) on delivery.";
             }
-            if (formData.pricePerKg === "" || isNaN(Number(formData.pricePerKg)) || Number(formData.pricePerKg) <= 0) {
+            const pricePerKgValue = parseFormattedNumber(formData.pricePerKg);
+            if (formData.pricePerKg === "" || isNaN(pricePerKgValue) || pricePerKgValue <= 0) {
                 return "Enter a valid price per kg (> 0 UGX).";
             }
         }
@@ -462,11 +582,11 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     const handleSyncNow = async (harvestData) => {
         try {
             console.log('[HarvestForm] Syncing to backend now...');
-            const response = await postHarvestRecord(harvestData);
+            const response = await postProductionHarvestRecord(harvestData);
 
             if (response.success) {
                 // Remove from local queue since it's synced
-                await removeRecordFromQueue(harvestData.id);
+                await removeProductionRecordFromQueue(harvestData.id);
                 Alert.alert(
                     "Success!",
                     "Harvest record saved and synced to cloud successfully.",
@@ -526,12 +646,12 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
         try {
             const harvestData = {
                 // Fields aligned with API schema
-                workerName: formData.workerName.trim(),
+                workerName: (formData.workerName || '').trim(),
                 blockId: formData.blockId, // Integer PK
                 weight: Number(formData.weight),
                 date: formData.date,
-                pricePerKg: Number(formData.pricePerKg),
-                amountPaid: Number(formData.amountPaid),
+                pricePerKg: parseFormattedNumber(formData.pricePerKg),
+                amountPaid: parseFormattedNumber(formData.amountPaid),
                 paidBy: formData.paidBy, // Integer PK (don't trim)
                 id: formData.generatedId,
 
@@ -544,13 +664,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 // UPDATE MODE: Call the API to update the record
                 console.log('[HarvestForm] Updating harvest record:', editRecordId);
 
-                // Show loading
-                Alert.alert('Updating', 'Saving changes...', [], { cancelable: false });
-
-                const response = await updateHarvestRecord(editRecordId, harvestData);
-
-                // Close loading alert
-                Alert.alert('', '', [{ text: 'OK' }]);
+                const response = await updateProductionHarvestRecord(editRecordId, harvestData);
 
                 if (response.success) {
                     setAlertConfig({
@@ -565,6 +679,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                                     setFormData(initialFormState);
                                     setCurrentStep(0);
                                     setIsEditMode(false);
+                                    setEditRecordId(null);
                                     navigation.navigate('Harvests');
                                 }
                             }
@@ -588,7 +703,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 }
             } else {
                 // CREATE MODE: Save to local storage for offline sync
-                const { records: currentRecords } = await getUnsyncedRecords();
+                const { records: currentRecords } = await getUnsyncedProductionRecords();
                 const updatedRecords = [...currentRecords, harvestData];
                 await AsyncStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(updatedRecords));
 
@@ -599,22 +714,8 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 setFormData(initialFormState);
                 setCurrentStep(0);
 
-                // Show success message using CustomAlert
-                setAlertConfig({
-                    title: "Saved Locally!",
-                    message: "Your harvest record has been saved locally and is ready to sync.",
-                    type: 'success',
-                    buttons: [
-                        {
-                            text: "OK",
-                            onPress: () => {
-                                setAlertVisible(false);
-                                navigation.navigate('Harvests');
-                            }
-                        }
-                    ]
-                });
-                setAlertVisible(true);
+                // Auto-navigate to Payment Voucher
+                navigation.navigate('PaymentVoucher', { harvestData });
             }
 
         } catch (error) {
@@ -1011,4 +1112,9 @@ const stepStyles = StyleSheet.create({
     },
 });
 
+// Add this to clear the queue manually
+const clearQueue = async () => {
+    await AsyncStorage.removeItem('harvests_sync_queue');
+    console.log('Queue cleared!');
+};
 

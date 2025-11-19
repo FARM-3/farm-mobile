@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Rugyeyo-fmis",
-    "slug": "fmis-mobile",
+    "slug": "rugyeyo-farm-fmis-mobile",
     "jsEngine": "hermes",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -39,8 +39,10 @@
       "allowBackup": true,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
-      ]
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET"
+      ],
+      "networkSecurityConfig": "./android-network-security-config.xml"
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
@@ -51,7 +53,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "8c087bb9-b502-4477-8d8f-b218d5ffaa49"
+        "projectId": "2d047a6b-6ef0-4e31-8932-5769fc56fd3a"
       }
     }
   }

@@ -25,7 +25,10 @@ import BottomNav from '../../../components/BottomNav';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import CustomAlert from '../../../components/CustomAlert';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
-import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
+import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest, syncIdCounterWithBackend } from '../../../utils/firebaseSetup';
+import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
+import { fetchCurrentFarmerPrice } from '../../../services/priceService';
+import { syncAggregationRecords } from '../../../services/aggregationService';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
 
 // ================================================
@@ -53,29 +56,29 @@ const farmerFieldDefinitions = [
     {
         title: 'Personal Info',
         fields: [
-            { key: 'first_name', label: 'First Name *', keyboardType: 'default', required: true },
-            { key: 'last_name', label: 'Last Name *', keyboardType: 'default', required: true },
+            { key: 'first_name', label: 'First Name', keyboardType: 'default', required: true },
+            { key: 'last_name', label: 'Last Name', keyboardType: 'default', required: true },
             { key: 'gender', label: 'Gender', type: 'picker', pickerKey: 'gender' },
-            { key: 'nin', label: 'NIN', keyboardType: 'default' },
-            { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
-            { key: 'contact', label: 'Phone Number *', keyboardType: 'phone-pad', required: true, placeholder: 'Example: 0770123456' },
+            { key: 'nin', label: 'NIN', keyboardType: 'default', required: true },
+            { key: 'date_of_birth', label: 'Date of Birth', type: 'date', required: true },
+            { key: 'contact', label: 'Phone Number', keyboardType: 'phone-pad', required: true, placeholder: 'Example: 0770123456' },
             { key: 'email', label: 'Email (optional)', keyboardType: 'email-address', placeholder: 'Example: johnkato@gmail.com' },
             { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'yes-no' },
             { key: 'cooperative', label: 'Cooperative Name', keyboardType: 'default', dependsOn: { field: 'in_cooperative', value: true } },
-            { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date' },
+            { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date', required: true },
         ]
     },
     // Step 2: Location & UID
     {
         title: 'Location & ID',
         fields: [
-            { key: 'district', label: 'District', type: 'picker', pickerKey: 'district' },
-            { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county' },
+            { key: 'district', label: 'District', type: 'picker', pickerKey: 'district', required: true },
+            { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county', required: true },
             // Parish will dynamically filter based on sub_county
-            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish', dynamic: true }, 
+            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish', dynamic: true, required: true },
             { key: 'village', label: 'Village', keyboardType: 'default' },
             { key: 'gps', label: 'GPS Location (optional)', keyboardType: 'default' },
-            { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default' },
+            { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default', required: true },
             { key: 'uid', label: 'Farmer UID (Generated)', special: 'generate_uid', readOnly: true },
         ]
     },
@@ -83,27 +86,27 @@ const farmerFieldDefinitions = [
     {
         title: 'Farm Details',
         fields: [
-            { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety' },
-            { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric' },
-            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'yes-no' },
+            { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety', required: true },
+            { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric', required: true },
+            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'yes-no', required: true },
             { key: 'other_farms', label: 'If no, which farms (location, owner)', keyboardType: 'default', dependsOn: { field: 'all_your_trees', value: false } },
-            { key: 'planted_date', label: 'Date planted', type: 'date' },
-            { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing' },
-            { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership' },
-            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no' },
-            { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source' },
-            { key: 'seedling_type', label: 'Type of seedlings', type: 'multi-select', pickerKey: 'seedling_type' },
-            { key: 'age_of_seedlings', label: 'Age of seedlings (Days)', keyboardType: 'numeric' },
+            { key: 'planted_date', label: 'Date planted', type: 'date', required: true },
+            { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing', required: true },
+            { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership', required: true },
+            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no', required: true },
+            { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source', required: true },
+            { key: 'seedling_type', label: 'Type of seedlings', type: 'multi-select', pickerKey: 'seedling_type', required: true },
+            { key: 'age_of_seedlings', label: 'Age of seedlings (Days)', keyboardType: 'numeric', required: true },
         ]
     },
     // Step 4: Practices & Chemicals
     {
         title: 'Farming Practices',
         fields: [
-            { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices' },
-            { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation' },
-            { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true },
-            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'yes-no' },
+            { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices', required: true },
+            { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation', required: true },
+            { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true, required: true },
+            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'yes-no', required: true },
             { key: 'pesticides', label: 'If yes, list pesticides (comma separated)', array: true, dependsOn: { field: 'uses_pesticides', value: true } },
         ]
     }
@@ -116,7 +119,9 @@ const harvestFieldDefinitions = [
         fields: [
             { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
             { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
-            { key: 'number_of_bags', label: 'Number of Bags', keyboardType: 'numeric' },
+            { key: 'location_on_delivery', label: 'Location on Delivery', type: 'picker', pickerKey: 'location_on_delivery', required: true },
+            { key: 'location_on_delivery_other', label: 'Specify Location', keyboardType: 'default', dependsOn: { field: 'location_on_delivery', value: 'Other' } },
+            { key: 'gps_coordinates', label: 'GPS Coordinates', keyboardType: 'default', action: 'capture_gps' },
             { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
         ]
     },
@@ -124,10 +129,10 @@ const harvestFieldDefinitions = [
     {
         title: 'Quality & Payment',
         fields: [
-            { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type' },
+            { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type', required: true },
             { key: 'price_per_kg', label: 'Price per Kg (UGX)', keyboardType: 'numeric', required: true },
             { key: 'amount_paid', label: 'Amount Paid (UGX)', keyboardType: 'numeric', readOnly: true, calculated: true },
-            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff' },
+            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff', required: true },
             { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
         ]
     }
@@ -188,18 +193,19 @@ const getCurrentGPSLocation = async () => {
 // === 2. LIGHTWEIGHT LOCAL UI HELPERS (POLISHED)===
 // ===============================================
 
-const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true, placeholder = '' }) => (
+const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true, placeholder = '', error = '' }) => (
     <View style={{ marginBottom: 15 }}>
         {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-        <TextInput 
-            value={value} 
-            onChangeText={onChangeText} 
-            keyboardType={keyboardType} 
-            style={[styles.textInput, !editable && styles.readOnlyInput]} 
+        <TextInput
+            value={value}
+            onChangeText={onChangeText}
+            keyboardType={keyboardType}
+            style={[styles.textInput, !editable && styles.readOnlyInput, error && styles.errorInput]}
             editable={editable}
             placeholder={placeholder}
             placeholderTextColor={BORDER_LIGHT}
         />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
 );
 
@@ -447,7 +453,12 @@ const AutocompleteInput = ({ label, value, onChangeText, onSelect, suggestions =
 
     const handleSelect = (item) => {
         const selectedId = item.farmer_id || item.uid || item.id;
+
+        // Call onSelect to update both farmer_uid and farmer_name in the form
+        // The onSelect handler will properly set farmer_uid to the ID and farmer_name to the name
         onSelect(item, selectedId);
+
+        // Close the suggestions dropdown
         setShowSuggestions(false);
     };
 
@@ -492,12 +503,6 @@ const AutocompleteInput = ({ label, value, onChangeText, onSelect, suggestions =
                             );
                         })}
                     </ScrollView>
-                    <TouchableOpacity
-                        style={styles.autocompleteClose}
-                        onPress={() => setShowSuggestions(false)}
-                    >
-                        <Text style={styles.autocompleteCloseText}>Close</Text>
-                    </TouchableOpacity>
                 </View>
             )}
         </View>
@@ -566,7 +571,7 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
 };
 
 // --- NEW/REPLACED Table Component: Searchable Data List ---
-const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, isFarmer, farmersList = [] }) => {
+const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, onVoucher, isFarmer, farmersList = [] }) => {
     const [searchText, setSearchText] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -776,7 +781,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                     )}
                 </View>
 
-                {/* Edit, Sync Draft (if draft), and Delete Icon Buttons */}
+                {/* Edit, Sync Draft (if draft), Voucher (for harvests), and Delete Icon Buttons */}
                 <View style={styles.recordActions}>
                     {/* Sync Draft Button - Only shows for draft records */}
                     {item._isDraft && onSyncDraft && (
@@ -788,6 +793,19 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                             }}
                         >
                             <Ionicons name="cloud-upload-outline" size={20} color="#4CAF50" />
+                        </TouchableOpacity>
+                    )}
+
+                    {/* Voucher Button - Only shows for harvest records */}
+                    {!isFarmer && onVoucher && (
+                        <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={(e) => {
+                                e.stopPropagation(); // Prevent triggering the main onPress
+                                onVoucher(item);
+                            }}
+                        >
+                            <Ionicons name="document-text" size={20} color={PRIMARY_BROWN} />
                         </TouchableOpacity>
                     )}
 
@@ -1030,7 +1048,28 @@ const FarmerDetailView = ({ farmer, onBack }) => {
  * Displays all harvest data organized in logical sections with proper labels
  */
 const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
+    const [staffName, setStaffName] = useState(null);
+
     if (!harvest) return null;
+
+    // Load staff name when harvest or paid_by changes
+    useEffect(() => {
+        const loadStaffName = async () => {
+            if (harvest.paid_by) {
+                try {
+                    const { getStaffById } = await import('../../../services/staffService');
+                    const staff = await getStaffById(harvest.paid_by);
+                    if (staff && staff.displayName) {
+                        setStaffName(staff.displayName);
+                    }
+                } catch (error) {
+                    console.log('[HarvestDetailView] Could not load staff name:', error);
+                    setStaffName(null);
+                }
+            }
+        };
+        loadStaffName();
+    }, [harvest.paid_by]);
 
     // Helper to format field values properly
     const formatValue = (value) => {
@@ -1040,28 +1079,63 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
         return String(value);
     };
 
-    // Lookup farmer details from farmersList using the name field (which contains farmer UID)
-    const farmerUID = harvest.name || harvest.farmer_name || harvest.farmer_uid;
+    // Lookup farmer details from farmersList
+    // harvest.farmer_uid contains the actual farmer ID
+    // harvest.farmer_name contains the farmer's full name
+    const actualFarmerUID = harvest.farmer_uid;
+    const actualFarmerName = harvest.farmer_name;
     let farmerDetails = null;
-    if (farmerUID && Array.isArray(farmersList)) {
-        farmerDetails = farmersList.find(f =>
-            String(f.farmer_id) === String(farmerUID) ||
-            String(f.uid) === String(farmerUID) ||
-            String(f.id) === String(farmerUID)
-        );
+
+    // Try to find farmer in the farmersList by ID
+    if (actualFarmerUID && Array.isArray(farmersList)) {
+        farmerDetails = farmersList.find(f => {
+            const farmerId = f.farmer_id || f.uid || f.id;
+            return String(farmerId) === String(actualFarmerUID);
+        });
+
+        // If not found by ID, try to match by name
+        if (!farmerDetails && actualFarmerName) {
+            farmerDetails = farmersList.find(f => {
+                const farmerName = `${f.first_name || ''} ${f.last_name || ''}`.trim();
+                return farmerName === String(actualFarmerName);
+            });
+        }
     }
 
-    const farmerDisplayName = farmerDetails
-        ? `${farmerDetails.first_name || ''} ${farmerDetails.last_name || ''}`.trim()
-        : farmerUID || 'Unknown Farmer';
+    // Display name: prefer farmer_name from harvest, then from farmer details
+    const farmerDisplayName = actualFarmerName ||
+        (farmerDetails ? `${farmerDetails.first_name || ''} ${farmerDetails.last_name || ''}`.trim() : 'Unknown Farmer');
+
+    // Display ID: use farmer_uid from harvest
+    const farmerDisplayID = actualFarmerUID ||
+        (farmerDetails ? (farmerDetails.farmer_id || farmerDetails.uid || farmerDetails.id) : 'Not available');
+
+    console.log('[HarvestDetailView] Debug info:', {
+        actualFarmerUID,
+        actualFarmerName,
+        farmerDisplayName,
+        farmerDisplayID,
+        farmerDetailsFound: !!farmerDetails,
+        harvestData: {
+            farmer_uid: harvest.farmer_uid,
+            farmer_name: harvest.farmer_name,
+            location_on_delivery: harvest.location_on_delivery,
+            gps_coordinates: harvest.gps_coordinates,
+            coffee_type: harvest.coffee_type,
+            price_per_kg: harvest.price_per_kg
+        }
+    });
 
     // Field sections for organized display
+    // NOTE: Only showing fields that are actually in the harvest form:
+    // farmer_uid, farmer_name, weight_on_delivery, location_on_delivery, gps_coordinates,
+    // harvest_id, date_of_delivery, coffee_type, price_per_kg, amount_paid, paid_by
     const sections = [
         {
             title: 'Farmer Information',
             fields: [
                 { label: 'Farmer Name', value: farmerDisplayName },
-                { label: 'Farmer ID', value: farmerUID },
+                { label: 'Farmer ID', value: farmerDisplayID },
                 { label: 'Contact', value: farmerDetails?.contact || 'Not available' },
                 { label: 'District', value: farmerDetails?.district || 'Not available' },
             ]
@@ -1069,26 +1143,20 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
         {
             title: 'Harvest Details',
             fields: [
-                { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
+                { label: 'Harvest ID', value: harvest.harvest_id || harvest.id },
                 { label: 'Date of Delivery', value: harvest.date_of_delivery },
                 { label: 'Weight on Delivery', value: harvest.weight_on_delivery ? `${harvest.weight_on_delivery} kg` : 'Not provided' },
-                { label: 'Weight After Floating', value: harvest.weight_after_floating ? `${harvest.weight_after_floating} kg` : 'Not provided' },
-                { label: 'Number of Bags', value: harvest.number_of_bags },
-            ]
-        },
-        {
-            title: 'Coffee Quality',
-            fields: [
-                { label: 'Coffee Type/Grade', value: harvest.grade || harvest.coffee_type },
-                { label: 'Cherry Color', value: harvest.cherry_color || harvest.cherry_colour },
-                { label: 'Stage', value: harvest.stage },
+                { label: 'Location on Delivery', value: harvest.location_on_delivery || 'Not provided' },
+                { label: 'GPS Coordinates', value: harvest.gps_coordinates || 'Not captured' },
+                { label: 'Coffee Type', value: harvest.coffee_type || harvest.grade || 'Not provided' },
+                { label: 'Price per kg', value: harvest.price_per_kg ? `UGX ${Number(harvest.price_per_kg).toLocaleString()}` : 'Not provided' },
             ]
         },
         {
             title: 'Payment Information',
             fields: [
                 { label: 'Amount Paid', value: harvest.amount_paid ? `UGX ${Number(harvest.amount_paid).toLocaleString()}` : 'Not provided' },
-                { label: 'Paid By', value: harvest.paid_by || harvest.who_paid },
+                { label: 'Paid By', value: staffName || harvest.paid_by || harvest.who_paid || 'Not provided' },
             ]
         }
     ];
@@ -1108,7 +1176,6 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
             <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
                 {/* Harvest ID Card */}
                 <View style={styles.detailNameCard}>
-                    <Ionicons name="leaf" size={32} color={PRIMARY_BROWN} style={{ marginBottom: 8 }} />
                     <Text style={styles.detailFarmerName}>
                         {farmerDisplayName}
                     </Text>
@@ -1139,7 +1206,7 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
 // ===============================================
 
 const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) => {
-    const onNavigate = onNavigateProp ?? ((screen) => { if (navigation && navigation.navigate) navigation.navigate(screen); });
+    const onNavigate = onNavigateProp ?? ((screen, params) => { if (navigation && navigation.navigate) navigation.navigate(screen, params); });
 
     // --- State declarations ---
     const [farmersList, setFarmersList] = useState([]);
@@ -1150,7 +1217,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '4,600', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1177,6 +1244,15 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
     // State for sync loading indicator
     const [isSyncing, setIsSyncing] = useState(false);
+
+    // State for validation errors
+    const [farmerErrors, setFarmerErrors] = useState({});
+    const [harvestErrors, setHarvestErrors] = useState({});
+
+    // State for current farmer price
+    const [currentFarmerPrice, setCurrentFarmerPrice] = useState(null);
+    const [isPriceLoading, setIsPriceLoading] = useState(false);
+    const [priceRefreshKey, setPriceRefreshKey] = useState(0);
 
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
@@ -1247,6 +1323,31 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
             // Combine synced harvests from backend and local drafts
             const allHarvests = [...syncedHarvests, ...harvestDrafts];
+
+            // Sort by ID first (harvest_id contains sequential suffix), then by timestamp
+            // Harvest IDs are like: PA1611A00, PA1611A01, PA1611A02, PA1611A04, etc.
+            // The last 3 chars (e.g., A00, A01, A02, A04) indicate the order
+            allHarvests.sort((a, b) => {
+                // Extract IDs
+                const idA = a.harvest_id || a.id || '';
+                const idB = b.harvest_id || b.id || '';
+
+                // If both have valid IDs, compare them (descending = newest first)
+                if (idA && idB) {
+                    // IDs are strings, so compare them lexicographically in reverse
+                    // String comparison: "PA1611A04" > "PA1611A03" > "PA1611A02" > "PA1611A01" > "PA1611A00"
+                    if (idA > idB) return -1;  // a comes after b alphabetically, so a is newer
+                    if (idA < idB) return 1;   // b comes after a alphabetically, so b is newer
+                }
+
+                // Fallback to timestamp/date comparison
+                const timestampA = a.timestamp || new Date(a.created_at || a.date_of_delivery || 0).getTime();
+                const timestampB = b.timestamp || new Date(b.created_at || b.date_of_delivery || 0).getTime();
+                return timestampB - timestampA; // Descending order (newest first)
+            });
+
+            console.log('[loadRecords] Sorted harvest IDs:', allHarvests.slice(0, 5).map(h => h.harvest_id || h.id));
+
             setHarvestsList(allHarvests);
 
         } catch (e) {
@@ -1272,7 +1373,68 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         }
     };
 
-    // Sync unsynced records
+    // Sync unsynced records - UPDATED to use syncAggregationRecords service
+    /**
+     * Reconciles failed records by checking if they actually exist on the backend
+     * Removes locally-pending records that were successfully created despite sync failure
+     */
+    const reconcileFailedRecords = async (failedRecords, allFarmerRecords, allHarvestRecords) => {
+        console.log('[reconcileFailedRecords] Checking', failedRecords.length, 'failed records on backend...');
+
+        let actuallyFailedFarmers = [];
+        let actuallyFailedHarvests = [];
+
+        // Check if failed farmers actually exist on backend
+        for (const failedFarmer of failedRecords.filter(r => r.type === 'farmer')) {
+            try {
+                const farmerId = failedFarmer.id || failedFarmer.uid;
+                if (!farmerId) continue;
+
+                const { default: ApiService } = await import('../../../services/ApiService');
+                await ApiService.get(`aggregation/farmer/${farmerId}/`);
+                console.log(`[reconcileFailedRecords] Farmer ${farmerId} actually exists on backend - removing from pending`);
+                // Record exists, so it's not really failed
+            } catch (err) {
+                if (err.response?.status === 404) {
+                    console.log(`[reconcileFailedRecords] Farmer ${failedFarmer.id} confirmed NOT on backend`);
+                    actuallyFailedFarmers.push(failedFarmer);
+                }
+            }
+        }
+
+        // Check if failed harvests actually exist on backend
+        for (const failedHarvest of failedRecords.filter(r => r.type === 'harvest')) {
+            try {
+                const harvestId = failedHarvest.id || failedHarvest.harvest_id;
+                if (!harvestId) continue;
+
+                const { default: ApiService } = await import('../../../services/ApiService');
+                await ApiService.get(`aggregation/farmer-harvest/${harvestId}/`);
+                console.log(`[reconcileFailedRecords] Harvest ${harvestId} actually exists on backend - removing from pending`);
+                // Record exists, so it's not really failed
+            } catch (err) {
+                if (err.response?.status === 404) {
+                    console.log(`[reconcileFailedRecords] Harvest ${failedHarvest.id} confirmed NOT on backend`);
+                    actuallyFailedHarvests.push(failedHarvest);
+                }
+            }
+        }
+
+        // Remove the records that actually exist from the pending list
+        const reconcilledFarmerRecords = allFarmerRecords.filter(r =>
+            !failedRecords.find(f => f.type === 'farmer' && (f.id === r.id || f.uid === r.uid))
+        );
+
+        const reconcilledHarvestRecords = allHarvestRecords.filter(r =>
+            !failedRecords.find(f => f.type === 'harvest' && (f.id === r.id || f.harvest_id === r.harvest_id))
+        );
+
+        console.log('[reconcileFailedRecords] Reconciliation complete');
+        console.log('[reconcileFailedRecords] Records actually failed:', actuallyFailedFarmers.length + actuallyFailedHarvests.length);
+
+        return { reconcilledFarmerRecords, reconcilledHarvestRecords };
+    };
+
     const handleSyncRecords = async () => {
         setIsSyncing(true);
         try {
@@ -1287,7 +1449,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             const harvestDrafts = allHarvestRecords.filter(r => r._isDraft === true);
             const harvestPending = allHarvestRecords.filter(r => r._isDraft === false && r._isSynced !== true);
 
-            // Combine both drafts and pending for syncing (all unsyc ed records)
+            // Combine both drafts and pending for syncing (all unsynced records)
             const farmerRecordsToSync = [...farmerDrafts, ...farmerPending];
             const harvestRecordsToSync = [...harvestDrafts, ...harvestPending];
 
@@ -1295,60 +1457,75 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             console.log('[handleSyncRecords] Farmer records to sync:', farmerRecordsToSync.length, '(drafts:', farmerDrafts.length, ', pending:', farmerPending.length, ')');
             console.log('[handleSyncRecords] Harvest records to sync:', harvestRecordsToSync.length, '(drafts:', harvestDrafts.length, ', pending:', harvestPending.length, ')');
 
-            let successfullysynced = 0;
-            let failedSync = 0;
-            const failedDrafts = [];
+            // Use the new sync service that handles both CREATE and UPDATE
+            const syncResult = await syncAggregationRecords(farmerRecordsToSync, harvestRecordsToSync);
 
-            // Sync all farmer records (both drafts and pending) - track which ones succeed
-            const syncedFarmerIds = [];
-            for (const record of farmerRecordsToSync) {
-                try {
-                    console.log(`[handleSyncRecords] Syncing farmer: ${record.id}`);
-                    await submitFarmer(record);
-                    syncedFarmerIds.push(record.id);
-                    successfullysynced++;
-                    console.log(`[handleSyncRecords] ✓ Farmer synced: ${record.id}`);
-                } catch (e) {
-                    failedSync++;
-                    failedDrafts.push({ type: 'farmer', id: record.id, error: e.message });
-                    console.error('[handleSyncRecords] ✗ Error syncing farmer:', record.id, e.message);
-                }
-            }
+            console.log(`[handleSyncRecords] Sync result:`, syncResult);
 
-            // Sync all harvest records (both drafts and pending) - track which ones succeed
-            const syncedHarvestIds = [];
-            for (const record of harvestRecordsToSync) {
-                try {
-                    console.log(`[handleSyncRecords] Syncing harvest: ${record.id}`);
-                    await submitHarvest(record);
-                    syncedHarvestIds.push(record.id);
-                    successfullysynced++;
-                    console.log(`[handleSyncRecords] ✓ Harvest synced: ${record.id}`);
-                } catch (e) {
-                    failedSync++;
-                    failedDrafts.push({ type: 'harvest', id: record.id, error: e.message });
-                    console.error('[handleSyncRecords] ✗ Error syncing harvest:', record.id, e.message);
-                }
+            // NEW: Reconcile failed records - check if they actually exist on backend
+            let finalFarmerRecords = allFarmerRecords;
+            let finalHarvestRecords = allHarvestRecords;
+
+            if (syncResult.failedRecords && syncResult.failedRecords.length > 0) {
+                console.log('[handleSyncRecords] Reconciling', syncResult.failedRecords.length, 'failed records...');
+                const { reconcilledFarmerRecords, reconcilledHarvestRecords } = await reconcileFailedRecords(
+                    syncResult.failedRecords,
+                    allFarmerRecords,
+                    allHarvestRecords
+                );
+                finalFarmerRecords = reconcilledFarmerRecords;
+                finalHarvestRecords = reconcilledHarvestRecords;
             }
 
             // Only remove records that were successfully synced
-            console.log(`[handleSyncRecords] Successfully synced: ${successfullysynced}, Failed: ${failedSync}`);
+            if (syncResult.syncedFarmerIds.length > 0) {
+                console.log('[handleSyncRecords] Synced farmer IDs:', syncResult.syncedFarmerIds);
+                console.log('[handleSyncRecords] All farmer records IDs:', finalFarmerRecords.map(d => ({ id: d.id, uid: d.uid, farmer_id: d.farmer_id, first_name: d.first_name })));
 
-            if (syncedFarmerIds.length > 0) {
-                const remainingFarmerRecords = allFarmerRecords.filter(d => !syncedFarmerIds.includes(d.id));
+                // Filter out synced records - check multiple ID fields for flexibility
+                const remainingFarmerRecords = finalFarmerRecords.filter(d => {
+                    const isSynced = syncResult.syncedFarmerIds.includes(d.id) ||
+                                    syncResult.syncedFarmerIds.includes(d.uid) ||
+                                    syncResult.syncedFarmerIds.includes(d.farmer_id);
+
+                    if (!isSynced && d._isDraft === false) {
+                        // If it's marked as synced (not a draft) but not in our list, remove it anyway
+                        console.log('[handleSyncRecords] Force removing pending farmer:', d.id, d.first_name);
+                        return false;
+                    }
+
+                    return !isSynced;
+                });
+                console.log('[handleSyncRecords] Remaining farmer records after filter:', remainingFarmerRecords.length);
+                console.log('[handleSyncRecords] Removed records:', finalFarmerRecords.length - remainingFarmerRecords.length);
+
                 if (remainingFarmerRecords.length > 0) {
                     await AsyncStorage.setItem('farmer_drafts', JSON.stringify(remainingFarmerRecords));
+                    console.log('[handleSyncRecords] Updated farmer_drafts with', remainingFarmerRecords.length, 'remaining records');
                 } else {
                     await AsyncStorage.removeItem('farmer_drafts');
+                    console.log('[handleSyncRecords] ✓ All farmer drafts removed from AsyncStorage');
                 }
             }
 
-            if (syncedHarvestIds.length > 0) {
-                const remainingHarvestRecords = allHarvestRecords.filter(d => !syncedHarvestIds.includes(d.id));
+            if (syncResult.syncedHarvestIds.length > 0) {
+                console.log('[handleSyncRecords] Synced harvest IDs:', syncResult.syncedHarvestIds);
+                console.log('[handleSyncRecords] All harvest records IDs:', finalHarvestRecords.map(d => ({ id: d.id, harvest_id: d.harvest_id })));
+
+                // Filter out synced records - check multiple ID fields for flexibility
+                const remainingHarvestRecords = finalHarvestRecords.filter(d => {
+                    const isSynced = syncResult.syncedHarvestIds.includes(d.id) ||
+                                    syncResult.syncedHarvestIds.includes(d.harvest_id);
+                    return !isSynced;
+                });
+                console.log('[handleSyncRecords] Remaining harvest records after filter:', remainingHarvestRecords.length);
+
                 if (remainingHarvestRecords.length > 0) {
                     await AsyncStorage.setItem('harvest_drafts', JSON.stringify(remainingHarvestRecords));
+                    console.log('[handleSyncRecords] Updated harvest_drafts with', remainingHarvestRecords.length, 'remaining records');
                 } else {
                     await AsyncStorage.removeItem('harvest_drafts');
+                    console.log('[handleSyncRecords] ✓ All harvest drafts removed from AsyncStorage');
                 }
             }
 
@@ -1357,23 +1534,23 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await countUnsyncedRecords();
 
             // Show alert based on sync results
-            if (failedSync === 0) {
+            if (syncResult.failedCount === 0) {
                 // All synced successfully
                 setAlertConfig({
                     visible: true,
-                    title: '✓ Sync Successful',
-                    message: `${successfullysynced} record${successfullysynced !== 1 ? 's have' : ' has'} been synced to the cloud successfully!`,
+                    title: 'Sync Successful',
+                    message: `${syncResult.syncedCount} record${syncResult.syncedCount !== 1 ? 's have' : ' has'} been synced to the cloud successfully!`,
                     type: 'success',
                     buttons: [
                         { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
                     ]
                 });
-            } else if (successfullysynced > 0) {
+            } else if (syncResult.syncedCount > 0) {
                 // Some synced, some failed
                 setAlertConfig({
                     visible: true,
-                    title: '⚠ Partial Sync',
-                    message: `Successfully synced ${successfullysynced} record${successfullysynced !== 1 ? 's' : ''}, but ${failedSync} record${failedSync !== 1 ? 's' : ''} failed. The failed records remain in your pending list.`,
+                    title: 'Partial Sync',
+                    message: `Successfully synced ${syncResult.syncedCount} record${syncResult.syncedCount !== 1 ? 's' : ''}, but ${syncResult.failedCount} record${syncResult.failedCount !== 1 ? 's' : ''} failed. The failed records remain in your pending list.`,
                     type: 'warning',
                     buttons: [
                         { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
@@ -1408,6 +1585,49 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         }
     };
 
+    // Fetch current farmer price when harvest tab is active or when refresh is triggered
+    useEffect(() => {
+        if (activeTab === 'harvests') {
+            const fetchPrice = async () => {
+                console.log('[AggregationScreen] 🔄 Starting to fetch farmer price from API...');
+                setIsPriceLoading(true);
+                try {
+                    const price = await fetchCurrentFarmerPrice();
+                    console.log('[AggregationScreen] ✅ API returned farmer price:', price);
+                    setCurrentFarmerPrice(price);
+
+                    if (price !== null && price !== undefined) {
+                        console.log('[AggregationScreen] 💰 Price will be applied to form:', price);
+                    } else {
+                        console.warn('[AggregationScreen] ⚠️ No price returned from API (might not be set in web app)');
+                    }
+                } catch (error) {
+                    console.error('[AggregationScreen] ❌ Error fetching farmer price:', error);
+                    console.error('[AggregationScreen] Error details:', error.message);
+                    setCurrentFarmerPrice(null);
+                } finally {
+                    setIsPriceLoading(false);
+                }
+            };
+            fetchPrice();
+        }
+    }, [activeTab, priceRefreshKey]);
+
+    // Update harvest form price when farmer price is fetched from DB
+    useEffect(() => {
+        if (currentFarmerPrice !== null && currentFarmerPrice !== undefined) {
+            const formattedPrice = formatNumberWithCommas(currentFarmerPrice.toString());
+            console.log('[AggregationScreen] 📝 Updating form price_per_kg from', currentFarmerPrice, 'to formatted:', formattedPrice);
+            setHarvestForm(prev => ({
+                ...prev,
+                price_per_kg: formattedPrice
+            }));
+            console.log('[AggregationScreen] ✅ Form updated with price:', formattedPrice);
+        } else {
+            console.log('[AggregationScreen] ⏭️ Skipping form update - currentFarmerPrice is null or undefined');
+        }
+    }, [currentFarmerPrice]);
+
     useEffect(() => {
         (async () => {
             try {
@@ -1416,6 +1636,18 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             } catch (e) {
                 console.warn('init auth failed', e);
             }
+
+            // Sync ID counters with backend to ensure sequential IDs don't conflict
+            // This sets the harvest counter to be higher than any existing harvest ID
+            try {
+                console.log('[AggregationScreen] Syncing ID counters with backend...');
+                await syncIdCounterWithBackend('', 'harvestIdCounter');
+                console.log('[AggregationScreen] Harvest ID counter synced successfully');
+            } catch (e) {
+                console.warn('[AggregationScreen] Could not sync harvest counter with backend:', e);
+                // Continue anyway - counter will auto-increment from local value
+            }
+
             await loadRecords();
             await countUnsyncedRecords();
         })();
@@ -1424,21 +1656,34 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     // Generate Farmer UID when user moves to step 1 (step 2 in UI)
     useEffect(() => {
         if (farmerStep === 1 && !farmerForm.uid && activeTab === 'farmers' && farmerForm.first_name && farmerForm.last_name) {
-            setFarmerForm(p => ({
-                ...p,
-                uid: generateFarmerId(farmerForm.first_name, farmerForm.last_name)
-            }));
+            (async () => {
+                try {
+                    const uid = await generateFarmerId(farmerForm.first_name, farmerForm.last_name);
+                    setFarmerForm(p => ({
+                        ...p,
+                        uid: uid
+                    }));
+                } catch (error) {
+                    console.error('[AggregationScreen] Error generating Farmer ID:', error);
+                }
+            })();
         }
     }, [farmerStep, activeTab, farmerForm.first_name, farmerForm.last_name]);
 
     // Generate Harvest ID when farmer name and date are available
     useEffect(() => {
         if (activeTab === 'harvests' && harvestForm.farmer_name && harvestForm.date_of_delivery && !harvestForm.harvest_id) {
-            const harvestId = generateHarvestId(harvestForm.farmer_name, harvestForm.date_of_delivery);
-            setHarvestForm(p => ({
-                ...p,
-                harvest_id: harvestId
-            }));
+            (async () => {
+                try {
+                    const harvestId = await generateHarvestId(harvestForm.farmer_name, harvestForm.date_of_delivery);
+                    setHarvestForm(p => ({
+                        ...p,
+                        harvest_id: harvestId
+                    }));
+                } catch (error) {
+                    console.error('[AggregationScreen] Error generating Harvest ID:', error);
+                }
+            })();
         }
     }, [harvestForm.farmer_name, harvestForm.date_of_delivery, activeTab, harvestForm.harvest_id]);
 
@@ -1453,10 +1698,15 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : '4,600', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
         }));
+
+        // Reset price loading state when resetting forms
+        setIsPriceLoading(false);
         setFarmerStep(0);
         setHarvestStep(0);
+        setFarmerErrors({});
+        setHarvestErrors({});
     };
 
     const getFarmerDisplayName = (f) => {
@@ -1477,27 +1727,74 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             }
             // Logic for 'Yes'/'No' pickers (which represent booleans in state)
             if (['in_cooperative', 'all_your_trees', 'deforested', 'uses_pesticides'].includes(key)) {
-                 newState[key] = value === 'Yes' || value === true;
+                  newState[key] = value === 'Yes' || value === true;
             }
 
             console.log('[Farmer Form] New state after update:', newState);
             return newState;
         });
+
+        // Validation for NIN
+        if (key === 'nin') {
+            if (value) {
+                if (value.length > 14) {
+                    setFarmerErrors(prev => ({ ...prev, nin: 'NIN must not exceed 14 characters.' }));
+                } else if (!/^(CF|CM)[A-Z0-9]*$/.test(value.toUpperCase())) {
+                    setFarmerErrors(prev => ({ ...prev, nin: 'NIN must start with CF or CM in uppercase letters.' }));
+                } else {
+                    setFarmerErrors(prev => ({ ...prev, nin: '' }));
+                }
+            } else {
+                setFarmerErrors(prev => ({ ...prev, nin: '' }));
+            }
+        }
+
+        // Validation for contact
+        if (key === 'contact') {
+            if (value && /[^0-9]/.test(value)) {
+                setFarmerErrors(prev => ({ ...prev, contact: 'Phone number must contain only digits.' }));
+            } else if (value && value.length > 10) {
+                setFarmerErrors(prev => ({ ...prev, contact: 'Phone number should not exceed 10 digits.' }));
+            } else {
+                setFarmerErrors(prev => ({ ...prev, contact: '' }));
+            }
+        }
     };
 
     // FIXED: Create proper update function for harvest form
     const updateHarvestForm = (key, value) => {
         console.log(`[Harvest Form] Updating field: ${key}, value:`, value);
         setHarvestForm(p => {
-            const newState = { ...p, [key]: value };
+            let processedValue = value;
+
+            // Handle money fields with comma formatting, but prevent editing price_per_kg if it's set from DB
+            if (key === 'price_per_kg') {
+                // If price_per_kg is set from database, don't allow manual editing
+                if (currentFarmerPrice !== null && currentFarmerPrice !== undefined) {
+                    console.log('[Harvest Form] price_per_kg is read-only when set from database');
+                    return p; // Don't update if price is set from database
+                }
+                // Remove any non-numeric characters except decimal point
+                const cleaned = String(value).replace(/[^0-9.]/g, '');
+                // Prevent multiple decimal points
+                const parts = cleaned.split('.');
+                if (parts.length > 2) {
+                    return p; // Don't update if multiple decimal points
+                }
+                // Format with commas
+                processedValue = formatNumberWithCommas(cleaned);
+            }
+
+            const newState = { ...p, [key]: processedValue };
 
             // Auto-calculate amount_paid when weight or price_per_kg changes
             if (key === 'weight_on_delivery' || key === 'price_per_kg') {
-                const weight = Number(key === 'weight_on_delivery' ? value : newState.weight_on_delivery) || 0;
-                const pricePerKg = Number(key === 'price_per_kg' ? value : newState.price_per_kg) || 0;
+                const weight = parseFormattedNumber(key === 'weight_on_delivery' ? processedValue : newState.weight_on_delivery) || 0;
+                const pricePerKg = parseFormattedNumber(key === 'price_per_kg' ? processedValue : newState.price_per_kg) || 0;
                 const calculatedAmount = weight * pricePerKg;
 
-                newState.amount_paid = calculatedAmount > 0 ? calculatedAmount.toFixed(2) : '';
+                // Format calculated amount with commas
+                newState.amount_paid = calculatedAmount > 0 ? formatNumberWithCommas(calculatedAmount.toFixed(2)) : '';
                 console.log(`[Harvest Form] Auto-calculated amount_paid: ${newState.amount_paid} (${weight} kg × ${pricePerKg} UGX/kg)`);
             }
 
@@ -1515,7 +1812,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         // Validation
         if (!farmerForm.first_name || !farmerForm.contact || !userId) {
             console.error('[handleFarmerSubmit] Validation failed - missing required fields');
-            Alert.alert("Validation", "Please ensure First name, Contact, and User ID are present.");
+            setAlertConfig({
+                visible: true,
+                title: "Validation",
+                message: "Please ensure First name, Contact, and User ID are present.",
+                type: 'warning',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
             return;
         }
 
@@ -1577,7 +1880,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             console.error("[handleFarmerSubmit] Error details:", {
                 message: e.message,
             });
-            Alert.alert(`Save Failed`, e.message || `Failed to save farmer details locally.`);
+            setAlertConfig({
+                visible: true,
+                title: `Save Failed`,
+                message: e.message || `Failed to save farmer details locally.`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -1598,7 +1907,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         const currentStepData = steps[currentStepNum];
 
         if (!currentStepData) {
-            Alert.alert('Error', 'Unable to save draft. Step information not found.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Unable to save draft. Step information not found.',
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
             return;
         }
 
@@ -1669,7 +1984,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await countUnsyncedRecords();
         } catch (e) {
             console.error(`[handleSaveDraft] ❌ Error saving draft:`, e);
-            Alert.alert('Save Failed', e.message || `Failed to save ${type} draft.`);
+            setAlertConfig({
+                visible: true,
+                title: 'Save Failed',
+                message: e.message || `Failed to save ${type} draft.`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -1683,7 +2004,27 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         if (!harvestForm.farmer_uid || !harvestForm.weight_on_delivery || !harvestForm.price_per_kg || !userId) {
             console.error('[handleHarvestSubmit] Validation failed - missing required fields');
-            Alert.alert('Validation', 'Please fill Farmer UID, Weight, Price per Kg and ensure you are logged in.');
+            setAlertConfig({
+                visible: true,
+                title: 'Validation',
+                message: 'Please fill Farmer UID, Weight, Price per Kg and ensure you are logged in.',
+                type: 'warning',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
+            return;
+        }
+
+        // CRITICAL: Ensure farmer lookup completed successfully before submission
+        // This prevents sending just the farmer_uid to the backend instead of actual farmer name
+        if (!harvestForm.farmer_name || harvestForm.farmer_name.trim() === '') {
+            console.error('[handleHarvestSubmit] Farmer lookup incomplete - farmer_name is empty');
+            setAlertConfig({
+                visible: true,
+                title: 'Farmer Lookup Required',
+                message: `The farmer with UID "${harvestForm.farmer_uid}" could not be found in the system. Please verify the UID is correct and try again.`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
             return;
         }
 
@@ -1697,9 +2038,9 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         const harvestRecord = {
             ...harvestForm,
             id: recordId,
-            weight_on_delivery: Number(harvestForm.weight_on_delivery) || 0,
-            price_per_kg: Number(harvestForm.price_per_kg) || 0,
-            amount_paid: Number(harvestForm.amount_paid) || 0,
+            weight_on_delivery: parseFormattedNumber(harvestForm.weight_on_delivery) || 0,
+            price_per_kg: parseFormattedNumber(harvestForm.price_per_kg) || 0,
+            amount_paid: parseFormattedNumber(harvestForm.amount_paid) || 0,
             number_of_bags: Number(harvestForm.number_of_bags) || 0,
             weight_after_floating: Number(harvestForm.weight_after_floating) || 0,
             recorder_id: userId,
@@ -1731,18 +2072,45 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
             console.log(`[handleHarvestSubmit] ✅ Harvest saved locally!`);
 
-            setSuccessMessage(`Harvest for '${harvestForm.farmer_name || harvestForm.farmer_uid}' saved locally and ready to sync!`);
-            setViewMode('success');
             resetForms();
             await loadRecords();
             await countUnsyncedRecords();
+
+            // Auto-generate voucher with complete data from form and record
+            const voucherData = {
+                ...harvestRecord,
+                // Farmer info from form
+                farmer_name: harvestForm.farmer_name || harvestForm.farmer_uid,
+                farmer_uid: harvestForm.farmer_uid,
+                // Location info
+                location_on_delivery: harvestForm.location_on_delivery,
+                // Harvest details
+                harvest_id: harvestRecord.harvest_id || harvestRecord.id,
+                date_of_delivery: harvestForm.date_of_delivery,
+                weight_on_delivery: harvestForm.weight_on_delivery,
+                // Pricing and payment - keep raw values, PaymentVoucher will parse them
+                price_per_kg: harvestRecord.price_per_kg,
+                amount_paid: harvestRecord.amount_paid, // This may be formatted with commas
+                // Payment processor info
+                paid_by: harvestForm.paid_by, // This is the staff ID
+                // Add coffee type if available
+                coffee_type: harvestForm.coffee_type,
+            };
+            console.log('[handleHarvestSubmit] Voucher data:', JSON.stringify(voucherData, null, 2));
+            onNavigate('PaymentVoucher', { harvestData: voucherData });
         } catch (e) {
             console.error(`[handleHarvestSubmit] ❌ Save error:`, e);
             console.error('[handleHarvestSubmit] Error details:', {
                 message: e.message,
             });
 
-            Alert.alert(`Save Failed`, e.message || `Failed to save harvest details locally.`);
+            setAlertConfig({
+                visible: true,
+                title: `Save Failed`,
+                message: e.message || `Failed to save harvest details locally.`,
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+            });
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -1771,13 +2139,90 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         };
         
         const handleNext = () => {
+            // Check for validation errors
+            const hasErrors = isFarmer ? Object.values(farmerErrors).some(error => error) : Object.values(harvestErrors).some(error => error);
+            if (hasErrors) {
+                setAlertConfig({
+                    visible: true,
+                    title: "Input Error",
+                    message: "Please fix the validation errors before proceeding.",
+                    type: 'error',
+                    buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                });
+                return;
+            }
+
             // Basic required field validation for current step
-            const missingRequired = currentStepFields.fields.some(f =>
-                f.required && (!formData[f.key] || (typeof formData[f.key] === 'string' && formData[f.key].trim() === ''))
-            );
+            const missingRequired = currentStepFields.fields.some(f => {
+                if (!f.required) return false;
+
+                // Skip validation if field has a dependency that's not met
+                if (f.dependsOn) {
+                    const dependencyValue = formData[f.dependsOn.field];
+                    const dependencyMet = (f.dependsOn.value === true && dependencyValue === true) ||
+                                         (f.dependsOn.value === false && dependencyValue === false) ||
+                                         (typeof f.dependsOn.value === 'string' && String(dependencyValue) === String(f.dependsOn.value));
+
+                    if (!dependencyMet) {
+                        return false; // Skip validation if dependency not met
+                    }
+                }
+
+                const value = formData[f.key];
+
+                // Handle boolean fields (yes-no) - false is a valid value
+                if (typeof value === 'boolean') return false;
+
+                // Handle array fields (multi-select) - empty array is invalid
+                if (Array.isArray(value)) return value.length === 0;
+
+                // Handle string fields - empty or whitespace is invalid
+                if (typeof value === 'string') return value.trim() === '';
+
+                // Handle null/undefined
+                return !value;
+            });
 
             if (missingRequired) {
-                Alert.alert("Validation", "Please fill all required fields in this step.");
+                // Find which required fields are missing
+                const missingFields = currentStepFields.fields
+                    .filter(f => f.required)
+                    .filter(f => {
+                        // Skip validation if field has a dependency that's not met
+                        if (f.dependsOn) {
+                            const dependencyValue = formData[f.dependsOn.field];
+                            const dependencyMet = (f.dependsOn.value === true && dependencyValue === true) ||
+                                                 (f.dependsOn.value === false && dependencyValue === false) ||
+                                                 (typeof f.dependsOn.value === 'string' && String(dependencyValue) === String(f.dependsOn.value));
+
+                            if (!dependencyMet) {
+                                return false; // Skip this field if dependency not met
+                            }
+                        }
+
+                        const value = formData[f.key];
+                        if (typeof value === 'boolean') return false;
+                        if (Array.isArray(value)) return value.length === 0;
+                        if (typeof value === 'string') return value.trim() === '';
+                        return !value;
+                    });
+
+                // Log detailed information for debugging
+                console.log('[handleNext] Missing required fields:', {
+                    step: currentStep + 1,
+                    stepTitle: currentStepFields.title,
+                    missingFields: missingFields.map(f => ({ key: f.key, label: f.label, value: formData[f.key] })),
+                    allRequiredFields: currentStepFields.fields.filter(f => f.required).map(f => ({ key: f.key, label: f.label, value: formData[f.key] }))
+                });
+
+                const missingFieldsText = missingFields.map(f => f.label).join(', ');
+                setAlertConfig({
+                    visible: true,
+                    title: "Missing Required Fields",
+                    message: `Please complete:\n\n${missingFieldsText}`,
+                    type: 'error',
+                    buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                });
                 return;
             }
 
@@ -1789,16 +2234,31 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                      setFormData('harvest_id', generateRecordId('PA'));
                 } else if (f.action === 'lookup' && !isFarmer && formData.farmer_uid) {
                     const farmerUID = formData.farmer_uid;
+                    console.log('[renderGroupedStepForm] Looking up farmer with UID:', farmerUID);
+                    console.log('[renderGroupedStepForm] Available farmers count:', farmersList?.length);
+
                     // Check for farmer_id (Django API), uid (legacy), or id (fallback)
                     const found = farmersList.find(f =>
                         String(f.farmer_id) === String(farmerUID) ||
                         String(f.uid) === String(farmerUID) ||
                         String(f.id) === String(farmerUID)
                     );
+
                     if (found) {
-                        setFormData('farmer_name', getFarmerDisplayName(found));
+                        const displayName = getFarmerDisplayName(found);
+                        console.log('[renderGroupedStepForm] ✓ Farmer found:', displayName);
+                        setFormData('farmer_name', displayName);
                     } else {
-                        Alert.alert('Farmer Not Found', 'No farmer with that UID was found in local records.');
+                        console.warn('[renderGroupedStepForm] ✗ Farmer NOT found with UID:', farmerUID);
+                        console.warn('[renderGroupedStepForm] Searched UIDs:', farmersList?.map(f => ({ farmer_id: f.farmer_id, uid: f.uid, id: f.id })));
+
+                        setAlertConfig({
+                            visible: true,
+                            title: 'Farmer Not Found',
+                            message: `No farmer with UID "${farmerUID}" was found in local records. Please verify the UID is correct.`,
+                            type: 'error',
+                            buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }]
+                        });
                     }
                 }
             });
@@ -1933,19 +2393,23 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             updateForm(field.key, processedValue);
                         };
 
+                        // Special handling for price_per_kg field - make it read-only when price is set from DB
+                        const isPriceReadOnly = field.key === 'price_per_kg' && !isFarmer && currentFarmerPrice !== null && currentFarmerPrice !== undefined;
+
                         const inputElement = (
                             <CustomInput
                                 key={field.key}
                                 label={`${field.label}${field.required ? ' *' : ''}`}
-                                value={fieldValue}
-                                onChangeText={field.readOnly ? null : handleTextChange}
+                                value={isPriceLoading && field.key === 'price_per_kg' && !isFarmer ? 'Loading...' : fieldValue}
+                                onChangeText={(isPriceReadOnly || field.readOnly) ? null : handleTextChange}
                                 keyboardType={field.keyboardType}
-                                editable={!field.readOnly}
+                                editable={!(isPriceReadOnly || field.readOnly)}
                                 placeholder={field.readOnly ? '' : (field.placeholder || `Enter ${field.label}`)}
+                                error={isFarmer ? farmerErrors[field.key] : harvestErrors[field.key]}
                             />
                         );
 
-                        // Show button after GPS field
+                        // Show button after GPS field for farmer form
                         if (field.key === 'gps' && isFarmer) {
                             return (
                                 <View key={field.key}>
@@ -1981,12 +2445,94 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             );
                         }
 
+                        // Show button after GPS coordinates field for harvest form
+                        if (field.key === 'gps_coordinates' && !isFarmer) {
+                            return (
+                                <View key={field.key}>
+                                    {inputElement}
+                                    <TouchableOpacity
+                                        style={styles.generateButton}
+                                        onPress={async () => {
+                                            const gpsLocation = await getCurrentGPSLocation();
+                                            updateForm('gps_coordinates', gpsLocation);
+                                            setAlertConfig({
+                                                visible: true,
+                                                title: 'GPS Coordinates Captured',
+                                                message: `Coordinates: ${gpsLocation}`,
+                                                type: 'success',
+                                                buttons: [
+                                                    {
+                                                        text: 'OK',
+                                                        onPress: () => {
+                                                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                                                        }
+                                                    }
+                                                ]
+                                            });
+                                        }}
+                                    >
+                                        <Text>
+                                            <Text style={styles.generateButtonText}>Capture Current GPS Location</Text>
+                                            <Text>{'\n'}</Text>
+                                            <Text style={styles.generateButtonSubtext}>(Capture exact delivery location)</Text>
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        }
+
                         // Show helper text for calculated amount_paid field
                         if (field.calculated && field.key === 'amount_paid') {
                             return (
                                 <View key={field.key}>
                                     {inputElement}
                                     <Text style={styles.helperText}>Auto-calculated: Weight × Price per Kg</Text>
+                                </View>
+                            );
+                        }
+
+                        // Show refresh button and helper text for price_per_kg field
+                        if (field.key === 'price_per_kg' && !isFarmer) {
+                            return (
+                                <View key={field.key}>
+                                    <Text style={styles.inputLabel}>{field.label}{field.required ? ' *' : ''}</Text>
+                                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                        <View style={{ flex: 1 }}>
+                                            <CustomInput
+                                                value={isPriceLoading ? 'Loading...' : fieldValue}
+                                                onChangeText={(isPriceReadOnly || field.readOnly) ? null : handleTextChange}
+                                                keyboardType={field.keyboardType}
+                                                editable={!(isPriceReadOnly || field.readOnly)}
+                                                placeholder={field.readOnly ? '' : (field.placeholder || `Enter ${field.label}`)}
+                                                error={harvestErrors[field.key]}
+                                            />
+                                        </View>
+                                        <TouchableOpacity
+                                            style={{
+                                                backgroundColor: CoffeeColors.PRIMARY_BROWN,
+                                                paddingHorizontal: 16,
+                                                paddingVertical: 12,
+                                                borderRadius: 8,
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                minHeight: 48
+                                            }}
+                                            onPress={() => setPriceRefreshKey(prev => prev + 1)}
+                                            disabled={isPriceLoading}
+                                        >
+                                            <Ionicons
+                                                name={isPriceLoading ? "hourglass" : "refresh"}
+                                                size={20}
+                                                color={CoffeeColors.WHITE}
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                    {isPriceReadOnly && (
+                                        <Text style={styles.helperText}>Price fetched from database (latest price)</Text>
+                                    )}
+                                    {currentFarmerPrice === null && !isPriceLoading && (
+                                        <Text style={styles.helperText}>No price set in database - enter manually</Text>
+                                    )}
                                 </View>
                             );
                         }
@@ -2079,13 +2625,43 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     const storageKey = 'farmer_drafts';
                     const existingDrafts = await AsyncStorage.getItem(storageKey);
                     const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
-                    const updatedDrafts = draftsArray.filter(d => d.id !== farmerId);
+                    const updatedDrafts = draftsArray.filter(d => d.id !== farmerId && d.uid !== farmerId && d.farmer_id !== farmerId);
                     await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
                     console.log('[handleDelete] Draft deleted from local storage');
                 } else {
-                    // Delete submitted farmer from API
-                    await deleteFarmer(farmerId);
-                    console.log('[handleDelete] Farmer deleted from API');
+                    // Try to delete submitted farmer from API
+                    let apiDeleteSucceeded = false;
+                    try {
+                        await deleteFarmer(farmerId);
+                        apiDeleteSucceeded = true;
+                        console.log('[handleDelete] ✅ Farmer deleted from API successfully, farmerId:', farmerId);
+                    } catch (apiError) {
+                        // If API delete fails (404 or 500), also try to remove from AsyncStorage
+                        console.error('[handleDelete] ❌ API DELETE FAILED for farmerId:', farmerId, {
+                            status: apiError.response?.status,
+                            message: apiError.message,
+                            responseData: apiError.response?.data
+                        });
+
+                        const storageKey = 'farmer_drafts';
+                        const existingDrafts = await AsyncStorage.getItem(storageKey);
+                        if (existingDrafts) {
+                            const draftsArray = JSON.parse(existingDrafts);
+                            const updatedDrafts = draftsArray.filter(d => d.id !== farmerId && d.uid !== farmerId && d.farmer_id !== farmerId);
+                            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
+                            console.log('[handleDelete] Removed from local storage as fallback');
+                        }
+
+                        // For 500 errors, just log a warning and treat as success (user sees it gone)
+                        if (apiError.response?.status === 500) {
+                            console.warn('[handleDelete] Backend error (500), but removed from local storage');
+                        } else if (apiError.response?.status !== 404) {
+                            // Re-throw if it's not 404 or 500
+                            throw apiError;
+                        } else {
+                            console.log('[handleDelete] Record not found in API (404), treating as successful deletion');
+                        }
+                    }
                 }
 
                 // Remove from local state immediately for better UX
@@ -2118,13 +2694,34 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     const storageKey = 'harvest_drafts';
                     const existingDrafts = await AsyncStorage.getItem(storageKey);
                     const draftsArray = existingDrafts ? JSON.parse(existingDrafts) : [];
-                    const updatedDrafts = draftsArray.filter(d => d.id !== harvestId);
+                    const updatedDrafts = draftsArray.filter(d => d.id !== harvestId && d.harvest_id !== harvestId);
                     await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
                     console.log('[handleDelete] Draft deleted from local storage');
                 } else {
-                    // Delete submitted harvest from API
-                    await deleteHarvest(harvestId);
-                    console.log('[handleDelete] Harvest deleted from API');
+                    // Try to delete from API first
+                    try {
+                        await deleteHarvest(harvestId);
+                        console.log('[handleDelete] Harvest deleted from API');
+                    } catch (apiError) {
+                        // If API delete fails (404 or 500), also try to remove from AsyncStorage
+                        console.warn('[handleDelete] API delete failed, attempting to remove from local storage:', apiError.message);
+
+                        const storageKey = 'harvest_drafts';
+                        const existingDrafts = await AsyncStorage.getItem(storageKey);
+                        if (existingDrafts) {
+                            const draftsArray = JSON.parse(existingDrafts);
+                            const updatedDrafts = draftsArray.filter(d => d.id !== harvestId && d.harvest_id !== harvestId);
+                            await AsyncStorage.setItem(storageKey, JSON.stringify(updatedDrafts));
+                            console.log('[handleDelete] Removed from local storage as fallback');
+                        }
+
+                        // Re-throw the error if it's not a 404 (record not found)
+                        if (apiError.response?.status !== 404) {
+                            throw apiError;
+                        } else {
+                            console.log('[handleDelete] Record not found in API (404), treating as successful deletion');
+                        }
+                    }
                 }
 
                 // Remove from local state immediately for better UX
@@ -2151,10 +2748,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             }
         } catch (error) {
             console.error('[handleDelete] Delete failed:', error);
-            const errorMsg = error.response?.data?.detail
-                || error.response?.data?.message
-                || error.message
-                || 'Failed to delete record';
+
+            // Build user-friendly error message
+            let errorMsg = 'Failed to delete record.';
+            if (error.response?.status === 500) {
+                errorMsg = 'Server error occurred. The record may have been deleted. Please refresh and check.';
+            } else if (error.response?.status === 404) {
+                errorMsg = 'Record not found. It may have already been deleted.';
+            } else if (error.response?.data?.detail) {
+                errorMsg = error.response.data.detail;
+            } else if (error.response?.data?.message) {
+                errorMsg = error.response.data.message;
+            } else if (error.message) {
+                errorMsg = error.message;
+            }
 
             // Show error using CustomAlert
             setAlertConfig({
@@ -2164,7 +2771,15 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 type: 'error',
                 buttons: [
                     {
+                        text: 'Refresh',
+                        onPress: async () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                            await loadRecords();
+                        }
+                    },
+                    {
                         text: 'OK',
+                        style: 'cancel',
                         onPress: () => {
                             setAlertConfig(prev => ({ ...prev, visible: false }));
                         }
@@ -2275,10 +2890,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 farmer_uid: record.name || record.farmer_uid || '',
                 farmer_name: record.farmer_name || '',
                 weight_on_delivery: String(record.weight_on_delivery || ''),
+                location_on_delivery: record.location_on_delivery || '',
+                gps_coordinates: record.gps_coordinates || '',
                 number_of_bags: String(record.number_of_bags || ''),
                 date_of_delivery: record.date_of_delivery || '',
                 coffee_type: record.grade || record.coffee_type || '',
-                amount_paid: String(record.amount_paid || ''),
+                price_per_kg: record.price_per_kg ? formatNumberWithCommas(String(record.price_per_kg)) : (currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : ''),
+                amount_paid: record.amount_paid ? formatNumberWithCommas(String(record.amount_paid)) : '',
                 paid_by: record.paid_by || record.who_paid || '',
                 selectedStaff: null, // Will be set by SearchableStaffPicker
                 harvest_id: record.id || record.harvest_id || '',
@@ -2360,6 +2978,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     farmer_uid: draftRecord.farmer_uid || draftRecord.name || '',
                     farmer_name: draftRecord.farmer_name || '',
                     weight_on_delivery: draftRecord.weight_on_delivery || 0,
+                    location_on_delivery: draftRecord.location_on_delivery || '',
+                    gps_coordinates: draftRecord.gps_coordinates || '',
                     number_of_bags: draftRecord.number_of_bags || 0,
                     date_of_delivery: draftRecord.date_of_delivery || '',
                     coffee_type: draftRecord.coffee_type || draftRecord.grade || '',
@@ -2494,6 +3114,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     }}
                     onDelete={(r) => handleDelete(r, 'farmer')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
+                    onVoucher={null}
                 />
             );
         } else {
@@ -2517,6 +3138,38 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     }}
                     onDelete={(r) => handleDelete(r, 'harvest')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
+                    onVoucher={(r) => {
+                        // Prepare harvest data for voucher - lookup farmer name from farmersList
+                        const farmerUID = r.name || r.farmer_name || r.farmer_uid;
+                        let farmerName = farmerUID || 'Unknown';
+
+                        // Look up farmer name from farmersList
+                        if (farmerUID && Array.isArray(farmersList)) {
+                            const farmer = farmersList.find(f =>
+                                String(f.farmer_id) === String(farmerUID) ||
+                                String(f.uid) === String(farmerUID) ||
+                                String(f.id) === String(farmerUID)
+                            );
+
+                            if (farmer) {
+                                farmerName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || farmer.name || farmerUID;
+                            }
+                        }
+
+                        const voucherData = {
+                            ...r,
+                            farmer_name: farmerName, // Use farmer_name to match PaymentVoucherScreen expectations
+                            blockId: 'N/A', // Aggregation might not have blocks
+                            price_per_kg: parseFormattedNumber(r.price_per_kg) || 0, // Parse formatted strings from API
+                            amount_paid: parseFormattedNumber(r.amount_paid) || 0, // Parse formatted strings from API
+                            weight_on_delivery: parseFormattedNumber(r.weight_on_delivery) || 0, // Parse formatted strings from API
+                            pricePerKg: parseFormattedNumber(r.price_per_kg) || 0,
+                            amountPaid: parseFormattedNumber(r.amount_paid) || 0,
+                            paidBy: r.paid_by || 'N/A',
+                            date: r.date_of_delivery || r.date,
+                        };
+                        onNavigate('PaymentVoucher', { harvestData: voucherData });
+                    }}
                 />
             );
         }
@@ -2536,7 +3189,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     return (
         <View style={styles.screen}>
             <SimpleHeader
-                title="Aggregation Records"
+                title="External Harvest Records"
                 onBackPress={handleBackPress}
                 unsyncedCount={unsyncedCount}
                 onSync={handleSyncRecords}
@@ -2732,6 +3385,15 @@ const styles = StyleSheet.create({
     readOnlyInput: {
         backgroundColor: LIGHT_GRAY_BG,
         color: TEXT_GRAY,
+    },
+    errorInput: {
+        borderColor: '#d32f2f',
+    },
+    errorText: {
+        color: '#d32f2f',
+        fontSize: 12,
+        marginTop: 4,
+        fontFamily: Fonts.regular,
     },
     helperText: {
         fontSize: 12,
@@ -3209,9 +3871,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        backgroundColor: '#fff',
         paddingVertical: 15,
-        borderBottomWidth: 1,
-        borderBottomColor: LIGHT_GRAY_BG,
+        paddingHorizontal: 15,
+        borderRadius: 8,
+        marginBottom: 10,
+        borderLeftWidth: 4,
+        borderLeftColor: PRIMARY_BROWN,
+        shadowColor: DARK_BROWN,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
     },
     dataListItemTitle: {
         fontSize: 16,
@@ -3365,7 +4036,7 @@ const styles = StyleSheet.create({
         padding: 16,
     },
     detailNameCard: {
-        backgroundColor: VERY_LIGHT_BROWN,
+        backgroundColor: '#fef5f0',
         padding: 20,
         borderRadius: 12,
         marginBottom: 20,

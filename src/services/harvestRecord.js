@@ -2,6 +2,7 @@
 
 import ApiService from './ApiService';
 import AsyncStorage from "@react-native-async-storage/async-storage"; // <-- Added for sync utilities
+import { logProductionHarvestCreated, logSyncCompleted } from './ActivityService';
 
 const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsynced records
 
@@ -10,7 +11,18 @@ const SYNC_QUEUE_KEY = "harvests_sync_queue"; // Key for the local queue of unsy
 /**
  * Maps the UI payload (camelCase, internal flags) to the format expected by the backend API (snake_case, strings).
  *
- * API Schema POST: { "name": "string", "weight_on_delivery": integer, "date_of_delivery": "string", "price_per_kg": integer, "amount_paid": "string", "paid_by": "string" }
+ * API Schema POST: {
+ *   "name": "string",
+ *   "coffee_type": "string",
+ *   "weight_on_delivery": integer,
+ *   "date_of_delivery": "string",
+ *   "location_of_delivery": "string",
+ *   "gps_coordinates_delivery": "string",
+ *   "price_per_kg": integer,
+ *   "amount_paid": "string",
+ *   "paid_by": "string",
+ *   "harvest_id": "string"
+ * }
  *
  * @param {object} payload - The raw payload from the UI or the sync queue.
  * @returns {object} The API-ready payload.
@@ -43,22 +55,39 @@ const mapToApiPayload = (payload) => {
     apiPayload.weight_on_delivery = Math.round(Number(payload.weight));
 
     // 3. Worker Name (UI: workerName (string) -> API: name (string))
-    apiPayload.name = payload.workerName;
+    // Handle multiple possible field names for worker name
+    apiPayload.name = payload.workerName || payload.worker_name || payload.name || '';
 
-    // 4. Price per Kg (UI: pricePerKg (Number) -> API: price_per_kg (integer))
+    // 4. Coffee Type (optional field - defaults to null in backend)
+    // Include as null to explicitly match backend model
+    apiPayload.coffee_type = payload.coffeeType || null;
+
+    // 5. Price per Kg (UI: pricePerKg (Number) -> API: price_per_kg (integer))
     apiPayload.price_per_kg = Math.round(Number(payload.pricePerKg));
 
-    // 5. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (string))
+    // 6. Amount Paid (UI: amountPaid (Number) -> API: amount_paid (string))
     apiPayload.amount_paid = String(Number(payload.amountPaid).toFixed(2));
 
-    // 6. Paid By (UI: paidBy (string like "RF001") -> API: paid_by (string))
+    // 7. Paid By (UI: paidBy (string like "RF001") -> API: paid_by (string))
     // Keep as string - API expects staff ID strings like "RF001", "RF002", etc.
-    // Handle if paidBy is an object with id property
+    // Handle if paidBy is an object with id property, or multiple field name variations
     if (typeof payload.paidBy === 'object' && payload.paidBy && payload.paidBy.id) {
-        apiPayload.paid_by = payload.paidBy.id;
+        apiPayload.paid_by = String(payload.paidBy.id);
+    } else if (payload.paidBy) {
+        apiPayload.paid_by = String(payload.paidBy);
+    } else if (payload.paid_by) {
+        apiPayload.paid_by = String(payload.paid_by);
+    } else if (payload.who_paid) {
+        apiPayload.paid_by = String(payload.who_paid);
     } else {
-        apiPayload.paid_by = String(payload.paidBy || '');
+        apiPayload.paid_by = '';
     }
+
+    // 8. Location of Delivery (optional - auto-populated from GPS in backend)
+    apiPayload.location_of_delivery = payload.locationOfDelivery || null;
+
+    // 9. GPS Coordinates (optional - if device provides location)
+    apiPayload.gps_coordinates_delivery = payload.gpsCoordinates || null;
 
     return apiPayload;
 };
@@ -70,6 +99,7 @@ const mapToApiPayload = (payload) => {
  */
 export const postHarvestRecord = async (uiPayload) => {
     const apiPayload = mapToApiPayload(uiPayload);
+    const harvestId = apiPayload.harvest_id;
     // Endpoint: aggregation/farmer-harvest/
     const endpoint = 'aggregation/farmer-harvest/';
 
@@ -78,7 +108,40 @@ export const postHarvestRecord = async (uiPayload) => {
     console.log('[postHarvestRecord] Mapped API payload:', apiPayload);
 
     try {
-        const response = await ApiService.post(endpoint, apiPayload);
+        let response;
+
+        // Check if harvest already exists (for re-sync scenarios)
+        try {
+            const existingCheck = await ApiService.get(`aggregation/farmer-harvest/${harvestId}/`);
+            if (existingCheck.status === 200) {
+                // Harvest exists, use PUT to update
+                console.log('[postHarvestRecord] Harvest exists, updating...');
+                response = await ApiService.put(`aggregation/farmer-harvest/${harvestId}/`, apiPayload);
+                console.log('[postHarvestRecord] Harvest updated successfully');
+            }
+        } catch (checkError) {
+            // Harvest doesn't exist (404) or other error, use POST to create
+            if (checkError.response?.status === 404) {
+                console.log('[postHarvestRecord] Harvest does not exist, creating...');
+                response = await ApiService.post(endpoint, apiPayload);
+                console.log('[postHarvestRecord] Harvest created successfully');
+            } else {
+                // Some other error during check, try POST anyway
+                console.log('[postHarvestRecord] Error checking harvest existence, trying POST...');
+                response = await ApiService.post(endpoint, apiPayload);
+                console.log('[postHarvestRecord] Harvest submitted successfully');
+            }
+        }
+
+        // Log activity for successful harvest creation
+        try {
+            const workerName = apiPayload.name || 'Unknown';
+            const weight = apiPayload.weight_on_delivery || 0;
+            await logProductionHarvestCreated(response.data.id || apiPayload.harvest_id, workerName, weight);
+        } catch (activityError) {
+            console.warn('[postHarvestRecord] Failed to log activity:', activityError);
+        }
+
         return { success: true, status: response.status, remoteData: response.data };
     } catch (error) {
         // Return 0 for status if network error (offline) to handle offline state robustly
@@ -259,7 +322,7 @@ export const syncAllRecords = async () => {
             validationErrors.push(`paidBy is an empty string`);
         }
 
-        if (!record.workerName) {
+        if (!record.workerName && !record.worker_name && !record.name) {
             validationErrors.push(`workerName is missing`);
         }
 
@@ -300,6 +363,15 @@ export const syncAllRecords = async () => {
     console.log(`[syncAllRecords] Synchronization complete. Synced ${syncedCount} of ${totalCount} records.`);
     if (failedRecords.length > 0) {
         console.log(`[syncAllRecords] Failed records:`, JSON.stringify(failedRecords, null, 2));
+    }
+
+    // Log sync completion activity
+    if (syncedCount > 0) {
+        try {
+            await logSyncCompleted(syncedCount, totalCount);
+        } catch (activityError) {
+            console.warn('[syncAllRecords] Failed to log sync activity:', activityError);
+        }
     }
 
     return { syncedCount, totalCount, failedRecords };
