@@ -58,6 +58,15 @@ import PaymentVoucherScreen from './features/harvest/screens/PaymentVoucherScree
 // Aggregation screens
 import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
 
+// Processing screens
+import ProcessingTypeScreen from './features/ProcessingScreen/screens/ProcessingTypeScreen';
+import FermentingSummaryScreen from './features/ProcessingScreen/screens/FermentingSummaryScreen';
+import FermentingFormScreen from './features/ProcessingScreen/screens/FermentingFormScreen';
+import WashingSummaryScreen from './features/ProcessingScreen/screens/WashingSummaryScreen';
+import WashingFormScreen from './features/ProcessingScreen/screens/WashingFormScreen';
+import NaturalSundryingSummaryScreen from './features/ProcessingScreen/screens/NaturalSundryingSummaryScreen';
+import NaturalSundryingFormScreen from './features/ProcessingScreen/screens/NaturalSundryingFormScreen';
+
 // Initialize the stack navigator
 const Stack = createNativeStackNavigator();
 
@@ -218,6 +227,52 @@ const App = () => {
                         name="Processing"
                         component={ProcessingScreen}
                         options={{ title: 'Processing' }}
+                    />
+
+                    {/* Processing Type screens */}
+                    <Stack.Screen
+                        name="ProcessingType"
+                        component={ProcessingTypeScreen}
+                        options={{ title: 'Processing Types' }}
+                    />
+
+                    {/* Fermenting screens */}
+                    <Stack.Screen
+                        name="FermentingSummary"
+                        component={FermentingSummaryScreen}
+                        options={{ title: 'Fermenting Records' }}
+                    />
+
+                    <Stack.Screen
+                        name="FermentingForm"
+                        component={FermentingFormScreen}
+                        options={{ title: 'Fermenting Form' }}
+                    />
+
+                    {/* Washing screens */}
+                    <Stack.Screen
+                        name="WashingSummary"
+                        component={WashingSummaryScreen}
+                        options={{ title: 'Washing Records' }}
+                    />
+
+                    <Stack.Screen
+                        name="WashingForm"
+                        component={WashingFormScreen}
+                        options={{ title: 'Washing Form' }}
+                    />
+
+                    {/* Natural Sundrying screens */}
+                    <Stack.Screen
+                        name="NaturalSundryingSummary"
+                        component={NaturalSundryingSummaryScreen}
+                        options={{ title: 'Natural Sundrying Records' }}
+                    />
+
+                    <Stack.Screen
+                        name="NaturalSundryingForm"
+                        component={NaturalSundryingFormScreen}
+                        options={{ title: 'Natural Sundrying Form' }}
                     />
 
                     {/* Block screens */}

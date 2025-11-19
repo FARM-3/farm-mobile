@@ -56,6 +56,15 @@ export default function ProcessingScreen({ navigation }) {
     );
   };
 
+  const handleCardPress = (process) => {
+    // Navigate to ProcessingType screen if available, otherwise show coming soon
+    if (process.screen === 'ProcessingType') {
+      navigation.navigate(process.screen);
+    } else {
+      handleComingSoon(process.name);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Simple White Header */}
@@ -69,7 +78,7 @@ export default function ProcessingScreen({ navigation }) {
             <TouchableOpacity
               key={process.id}
               style={styles.card}
-              onPress={() => handleComingSoon(process.name)}
+              onPress={() => handleCardPress(process)}
               activeOpacity={0.7}
             >
               <Text style={styles.cardIcon}>{process.icon}</Text>

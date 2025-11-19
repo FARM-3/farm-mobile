@@ -12,6 +12,7 @@ import {
     Platform,
     KeyboardAvoidingView,
     ActivityIndicator,
+    Modal,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -59,8 +60,13 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
     const [isSaving, setIsSaving] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editRecordId, setEditRecordId] = useState(null);
-    const [grades, setGrades] = useState([]); // List of available grades from Floating table
-    const [loadingGrades, setLoadingGrades] = useState(false);
+    const [showGradePicker, setShowGradePicker] = useState(false);
+
+    // Grade options
+    const gradeOptions = [
+        { id: 'A', label: 'Grade A' },
+        { id: 'B', label: 'Grade B' },
+    ];
 
     // Custom Alert state
     const [alertVisible, setAlertVisible] = useState(false);
@@ -71,29 +77,11 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
         buttons: [],
     });
 
-    // Load available grades from Floating API
-    const loadGrades = useCallback(async () => {
-        setLoadingGrades(true);
-        try {
-            // TODO: Implement API call to fetch floating grades
-            // const response = await fetchFloatingGrades();
-            // setGrades(response.data);
-
-            // Placeholder data for now
-            setGrades([
-                { id: 'GRA1401A00', label: 'GRA1401A00 - Grade A' },
-                { id: 'GRB1401A00', label: 'GRB1401A00 - Grade B' },
-            ]);
-        } catch (error) {
-            console.error('[NaturalSundryingForm] Error loading grades:', error);
-        } finally {
-            setLoadingGrades(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        loadGrades();
-    }, [loadGrades]);
+    // Handler for selecting a grade
+    const handleGradeSelect = (grade) => {
+        updateField('grade', grade.label);
+        setShowGradePicker(false);
+    };
 
     // Initialize form with edit data if provided
     useEffect(() => {
@@ -241,26 +229,64 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
                     <Text style={styles.mainTitle}>Natural Sundrying Details</Text>
 
                     {/* Grade Selection */}
-                    <Text style={styles.label}>Grade ID *</Text>
-                    {loadingGrades ? (
-                        <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
-                    ) : (
-                        <View style={styles.pickerWrap}>
-                            <TouchableOpacity
-                                style={styles.pickerButton}
-                                onPress={() => {
-                                    // TODO: Implement grade picker modal
-                                    console.log('Open grade picker');
-                                }}
-                            >
-                                <Text style={styles.pickerButtonText}>
-                                    {formData.grade || 'Select Grade'}
-                                </Text>
-                                <Ionicons name="chevron-down" size={20} color={CoffeeColors.MEDIUM_BROWN} />
-                            </TouchableOpacity>
-                        </View>
-                    )}
-                    <Text style={styles.helperText}>Select the grade from Quality Control (Floating)</Text>
+                    <Text style={styles.label}>Grade *</Text>
+                    <View style={styles.pickerWrap}>
+                        <TouchableOpacity
+                            style={styles.pickerButton}
+                            onPress={() => setShowGradePicker(true)}
+                        >
+                            <Text style={[styles.pickerButtonText, !formData.grade && styles.placeholderText]}>
+                                {formData.grade || 'Select Grade'}
+                            </Text>
+                            <Ionicons name="chevron-down" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={styles.helperText}>Select the coffee grade</Text>
+
+                    {/* Grade Picker Modal */}
+                    <Modal
+                        visible={showGradePicker}
+                        transparent={true}
+                        animationType="fade"
+                        onRequestClose={() => setShowGradePicker(false)}
+                    >
+                        <TouchableOpacity
+                            style={styles.modalOverlay}
+                            activeOpacity={1}
+                            onPress={() => setShowGradePicker(false)}
+                        >
+                            <View style={styles.modalContent}>
+                                <View style={styles.modalHeader}>
+                                    <Text style={styles.modalTitle}>Select Grade</Text>
+                                    <TouchableOpacity onPress={() => setShowGradePicker(false)}>
+                                        <Ionicons name="close" size={24} color={CoffeeColors.DARK_BROWN} />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.modalBody}>
+                                    {gradeOptions.map((grade) => (
+                                        <TouchableOpacity
+                                            key={grade.id}
+                                            style={[
+                                                styles.gradeOption,
+                                                formData.grade === grade.label && styles.gradeOptionSelected
+                                            ]}
+                                            onPress={() => handleGradeSelect(grade)}
+                                        >
+                                            <Text style={[
+                                                styles.gradeOptionText,
+                                                formData.grade === grade.label && styles.gradeOptionTextSelected
+                                            ]}>
+                                                {grade.label}
+                                            </Text>
+                                            {formData.grade === grade.label && (
+                                                <Ionicons name="checkmark-circle" size={24} color="#FF9800" />
+                                            )}
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        </TouchableOpacity>
+                    </Modal>
 
                     {/* Start Date */}
                     <Text style={styles.label}>Start Date *</Text>
@@ -436,5 +462,69 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.semiBold,
         textDecorationLine: 'underline',
         fontSize: 14,
+    },
+    placeholderText: {
+        color: CoffeeColors.GRAY_TEXT,
+    },
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        backgroundColor: CoffeeColors.WHITE,
+        borderRadius: 15,
+        width: '85%',
+        maxHeight: '60%',
+        shadowColor: CoffeeColors.DARK_BROWN,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: CoffeeColors.LIGHT_GRAY,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        fontFamily: Fonts.bold,
+        color: CoffeeColors.DARK_BROWN,
+    },
+    modalBody: {
+        padding: 10,
+    },
+    gradeOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 16,
+        marginVertical: 4,
+        marginHorizontal: 10,
+        borderRadius: 10,
+        backgroundColor: CoffeeColors.LIGHT_GRAY_BG,
+    },
+    gradeOptionSelected: {
+        backgroundColor: '#FFF3E0',
+        borderWidth: 2,
+        borderColor: '#FF9800',
+    },
+    gradeOptionText: {
+        fontSize: 16,
+        fontWeight: '500',
+        fontFamily: Fonts.regular,
+        color: CoffeeColors.DARK_BROWN,
+    },
+    gradeOptionTextSelected: {
+        fontWeight: '700',
+        fontFamily: Fonts.bold,
+        color: '#FF9800',
     },
 });
