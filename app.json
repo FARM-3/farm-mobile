@@ -1,13 +1,14 @@
 {
   "expo": {
     "name": "Rugyeyo-fmis",
-    "slug": "fmis-mobile",
+    "slug": "rugyeyo-farm-fmis-mobile",
     "jsEngine": "hermes",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "owner": "refactoryacademy",
     "splash": {
       "image": "./src/assets/splash-icon.png",
       "resizeMode": "contain",
@@ -20,8 +21,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to capture GPS coordinates for farmer records."
-      }
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to capture GPS coordinates for farmer records.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.anonymous.fmismobile"
     },
     "android": {
       "adaptiveIcon": {
@@ -53,7 +56,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "8c087bb9-b502-4477-8d8f-b218d5ffaa49"
+        "projectId": "2d047a6b-6ef0-4e31-8932-5769fc56fd3a"
       }
     }
   }
