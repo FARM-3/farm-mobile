@@ -44,6 +44,11 @@ import SecurityQuestionsScreen from './features/dashboard/screens/SecurityQuesti
 import DashboardScreen from './features/dashboard/screens/DashboardScreen';
 import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 
+// Processing screens
+import QualityControlScreen from './features/ProcessingScreen/screens/QualityControlScreen';
+import RipenessScreen from './features/ProcessingScreen/screens/RipenessScreen';
+import FloatingScreen from './features/ProcessingScreen/screens/FloatingScreen';
+
 // Block screens
 import BlockDetailsForm from './features/blocks/BlockDetailsForm';
 import BlockSummary from './features/blocks/BlockSummary';
@@ -218,6 +223,25 @@ const App = () => {
                         name="Processing"
                         component={ProcessingScreen}
                         options={{ title: 'Processing' }}
+                    />
+
+                    {/* Quality Control screens */}
+                    <Stack.Screen
+                        name="QualityControl"
+                        component={QualityControlScreen}
+                        options={{ title: 'Quality Control' }}
+                    />
+
+                    <Stack.Screen
+                        name="RipenessScreen"
+                        component={RipenessScreen}
+                        options={{ title: 'Ripeness Scores' }}
+                    />
+
+                    <Stack.Screen
+                        name="FloatingScreen"
+                        component={FloatingScreen}
+                        options={{ title: 'Floating Records' }}
                     />
 
                     {/* Block screens */}
