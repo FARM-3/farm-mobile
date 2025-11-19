@@ -92,6 +92,39 @@ class DatabaseService {
       `);
       console.log('[DatabaseService] Processing table created');
 
+      // Ripeness Score table
+      await this.db.execAsync(`
+        CREATE TABLE IF NOT EXISTS ripeness_scores (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          harvest_id TEXT NOT NULL,
+          date TEXT NOT NULL,
+          sample_size INTEGER NOT NULL,
+          no_of_red_cherry INTEGER NOT NULL,
+          ripeness_score REAL NOT NULL,
+          synced INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('[DatabaseService] Ripeness scores table created');
+
+      // Floating records table
+      await this.db.execAsync(`
+        CREATE TABLE IF NOT EXISTS floating_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          harvest_id TEXT NOT NULL,
+          grade TEXT NOT NULL,
+          weight REAL NOT NULL,
+          date TEXT NOT NULL,
+          ripeness_score REAL NOT NULL,
+          grade_id TEXT NOT NULL,
+          synced INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('[DatabaseService] Floating records table created');
+
       // Sync queue table - tracks records that need to be synced
       await this.db.execAsync(`
         CREATE TABLE IF NOT EXISTS sync_queue (
@@ -407,6 +440,8 @@ class DatabaseService {
         DELETE FROM harvests;
         DELETE FROM farmers;
         DELETE FROM processing;
+        DELETE FROM ripeness_scores;
+        DELETE FROM floating_records;
         DELETE FROM sync_queue;
       `);
       console.log('[DatabaseService] All data cleared');

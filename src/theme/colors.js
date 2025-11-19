@@ -3,6 +3,7 @@ const CoffeeColors = {
   // Coffee-themed brown color palette (All shades of #8B4513)
   VERY_DARK_BROWN: '#3E2723',      // Darkest shade - shadows, dark elements
   DARK_BROWN: '#6B3410',           // Dark brown - headers, primary buttons
+  COFFEE_BROWN: '#8B4513',         // Coffee brown - buttons, accents (alias for MEDIUM_BROWN)
   MEDIUM_BROWN: '#8B4513',         // Primary brown - main accent
   PRIMARY_BROWN: '#8B4513',        // Alias for MEDIUM_BROWN - primary color
   LIGHT_BROWN: '#A0522D',          // Light brown - lighter accents

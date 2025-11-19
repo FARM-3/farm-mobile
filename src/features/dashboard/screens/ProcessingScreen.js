@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
@@ -16,44 +17,65 @@ export default function ProcessingScreen({ navigation }) {
   const processes = [
     {
       id: 1,
-      name: 'Fermenting',
-      icon: '☕',
+      name: 'Quality Control',
+      icon: 'clipboard-check-outline',
       lastRecorded: 'Last Recorded by Sarah',
       time: '10:30 AM',
-      screen: 'Fermenting',
+      screen: 'QualityControl',
     },
     {
       id: 2,
-      name: 'Washing',
-      icon: '💧',
+      name: 'Processing Type',
+      icon: 'cog-outline',
       lastRecorded: 'Last Recorded by Sarah',
       time: '09:00 AM',
-      screen: 'Washing',
+      screen: 'ProcessingType',
     },
     {
       id: 3,
-      name: 'Sundrying',
-      icon: '☀️',
+      name: 'Drying',
+      icon: 'weather-sunny',
       lastRecorded: 'Last Recorded by Emily',
       time: '02:00 PM',
-      screen: 'Sundrying',
+      screen: 'Drying',
     },
     {
       id: 4,
       name: 'Bagging',
-      icon: '🎒',
+      icon: 'package-variant-closed',
       lastRecorded: 'Last Recorded by Michael',
       time: '04:30 PM',
       screen: 'Bagging',
     },
   ];
 
-  const handleComingSoon = (processName) => {
-    Alert.alert(
-      `${processName} Coming Soon`,
-      `The ${processName} feature is currently under development.`,
-      [{ text: 'OK' }]
-    );
+  const handleCardPress = (process) => {
+    console.log('[ProcessingScreen] Card pressed:', process.name, 'Screen:', process.screen);
+
+    if (process.screen === 'QualityControl') {
+      try {
+        console.log('[ProcessingScreen] Navigating to QualityControl screen...');
+        navigation.navigate(process.screen);
+      } catch (error) {
+        console.error('[ProcessingScreen] Navigation error:', error);
+        Alert.alert('Error', 'Failed to navigate to Quality Control screen');
+      }
+    } else {
+      Alert.alert(
+        `${process.name} Coming Soon`,
+        `The ${process.name} feature is currently under development.`,
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleCardPress = (process) => {
+    // Navigate to ProcessingType screen if available, otherwise show coming soon
+    if (process.screen === 'ProcessingType') {
+      navigation.navigate(process.screen);
+    } else {
+      handleComingSoon(process.name);
+    }
   };
 
   return (
@@ -69,10 +91,15 @@ export default function ProcessingScreen({ navigation }) {
             <TouchableOpacity
               key={process.id}
               style={styles.card}
-              onPress={() => handleComingSoon(process.name)}
+              onPress={() => handleCardPress(process)}
               activeOpacity={0.7}
             >
-              <Text style={styles.cardIcon}>{process.icon}</Text>
+              <MaterialCommunityIcons
+                name={process.icon}
+                size={48}
+                color={CoffeeColors.MEDIUM_BROWN}
+                style={styles.cardIcon}
+              />
               <Text style={styles.cardTitle}>{process.name}</Text>
               <Text style={styles.cardSubtitle}>{process.lastRecorded}</Text>
               <Text style={styles.cardTime}>{process.time}</Text>
@@ -116,7 +143,6 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   cardIcon: {
-    fontSize: 48,
     marginBottom: 12,
   },
   cardTitle: {
