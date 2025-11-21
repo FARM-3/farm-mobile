@@ -8,7 +8,10 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import CoffeeColors from '../../../theme/colors';
@@ -18,22 +21,50 @@ import BottomNav from '../../../components/BottomNav';
 import {
   getRipenessScores,
   addRipenessScore,
+  getAllHarvests,
 } from '../../../services/qualityControl';
 
 export default function RipenessScreen({ navigation }) {
   const [records, setRecords] = useState([]);
+  const [harvests, setHarvests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingHarvests, setLoadingHarvests] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [formData, setFormData] = useState({
     harvest_id: '',
     date: new Date().toISOString().split('T')[0],
-    sample_size: '',
+    sample_size: '100',
     no_of_red_cherry: '',
   });
+
+  const formatDateForDisplay = (date) => {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const handleDateChange = (event, date) => {
+    setShowDatePicker(Platform.OS === 'ios'); // Keep open on iOS
+
+    if (date) {
+      setSelectedDate(date);
+      setFormData({
+        ...formData,
+        date: date.toISOString().split('T')[0]
+      });
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
       loadRecords();
+      loadHarvests();
     }, [])
   );
 
@@ -44,9 +75,48 @@ export default function RipenessScreen({ navigation }) {
       setRecords(data);
     } catch (error) {
       console.error('Error loading ripeness records:', error);
-      Alert.alert('Error', 'Failed to load ripeness records');
+
+      // Check if it's a network error or 404
+      if (error.response?.status === 404) {
+        console.log('[RipenessScreen] No records found (404) - displaying empty state');
+        setRecords([]); // Just show empty state, don't alert
+      } else if (!error.response) {
+        // Network error - backend might be down
+        console.log('[RipenessScreen] Backend not reachable - showing empty state');
+        setRecords([]); // Show empty state instead of error
+      } else {
+        Alert.alert('Error', 'Failed to load ripeness records');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadHarvests = async () => {
+    try {
+      setLoadingHarvests(true);
+      console.log('[RipenessScreen] Fetching harvests from /api/aggregation/farmer-harvest/...');
+      const data = await getAllHarvests();
+      console.log('[RipenessScreen] ✓ Successfully loaded harvests:', data.length);
+      console.log('[RipenessScreen] First harvest sample:', JSON.stringify(data[0], null, 2));
+      console.log('[RipenessScreen] Sample harvest fields:', data[0] ? Object.keys(data[0]) : 'No harvests');
+      setHarvests(data);
+    } catch (error) {
+      console.error('[RipenessScreen] ✗ Error loading harvests:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+      });
+      // Show error to user so they know what's wrong
+      Alert.alert(
+        'Harvest Loading Failed',
+        `Could not load harvests from server.\n\nError: ${error.response?.status || 'Network error'}\n\nYou can still enter Harvest ID manually.`
+      );
+      setHarvests([]);
+    } finally {
+      setLoadingHarvests(false);
     }
   };
 
@@ -99,7 +169,51 @@ export default function RipenessScreen({ navigation }) {
       loadRecords();
     } catch (error) {
       console.error('Error saving ripeness score:', error);
-      Alert.alert('Error', 'Failed to save ripeness score');
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+
+      // Show more detailed error message
+      let errorMessage = 'Failed to save ripeness score';
+      let errorDetails = '';
+
+      if (error.response?.data) {
+        // Backend returned an error response
+        const errorData = error.response.data;
+        console.log('[RipenessScreen] Backend error data:', errorData);
+
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.harvest) {
+          // Harvest validation error - make it user-friendly
+          const harvestError = Array.isArray(errorData.harvest) ? errorData.harvest[0] : errorData.harvest;
+          if (harvestError.includes('does not exist') || harvestError.includes('Invalid pk')) {
+            errorMessage = `Harvest Not Found\n\nThe harvest "${formData.harvest_id}" does not exist in the database.\n\nPossible reasons:\n1. The harvest was deleted\n2. You need to create harvest records first\n3. The harvest list is outdated\n\nPlease refresh the page or contact your administrator.`;
+          } else {
+            errorMessage = `Harvest error: ${harvestError}`;
+          }
+        } else if (errorData.no_of_redcherry) {
+          errorMessage = `Red cherry field error: ${JSON.stringify(errorData.no_of_redcherry)}`;
+        } else {
+          errorMessage = JSON.stringify(errorData).substring(0, 200);
+        }
+        errorDetails = `\n\nStatus: ${error.response.status}`;
+      } else if (!error.response) {
+        errorMessage = 'Cannot connect to server. Please check if the backend is running.';
+        errorDetails = `\n\nAPI URL: http://142.93.94.236:8000/api/processing/ripeness/`;
+      } else if (error.response?.status) {
+        errorMessage = `Server error (${error.response.status})`;
+        errorDetails = error.response.statusText || '';
+      }
+
+      Alert.alert('Error', errorMessage + errorDetails);
     }
   };
 
@@ -138,24 +252,62 @@ export default function RipenessScreen({ navigation }) {
 
       <View style={styles.formField}>
         <Text style={styles.formLabel}>Harvest ID *</Text>
-        <TextInput
-          style={styles.formInput}
-          value={formData.harvest_id}
-          onChangeText={(text) => setFormData({ ...formData, harvest_id: text })}
-          placeholder="Enter Harvest ID"
-          placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
-        />
+        {loadingHarvests ? (
+          <View style={styles.pickerLoadingContainer}>
+            <ActivityIndicator size="small" color={CoffeeColors.COFFEE_BROWN} />
+            <Text style={styles.pickerLoadingText}>Loading harvests...</Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={formData.harvest_id}
+                onValueChange={(value) => setFormData({ ...formData, harvest_id: value })}
+                style={styles.picker}
+              >
+                <Picker.Item
+                  label={harvests.length === 0 ? "No harvests available - create harvests first" : "Select a harvest..."}
+                  value=""
+                />
+                {harvests.map((harvest) => (
+                  <Picker.Item
+                    key={harvest.id}
+                    label={`${harvest.harvest_id || harvest.id} - ${harvest.name || harvest.farmer_name || 'Unknown'}`}
+                    value={harvest.harvest_id || harvest.id}
+                  />
+                ))}
+              </Picker>
+            </View>
+            {harvests.length === 0 && (
+              <Text style={styles.helperText}>
+                No harvests found. Please create harvest records in the Aggregation section first.
+              </Text>
+            )}
+          </>
+        )}
       </View>
 
       <View style={styles.formField}>
         <Text style={styles.formLabel}>Date *</Text>
-        <TextInput
-          style={styles.formInput}
-          value={formData.date}
-          onChangeText={(text) => setFormData({ ...formData, date: text })}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
-        />
+        <TouchableOpacity
+          style={styles.datePickerButton}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <MaterialCommunityIcons name="calendar" size={20} color={CoffeeColors.DARK_BROWN} />
+          <Text style={styles.datePickerText}>
+            {formatDateForDisplay(formData.date)}
+          </Text>
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleDateChange}
+            maximumDate={new Date()} // Prevent future dates
+          />
+        )}
       </View>
 
       <View style={styles.formField}>
@@ -163,7 +315,11 @@ export default function RipenessScreen({ navigation }) {
         <TextInput
           style={styles.formInput}
           value={formData.sample_size}
-          onChangeText={(text) => setFormData({ ...formData, sample_size: text })}
+          onChangeText={(text) => {
+            // Only allow numbers
+            const numericValue = text.replace(/[^0-9]/g, '');
+            setFormData({ ...formData, sample_size: numericValue });
+          }}
           placeholder="Enter Sample Size"
           keyboardType="numeric"
           placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
@@ -175,7 +331,11 @@ export default function RipenessScreen({ navigation }) {
         <TextInput
           style={styles.formInput}
           value={formData.no_of_red_cherry}
-          onChangeText={(text) => setFormData({ ...formData, no_of_red_cherry: text })}
+          onChangeText={(text) => {
+            // Only allow numbers
+            const numericValue = text.replace(/[^0-9]/g, '');
+            setFormData({ ...formData, no_of_red_cherry: numericValue });
+          }}
           placeholder="Enter Number of Red Cherry"
           keyboardType="numeric"
           placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
@@ -453,6 +613,47 @@ const styles = StyleSheet.create({
     color: CoffeeColors.DARK_BROWN,
     backgroundColor: CoffeeColors.WHITE,
   },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: CoffeeColors.MEDIUM_BROWN + '40',
+    borderRadius: 8,
+    backgroundColor: CoffeeColors.WHITE,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+    color: CoffeeColors.DARK_BROWN,
+  },
+  pickerLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: CoffeeColors.MEDIUM_BROWN + '40',
+    borderRadius: 8,
+    backgroundColor: CoffeeColors.WHITE,
+  },
+  pickerLoadingText: {
+    marginLeft: 10,
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: CoffeeColors.MEDIUM_BROWN,
+  },
+  datePickerButton: {
+    borderWidth: 1,
+    borderColor: CoffeeColors.MEDIUM_BROWN + '40',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: CoffeeColors.WHITE,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  datePickerText: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: CoffeeColors.DARK_BROWN,
+    marginLeft: 10,
+  },
   calculatedScore: {
     backgroundColor: CoffeeColors.COFFEE_BROWN + '10',
     padding: 16,
@@ -483,5 +684,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     fontFamily: Fonts.semiBold,
+  },
+  helperText: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: CoffeeColors.MEDIUM_BROWN,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 });
