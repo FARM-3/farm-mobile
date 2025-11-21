@@ -174,13 +174,9 @@ export const submitFarmer = async (data) => {
         // Boolean field - MUST be true/false
         defforestation_status: Boolean(data.deforested),
 
-        // Seedling info - Django CharField expects strings, not arrays
+        // Seedling info - strings (FIXED: age_of_seedlings is required)
         source_of_seedlings: data.seedling_source || '',
-        type_of_seedlings: Array.isArray(data.seedling_type) && data.seedling_type.length > 0
-            ? data.seedling_type.join(', ') // Convert array to comma-separated string for Django CharField
-            : (typeof data.seedling_type === 'string' && data.seedling_type.trim()
-                ? data.seedling_type.trim()
-                : 'Not specified'), // FIXED: Django CharField requires a string, not array
+        type_of_seedlings: data.seedling_type || '',
         age_of_seedlings: data.age_of_seedlings && data.age_of_seedlings.trim()
             ? data.age_of_seedlings.trim()
             : 'Not specified', // FIXED: Cannot be blank per Django model
@@ -192,19 +188,15 @@ export const submitFarmer = async (data) => {
         irrigation_source: data.irrigation || '',
 
         // FIXED: Fertilizers and Pesticides - STRINGS (Django changed back to CharField)
-        fertilizers: Array.isArray(data.fertilizers) && data.fertilizers.length > 0
+        fertilizers: Array.isArray(data.fertilizers)
             ? data.fertilizers.join(', ') // Convert array to comma-separated string
-            : (typeof data.fertilizers === 'string' && data.fertilizers.trim() ? data.fertilizers.trim() : 'None'), // Use 'None' if empty
-        pesticide: data.uses_pesticides === false || !data.pesticides
-            ? 'None' // Send 'None' if user didn't select pesticides
-            : (Array.isArray(data.pesticides) && data.pesticides.length > 0
-                ? data.pesticides.join(', ') // Convert array to comma-separated string
-                : (typeof data.pesticides === 'string' && data.pesticides.trim() ? data.pesticides.trim() : 'None')), // Use 'None' if empty
+            : (data.fertilizers || ''), // Use as-is if string, or empty string
+        pesticide: Array.isArray(data.pesticides)
+            ? data.pesticides.join(', ') // Convert array to comma-separated string
+            : (data.pesticides || ''), // Use as-is if string, or empty string
     };
 
     console.log('[aggregationService] ========== FARMER SUBMISSION ==========');
-    console.log('[aggregationService] Input data.seedling_type:', data.seedling_type, '(type:', typeof data.seedling_type, ')');
-    console.log('[aggregationService] Converted type_of_seedlings:', apiPayload.type_of_seedlings);
     console.log('[aggregationService] API payload:', JSON.stringify(apiPayload, null, 2));
 
     // Now try to sync to API (silent fail if offline)
@@ -230,25 +222,19 @@ export const submitFarmer = async (data) => {
         return response.data;
     } catch (error) {
         // Enhanced error logging for debugging
-        console.error('[aggregationService] ❌ FARMER SUBMISSION ERROR');
-        console.error('[aggregationService] Error name:', error.name);
-        console.error('[aggregationService] Error message:', error.message);
+        console.error('[aggregationService] ❌ API submission failed:');
+        console.error('[aggregationService] Error type:', error.name);
 
         if (error.response) {
             // Server responded with error status
-            console.error('[aggregationService] Backend Status Code:', error.response.status);
-            console.error('[aggregationService] Backend Status Text:', error.response.statusText);
-            console.error('[aggregationService] Backend Response Data:', JSON.stringify(error.response.data, null, 2));
-            console.error('[aggregationService] Backend Response Headers:', JSON.stringify(error.response.headers, null, 2));
-
-            // For 500 errors, backend crash or signal issue
-            if (error.response.status === 500) {
-                console.error('[aggregationService] ⚠️  SERVER ERROR 500 - Backend crashed or signal handling issue');
-            }
+            console.error('[aggregationService] Status:', error.response.status);
+            console.error('[aggregationService] Status text:', error.response.statusText);
+            console.error('[aggregationService] Response data:', JSON.stringify(error.response.data, null, 2));
+            console.error('[aggregationService] Response headers:', error.response.headers);
 
             // For 400 errors, show detailed validation errors
             if (error.response.status === 400) {
-                console.error('[aggregationService] ⚠️  VALIDATION ERRORS (400):');
+                console.error('[aggregationService] ⚠️  VALIDATION ERRORS:');
                 const validationErrors = error.response.data;
                 Object.keys(validationErrors).forEach(field => {
                     console.error(`  - ${field}: ${JSON.stringify(validationErrors[field])}`);
@@ -262,12 +248,11 @@ export const submitFarmer = async (data) => {
             }
         } else if (error.request) {
             // Request made but no response (network issue)
-            console.error('[aggregationService] ⚠️  No response received from backend');
-            console.error('[aggregationService] Network error - backend may not be running');
-            console.error('[aggregationService] Request sent to:', error.request.responseURL || 'aggregation/farmer/');
+            console.error('[aggregationService] No response received from server');
+            console.error('[aggregationService] Network error or server unreachable');
         } else {
             // Error in setting up the request
-            console.error('[aggregationService] Error during request setup:', error.message);
+            console.error('[aggregationService] Error message:', error.message);
         }
 
         // For offline scenarios, return local record
@@ -371,49 +356,23 @@ export const fetchHarvests = async () => {
 export const submitHarvest = async (data) => {
     try {
     console.log('[aggregationService] Submitting harvest to API...');
-        console.log('[aggregationService] Harvest form data received:', {
-            farmer_uid: data.farmer_uid,
-            farmer_name: data.farmer_name,
-            name: data.name,
-            selectedStaff: data.selectedStaff?.displayName || data.selectedStaff?.name,
-        });
-
-        // Build API-friendly payload according to Django FarmerHarvest model
-        // IMPORTANT: Match Django field names EXACTLY from models.py
-        // The 'name' field in FarmerHarvest should be the farmer's actual name (not UID)
-        // Frontend validation should ensure farmer_name is populated from successful farmer lookup
-        let farmerName = data.farmer_name || '';
-
-        // If farmer_name is empty, try other sources (though this should not happen with proper validation)
-        if (!farmerName && data.selectedStaff?.displayName) {
-            farmerName = data.selectedStaff.displayName;
-            console.warn('[aggregationService] ⚠️  farmer_name was empty, using selectedStaff.displayName instead');
-        }
-
-        // Log warning if still empty - this indicates a data quality issue
-        if (!farmerName || farmerName.trim() === '') {
-            console.warn('[aggregationService] ⚠️  CRITICAL: farmer_name is still empty. This should have been caught by frontend validation.');
-            console.warn('[aggregationService] Available fields:', {
-                farmer_name: data.farmer_name,
-                farmer_uid: data.farmer_uid,
-                name: data.name,
-                selectedStaff: data.selectedStaff,
-            });
-        }
-
-        console.log('[aggregationService] Final farmer name to send:', farmerName);
-
+        // Build API-friendly payload according to schema (required: id, name)
         const apiPayload = {
-            harvest_id: data.harvest_id ?? data.id ?? undefined, // CRITICAL: Primary key in Django
-            name: farmerName, // CRITICAL: Django model requires 'name' field (farmer's actual name, not UID)
-            coffee_type: data.coffee_type ?? data.grade ?? '',
+            id: data.id ?? data.harvest_id ?? undefined,
+            name: data.name ?? data.farmer_name ?? '',
+            // Schema expects integer weights - coerce/round
             weight_on_delivery: Number.isFinite(Number(data.weight_on_delivery)) ? Math.round(Number(data.weight_on_delivery)) : (data.weight_on_delivery ? parseInt(data.weight_on_delivery, 10) : 0),
+            location_on_delivery: data.location_on_delivery ?? '',
+            gps_coordinates: data.gps_coordinates ?? '',
+            weight_after_floating: Number.isFinite(Number(data.weight_after_floating)) ? Math.round(Number(data.weight_after_floating)) : (data.weight_after_floating ? parseInt(data.weight_after_floating, 10) : 0),
             date_of_delivery: data.date_of_delivery ?? data.harvest_date ?? '',
-            location_of_delivery: data.location_on_delivery ?? '', // CRITICAL: Field name in model is location_of_delivery
-            gps_coordinates_delivery: data.gps_coordinates ?? '', // CRITICAL: Field name in model is gps_coordinates_delivery
-            price_per_kg: Number.isFinite(Number(data.price_per_kg)) ? Math.round(Number(data.price_per_kg)) : 0,
+            grade: data.grade ?? data.quality ?? '',
+            cherry_color: data.cherry_colour ?? data.cherryColor ?? data.cherry_color ?? '',
+            stage: data.stage ?? '',
             amount_paid: data.amount_paid != null ? String(data.amount_paid) : '',
-            paid_by: data.paid_by ?? data.who_paid ?? data.payer ?? '',
+            paid_by: data.who_paid ?? data.paid_by ?? data.payer ?? '',
+            recorder_id: data.recorder_id ?? data.recorder ?? null,
+            timestamp: data.timestamp ?? Date.now(),
         };
 
         console.log('[aggregationService] Harvest payload for API:', JSON.stringify(apiPayload, null, 2));
@@ -451,29 +410,16 @@ export const submitHarvest = async (data) => {
 
         return response.data;
     } catch (error) {
-        console.error('[aggregationService] ❌ HARVEST SUBMISSION ERROR');
-        console.error('[aggregationService] Error name:', error.name);
-        console.error('[aggregationService] Error message:', error.message);
-
+        console.error('[aggregationService] Error submitting harvest:');
         if (error.response) {
-            console.error('[aggregationService] Backend Status Code:', error.response.status);
-            console.error('[aggregationService] Backend Status Text:', error.response.statusText);
-            console.error('[aggregationService] Backend Response Data:', JSON.stringify(error.response.data, null, 2));
-            console.error('[aggregationService] Backend Response Headers:', JSON.stringify(error.response.headers, null, 2));
-
-            // For 500 errors, this indicates a backend crash - might be signal issue
-            if (error.response.status === 500) {
-                console.error('[aggregationService] ⚠️  SERVER ERROR 500 - Backend may have crashed or signal handling issue');
-            }
+            console.error('Status:', error.response.status);
+            console.error('Response data:', error.response.data);
         } else if (error.request) {
-            console.error('[aggregationService] No response received from backend - network issue or backend not running');
-            console.error('[aggregationService] Request sent to:', error.request.responseURL);
+            console.error('No response received');
         } else {
-            console.error('[aggregationService] Error without response or request:', error);
+            console.error('Error message:', error.message);
         }
-
-        console.error('[aggregationService] Submitted payload was:', JSON.stringify(apiPayload, null, 2));
-        console.error('[aggregationService] Original data was:', JSON.stringify(data, null, 2));
+        console.error('Request payload:', JSON.stringify(data, null, 2));
 
         throw error;
     }
@@ -525,12 +471,12 @@ export const syncFarmers = async () => {
                     spacing_between_trees: '3 metres by 3 metres',
                     defforestation_status: false,
                     source_of_seedlings: 'nursery',
-                    type_of_seedlings: 'Other', // FIXED: Django CharField expects string, not array
-                    age_of_seedlings: 'Not specified',
+                    type_of_seedlings: 'Other',
+                    age_of_seedlings: '',
                     standard_practices: false,
                     irrigation_source: 'none',
-                    fertilizers: 'None',
-                    pesticide: 'None', // FIXED: Cannot be blank per Django model
+                    fertilizers: '',
+                    pesticide: '',
                 };
 
                 const response = await ApiService.post('aggregation/farmer/', apiPayload);
@@ -664,18 +610,6 @@ export const syncAllAggregation = async () => {
 };
 
 /**
- * Helper to add timeout to a promise
- */
-const withTimeout = (promise, timeoutMs = 15000) => {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
-        )
-    ]);
-};
-
-/**
  * Sync records from AsyncStorage (for AggregationScreen draft/pending records)
  * Handles both CREATE (new records) and UPDATE (existing records)
  * @param {Array} farmerRecords - Farmer records to sync
@@ -683,23 +617,9 @@ const withTimeout = (promise, timeoutMs = 15000) => {
  * @returns {Promise<Object>} Sync results with success/failure counts
  */
 export const syncAggregationRecords = async (farmerRecords = [], harvestRecords = []) => {
-    console.log('[aggregationService] ========== STARTING AGGREGATION SYNC ==========');
+    console.log('[aggregationService] Starting AsyncStorage sync...');
     console.log(`[aggregationService] Farmers to sync: ${farmerRecords.length}`);
     console.log(`[aggregationService] Harvests to sync: ${harvestRecords.length}`);
-    console.log('[aggregationService] Sync started at:', new Date().toISOString());
-
-    if (farmerRecords.length === 0 && harvestRecords.length === 0) {
-        console.log('[aggregationService] No records to sync');
-        return {
-            success: true,
-            syncedCount: 0,
-            totalCount: 0,
-            failedCount: 0,
-            syncedFarmerIds: [],
-            syncedHarvestIds: [],
-            failedRecords: []
-        };
-    }
 
     let successCount = 0;
     let failureCount = 0;
@@ -713,9 +633,6 @@ export const syncAggregationRecords = async (farmerRecords = [], harvestRecords 
             console.log(`[aggregationService] Syncing farmer: ${farmer.uid || farmer.farmer_id || farmer.id}`);
 
             const farmerId = farmer.uid || farmer.farmer_id || farmer.id;
-            if (!farmerId) {
-                throw new Error('Farmer ID is missing - cannot sync');
-            }
 
             // Import API service to check if farmer exists
             const ApiService = await import('./ApiService');
@@ -723,32 +640,22 @@ export const syncAggregationRecords = async (farmerRecords = [], harvestRecords 
             // Check if farmer already exists in the backend
             let isExisting = false;
             try {
-                console.log(`[aggregationService] Checking if farmer ${farmerId} exists...`);
-                const checkResponse = await withTimeout(
-                    ApiService.default.get(`aggregation/farmer/${farmerId}/`),
-                    10000 // 10 second timeout for check request
-                );
+                const checkResponse = await ApiService.default.get(`aggregation/farmer/${farmerId}/`);
                 if (checkResponse.status === 200) {
                     isExisting = true;
-                    console.log(`[aggregationService] ✓ Farmer ${farmerId} exists in backend, will update`);
+                    console.log(`[aggregationService] Farmer ${farmerId} exists in backend, will update`);
                 }
             } catch (checkError) {
                 if (checkError.response?.status === 404) {
                     // Farmer doesn't exist, will create
-                    console.log(`[aggregationService] Farmer ${farmerId} not found in backend (404), will create new`);
-                    isExisting = false;
-                } else if (checkError.message?.includes('timeout')) {
-                    // Timeout - assume doesn't exist and try to create
-                    console.warn(`[aggregationService] ⏱️  Timeout checking farmer existence, will attempt create:`, checkError.message);
+                    console.log(`[aggregationService] Farmer ${farmerId} not found in backend, will create`);
                     isExisting = false;
                 } else {
                     // Other error - log but assume doesn't exist
-                    console.warn(`[aggregationService] Error checking farmer existence (${checkError.response?.status || 'unknown'}):`, checkError.message);
+                    console.warn(`[aggregationService] Error checking farmer existence:`, checkError.message);
                     isExisting = false;
                 }
             }
-
-            let backendFarmerId = null;
 
             if (isExisting) {
                 // UPDATE existing farmer
@@ -759,29 +666,14 @@ export const syncAggregationRecords = async (farmerRecords = [], harvestRecords 
                 await updateFarmer(farmerId, farmer);
 
                 console.log(`[aggregationService] ✓ Farmer updated: ${farmerId}`);
-                backendFarmerId = farmerId;
             } else {
                 // CREATE new farmer
                 console.log('[aggregationService] Creating new farmer');
-                const submitResponse = await submitFarmer(farmer);
+                await submitFarmer(farmer);
                 console.log('[aggregationService] ✓ Farmer created');
-
-                // Capture the actual farmer_id from Django backend
-                backendFarmerId = submitResponse.farmer_id || submitResponse.id || farmerId;
-                console.log(`[aggregationService] Backend returned farmer_id: ${backendFarmerId}`);
             }
 
-            // Track by both original id and backend farmer_id
             syncedFarmerIds.push(farmer.id);
-            if (farmer.uid) syncedFarmerIds.push(farmer.uid);
-            if (farmer.farmer_id) syncedFarmerIds.push(farmer.farmer_id);
-            if (backendFarmerId) syncedFarmerIds.push(backendFarmerId);
-            console.log(`[aggregationService] ✓ Added to syncedFarmerIds:`, {
-                localId: farmer.id,
-                uid: farmer.uid,
-                farmer_id: farmer.farmer_id,
-                backendFarmerId: backendFarmerId
-            });
             successCount++;
         } catch (error) {
             console.error(`[aggregationService] ✗ Failed to sync farmer:`, error);
@@ -807,9 +699,6 @@ export const syncAggregationRecords = async (farmerRecords = [], harvestRecords 
             console.log(`[aggregationService] Syncing harvest: ${harvest.harvest_id || harvest.id}`);
 
             const harvestId = harvest.harvest_id || harvest.id;
-            if (!harvestId) {
-                throw new Error('Harvest ID is missing - cannot sync');
-            }
 
             // Import API service to check if harvest exists
             const ApiService = await import('./ApiService');
@@ -817,32 +706,22 @@ export const syncAggregationRecords = async (farmerRecords = [], harvestRecords 
             // Check if harvest already exists in the backend
             let isExisting = false;
             try {
-                console.log(`[aggregationService] Checking if harvest ${harvestId} exists...`);
-                const checkResponse = await withTimeout(
-                    ApiService.default.get(`aggregation/farmer-harvest/${harvestId}/`),
-                    10000 // 10 second timeout for check request
-                );
+                const checkResponse = await ApiService.default.get(`aggregation/farmer-harvest/${harvestId}/`);
                 if (checkResponse.status === 200) {
                     isExisting = true;
-                    console.log(`[aggregationService] ✓ Harvest ${harvestId} exists in backend, will update`);
+                    console.log(`[aggregationService] Harvest ${harvestId} exists in backend, will update`);
                 }
             } catch (checkError) {
                 if (checkError.response?.status === 404) {
                     // Harvest doesn't exist, will create
-                    console.log(`[aggregationService] Harvest ${harvestId} not found in backend (404), will create new`);
-                    isExisting = false;
-                } else if (checkError.message?.includes('timeout')) {
-                    // Timeout - assume doesn't exist and try to create
-                    console.warn(`[aggregationService] ⏱️  Timeout checking harvest existence, will attempt create:`, checkError.message);
+                    console.log(`[aggregationService] Harvest ${harvestId} not found in backend, will create`);
                     isExisting = false;
                 } else {
                     // Other error - log but assume doesn't exist
-                    console.warn(`[aggregationService] Error checking harvest existence (${checkError.response?.status || 'unknown'}):`, checkError.message);
+                    console.warn(`[aggregationService] Error checking harvest existence:`, checkError.message);
                     isExisting = false;
                 }
             }
-
-            let backendHarvestId = null;
 
             if (isExisting) {
                 // UPDATE existing harvest
@@ -853,27 +732,14 @@ export const syncAggregationRecords = async (farmerRecords = [], harvestRecords 
                 await updateHarvest(harvestId, harvest);
 
                 console.log(`[aggregationService] ✓ Harvest updated: ${harvestId}`);
-                backendHarvestId = harvestId;
             } else {
                 // CREATE new harvest
                 console.log('[aggregationService] Creating new harvest');
-                const submitResponse = await submitHarvest(harvest);
+                await submitHarvest(harvest);
                 console.log('[aggregationService] ✓ Harvest created');
-
-                // Capture the actual harvest_id from Django backend
-                backendHarvestId = submitResponse.harvest_id || submitResponse.id || harvestId;
-                console.log(`[aggregationService] Backend returned harvest_id: ${backendHarvestId}`);
             }
 
-            // Track by both original id and backend harvest_id
             syncedHarvestIds.push(harvest.id);
-            if (harvest.harvest_id) syncedHarvestIds.push(harvest.harvest_id);
-            if (backendHarvestId) syncedHarvestIds.push(backendHarvestId);
-            console.log(`[aggregationService] ✓ Added to syncedHarvestIds:`, {
-                localId: harvest.id,
-                harvest_id: harvest.harvest_id,
-                backendHarvestId: backendHarvestId
-            });
             successCount++;
         } catch (error) {
             console.error(`[aggregationService] ✗ Failed to sync harvest:`, error);
@@ -895,15 +761,7 @@ export const syncAggregationRecords = async (farmerRecords = [], harvestRecords 
 
     const totalCount = farmerRecords.length + harvestRecords.length;
 
-    console.log('[aggregationService] ========== SYNC COMPLETE ==========');
-    console.log(`[aggregationService] Sync completed at:`, new Date().toISOString());
-    console.log(`[aggregationService] Results: ${successCount}/${totalCount} synced successfully, ${failureCount} failed`);
-    console.log(`[aggregationService] Synced Farmer IDs (${syncedFarmerIds.length}):`, syncedFarmerIds);
-    console.log(`[aggregationService] Synced Harvest IDs (${syncedHarvestIds.length}):`, syncedHarvestIds);
-
-    if (failedRecords.length > 0) {
-        console.warn(`[aggregationService] Failed records (${failedRecords.length}):`, failedRecords);
-    }
+    console.log(`[aggregationService] Sync complete: ${successCount}/${totalCount} synced, ${failureCount} failed`);
 
     return {
         success: failureCount === 0,

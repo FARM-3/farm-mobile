@@ -1,30 +1,30 @@
 import ApiService from '../services/ApiService';
 import AuthService from '../services/AuthService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- Helper for ID Generation ---
 
 /**
  * Get the next sequential ID suffix (A00, A01, ... A99, B00, ... Z99)
- * Stores counter in AsyncStorage to persist across sessions (offline-first)
- * Uses device-specific prefix to avoid conflicts in offline scenarios
- * @returns {Promise<string>} The suffix like "A00", "A01", "B00", etc.
+ * Stores counter in localStorage to persist across sessions
+ * @returns {string} The suffix like "A00", "A01", "B00", etc.
  */
-const getNextSequentialSuffix = async () => {
+const getNextSequentialSuffix = () => {
     try {
         let counter = 0;
 
-        // Retrieve from AsyncStorage
-        const stored = await AsyncStorage.getItem('farmerIdCounter');
-        counter = stored ? parseInt(stored, 10) : 0;
+        // Try to retrieve from localStorage
+        if (typeof localStorage !== 'undefined') {
+            const stored = localStorage.getItem('farmerIdCounter');
+            counter = stored ? parseInt(stored, 10) : 0;
+        }
 
         // Increment counter for next use
         const nextCounter = counter + 1;
 
         // Store for next time
-        await AsyncStorage.setItem('farmerIdCounter', String(nextCounter));
-
-        console.log('[firebaseSetup] Farmer ID counter incremented:', counter, '->', nextCounter);
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('farmerIdCounter', String(nextCounter));
+        }
 
         // Convert counter to Letter+Numbers format (A00 to Z99)
         // 0-99 = A00-A99
@@ -38,30 +38,33 @@ const getNextSequentialSuffix = async () => {
 
         return `${letter}${numbers}`;
     } catch (error) {
-        console.warn('[firebaseSetup] Error getting sequential suffix, using fallback:', error);
-        // Fallback if AsyncStorage fails
+        console.warn('Error getting sequential suffix, using fallback:', error);
+        // Fallback if localStorage fails
         return 'A00';
     }
 };
 
 /**
  * Get the next sequential harvest ID suffix (A00, A01, ... Z99)
- * Stores counter in AsyncStorage to persist across sessions (offline-first)
- * @returns {Promise<string>} The suffix like "A00", "A01", "Z99", etc.
+ * Stores counter in localStorage to persist across sessions
+ * @returns {string} The suffix like "A00", "A01", "Z99", etc.
  */
-const getNextHarvestSequentialSuffix = async () => {
+const getNextHarvestSequentialSuffix = () => {
     try {
         let counter = 0;
 
-        // Retrieve from AsyncStorage
-        const stored = await AsyncStorage.getItem('harvestIdCounter');
-        console.log('[firebaseSetup] Retrieved harvestIdCounter from AsyncStorage:', stored);
-        counter = stored ? parseInt(stored, 10) : 0;
+        // Try to retrieve from localStorage
+        if (typeof localStorage !== 'undefined') {
+            const stored = localStorage.getItem('harvestIdCounter');
+            counter = stored ? parseInt(stored, 10) : 0;
+        }
 
-        // Validate counter is a valid number
-        if (isNaN(counter) || counter < 0) {
-            console.warn('[firebaseSetup] Invalid counter value:', stored, 'resetting to 0');
-            counter = 0;
+        // Increment counter for next use
+        const nextCounter = counter + 1;
+
+        // Store for next time
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('harvestIdCounter', String(nextCounter));
         }
 
         // Convert counter to Letter+Numbers format (A00 to Z99)
@@ -71,72 +74,11 @@ const getNextHarvestSequentialSuffix = async () => {
         const letter = String.fromCharCode(65 + letterIndex); // A-Z
         const numbers = String(numberPart).padStart(2, '0'); // 00-99
 
-        // Get the suffix BEFORE incrementing
-        const currentSuffix = `${letter}${numbers}`;
-        console.log('[firebaseSetup] Harvest ID counter - current:', counter, 'suffix:', currentSuffix);
-
-        // Increment counter for next use
-        const nextCounter = counter + 1;
-
-        // Store for next time
-        await AsyncStorage.setItem('harvestIdCounter', String(nextCounter));
-        console.log('[firebaseSetup] Harvest ID counter incremented:', counter, '->', nextCounter, 'stored to AsyncStorage');
-
-        return currentSuffix;
+        return `${letter}${numbers}`;
     } catch (error) {
-        console.error('[firebaseSetup] Error getting harvest sequential suffix:', error);
-        // Fallback if AsyncStorage fails
-        console.warn('[firebaseSetup] Using fallback suffix: A00');
+        console.warn('Error getting harvest sequential suffix, using fallback:', error);
+        // Fallback if localStorage fails
         return 'A00';
-    }
-};
-
-/**
- * Synchronizes ID counter with backend to prevent conflicts
- * Gets the highest ID from the backend and sets counter accordingly
- * @param {string} idPrefix - Prefix to search for (e.g., 'JK' for farmer with initials JK)
- * @param {string} storageKey - Key to store counter (e.g., 'farmerIdCounter')
- * @returns {Promise<void>}
- */
-export const syncIdCounterWithBackend = async (idPrefix, storageKey) => {
-    try {
-        console.log(`[firebaseSetup] Syncing ${storageKey} with backend for prefix ${idPrefix}...`);
-
-        // Fetch all farmers/harvests to find the highest counter
-        let allRecords = [];
-        if (storageKey === 'farmerIdCounter') {
-            const response = await ApiService.get('aggregation/farmer/?limit=1000');
-            allRecords = Array.isArray(response.data) ? response.data : (response.data.results || []);
-        } else if (storageKey === 'harvestIdCounter') {
-            const response = await ApiService.get('aggregation/farmer-harvest/?limit=1000');
-            allRecords = Array.isArray(response.data) ? response.data : (response.data.results || []);
-        }
-
-        // Filter records matching this prefix and extract the counter
-        let highestCounter = 0;
-        const idField = storageKey === 'farmerIdCounter' ? 'id' : 'harvest_id';
-
-        for (const record of allRecords) {
-            const recordId = record[idField] || record.name || '';
-            if (recordId.startsWith(idPrefix)) {
-                // Extract suffix (last 3 characters)
-                const suffix = recordId.slice(-3);
-                if (/^[A-Z]\d{2}$/.test(suffix)) {
-                    const letter = suffix.charCodeAt(0) - 65; // A=0, B=1, ... Z=25
-                    const numbers = parseInt(suffix.slice(1), 10);
-                    const counter = letter * 100 + numbers;
-                    highestCounter = Math.max(highestCounter, counter);
-                }
-            }
-        }
-
-        // Set counter to highest + 1
-        const nextCounter = highestCounter + 1;
-        await AsyncStorage.setItem(storageKey, String(nextCounter));
-        console.log(`[firebaseSetup] Synced ${storageKey}: next counter will be ${nextCounter}`);
-    } catch (error) {
-        console.warn(`[firebaseSetup] Error syncing ${storageKey}:`, error);
-        // Continue anyway - counter will auto-increment from local value
     }
 };
 
@@ -145,12 +87,11 @@ export const syncIdCounterWithBackend = async (idPrefix, storageKey) => {
  * Format: [First Initial][Last Initial][DDMM][Letter][Number][Number]
  * Examples: JK0127A00, JK0127A01, JK0127A02
  * The last 3 characters increment sequentially: A00 -> A01 -> ... -> Z99
- * IMPORTANT: This is now async and must be awaited!
  * @param {string} firstName - First name of the farmer
  * @param {string} lastName - Last name of the farmer
- * @returns {Promise<string>} The unique Farmer ID.
+ * @returns {string} The unique Farmer ID.
  */
-export const generateFarmerId = async (firstName, lastName) => {
+export const generateFarmerId = (firstName, lastName) => {
     // Get initials
     const firstInitial = (firstName || '').charAt(0).toUpperCase();
     const lastInitial = (lastName || '').charAt(0).toUpperCase();
@@ -161,25 +102,20 @@ export const generateFarmerId = async (firstName, lastName) => {
     const mm = String(now.getMonth() + 1).padStart(2, '0');
 
     // Get next sequential suffix (A00 -> A01 -> ... -> Z99)
-    const suffix = await getNextSequentialSuffix();
+    const suffix = getNextSequentialSuffix();
 
-    const farmerId = `${firstInitial}${lastInitial}${dd}${mm}${suffix}`;
-    console.log('[firebaseSetup] Generated Farmer ID:', farmerId);
-
-    return farmerId;
+    return `${firstInitial}${lastInitial}${dd}${mm}${suffix}`;
 };
 
 /**
- * Utility to generate a unique Harvest ID (Aggregation Farmer Harvest)
- * Format: [Farmer Initials][DDMM]A[Sequential Letter][Sequential Numbers]
- * The "A" represents Aggregation. Sequential part goes from A00 to Z99 (2600 combinations)
- * Examples: JC1611AA00, JC1611AA01, JC1611AZ99, JC1611BA00, AA1201AA98, etc.
- * IMPORTANT: This is now async and must be awaited!
+ * Utility to generate a unique Harvest ID (Production Aggregation)
+ * Format: [Farmer Initials][DDMM][A][Sequential Number] where sequential number increases globally
+ * Examples: KM2906AA00, MJ3006AA02, etc.
  * @param {string} farmerName - Full farmer name (first last)
  * @param {string} dateOfDelivery - Date in YYYY-MM-DD format
- * @returns {Promise<string>} The unique Harvest ID.
+ * @returns {string} The unique Harvest ID.
  */
-export const generateHarvestId = async (farmerName = '', dateOfDelivery = '') => {
+export const generateHarvestId = (farmerName = '', dateOfDelivery = '') => {
     // Get farmer initials from first and last name
     const nameParts = farmerName.trim().split(/\s+/);
     const firstInitial = nameParts[0]?.charAt(0)?.toUpperCase() || 'X';
@@ -198,14 +134,9 @@ export const generateHarvestId = async (farmerName = '', dateOfDelivery = '') =>
     const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
 
     // Get next sequential suffix (A00 to Z99)
-    const suffix = await getNextHarvestSequentialSuffix();
+    const suffix = getNextHarvestSequentialSuffix();
 
-    // Format: [Initials][DDMM]A[Suffix]
-    // The "A" is fixed (Aggregation), suffix contains the sequential letter+numbers
-    const harvestId = `${firstInitial}${lastInitial}${dd}${mm}A${suffix}`;
-    console.log('[firebaseSetup] Generated Harvest ID:', harvestId, '(Counter incremented to produce suffix:', suffix, ')');
-
-    return harvestId;
+    return `${firstInitial}${lastInitial}${dd}${mm}A${suffix}`;
 };
 
 /**
@@ -381,73 +312,27 @@ export const submitFarmer = async (data) => {
 };
 
 /**
- * Checks if a harvest record is an aggregation/farmer harvest (not a production harvest)
- * Aggregation harvests have farmer_uid or farmer reference
- * Production harvests have block reference
- * @param {object} item - The harvest record from the API
- * @returns {boolean} True if this is an aggregation/farmer harvest
- */
-const isAggregationHarvest = (item) => {
-    // Check if it has farmer reference (aggregation/farmer-harvest endpoint)
-    const hasFarmerReference = item.farmer || item.farmer_uid || item.name;
-
-    // Check if it has block reference (harvests endpoint for production harvests)
-    const hasBlockReference = item.block;
-
-    // Production harvests typically have 'block' field and may have 'worker_name' instead of farmer
-    // Aggregation harvests have farmer_uid in 'name' field and farmer_name
-
-    // If it has block reference, it's a production harvest - exclude it
-    if (hasBlockReference && !hasFarmerReference) {
-        console.log('[firebaseSetup] Excluding production harvest (has block, no farmer):', item.id);
-        return false;
-    }
-
-    // If it has farmer reference, it's an aggregation harvest
-    if (hasFarmerReference) {
-        return true;
-    }
-
-    // Default to including it if unsure (favor aggregation side)
-    console.log('[firebaseSetup] Harvest record with unclear type, including it:', item.id);
-    return true;
-};
-
-/**
- * Fetches all aggregation/farmer harvest records from the Django API.
- * IMPORTANT: Only returns aggregation/farmer harvests, NOT production harvests
+ * Fetches all harvest records from the Django API.
  * Uses JWT authentication automatically via ApiService
  */
 export const fetchHarvests = async () => {
     try {
-        console.log('[firebaseSetup] Fetching aggregation/farmer harvests...');
+        console.log('[firebaseSetup] Fetching harvests...');
     const response = await ApiService.get('aggregation/farmer-harvest/');
         console.log('[firebaseSetup] Harvests fetched successfully');
         let payload = response.data;
         // If paginated, use results
         if (payload && Array.isArray(payload.results)) payload = payload.results;
 
-        // Filter to only include aggregation/farmer harvests (exclude production harvests)
-        const filteredPayload = (Array.isArray(payload) ? payload : []).filter(item => {
-            const isAggregation = isAggregationHarvest(item);
-            if (!isAggregation) {
-                console.log('[firebaseSetup] ⚠️  Filtered out non-aggregation harvest:', item);
-            }
-            return isAggregation;
-        });
-
-        console.log(`[firebaseSetup] Filtered harvests: ${filteredPayload.length} aggregation / ${payload.length} total`);
-
         // Normalize records to client-side shape expected by AggregationScreen
-        const normalized = filteredPayload.map(item => {
+        const normalized = (Array.isArray(payload) ? payload : []).map(item => {
             // Django returns farmer UID in 'name' field, preserve it for lookup
             // Also try to extract farmer_name if backend provided it
             const farmerName = item.farmer_name || (item.farmer && typeof item.farmer === 'object' && (item.farmer.name || item.farmer.full_name)) || (item.farmer ? String(item.farmer) : '');
 
             return {
-                // id: prefer numeric id, fallback to harvest_id string
-                id: item.id ?? item.harvest_id ?? null,
-                harvest_id: item.harvest_id ?? item.id ?? null,
+                // id: prefer numeric id, fallback to harvest id string
+                id: item.id ?? item.harvest ?? null,
 
                 // IMPORTANT: 'name' field contains farmer UID from Django
                 name: item.name || '',
@@ -481,14 +366,7 @@ export const fetchHarvests = async () => {
 
         console.log('[firebaseSetup] Normalized harvest count:', normalized.length);
         if (normalized.length > 0) {
-            console.log('[firebaseSetup] First harvest sample:', JSON.stringify(normalized[0], null, 2));
-        } else {
-            // Log the raw payload for debugging if no harvests were normalized
-            console.log('[firebaseSetup] Raw payload received (first item or total):',
-                payload && Array.isArray(payload) ? `Array with ${payload.length} items` : typeof payload);
-            if (payload && payload.length > 0) {
-                console.log('[firebaseSetup] Sample raw harvest:', JSON.stringify(payload[0], null, 2));
-            }
+            console.log('[firebaseSetup] First harvest sample:', normalized[0]);
         }
         return normalized;
     } catch (error) {

@@ -88,10 +88,18 @@ export default function ProcessingScreen({ navigation }) {
     console.log('[ProcessingScreen] Card pressed:', process.name, 'Screen:', process.screen);
 
     // Navigate to available screens, show "Coming Soon" for others
-    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType') {
+    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType' || process.screen === 'Drying' || process.screen === 'Bagging') {
       try {
-        console.log('[ProcessingScreen] Navigating to', process.screen, 'screen...');
-        navigation.navigate(process.screen);
+        let routeName;
+        if (process.screen === 'Drying') {
+          routeName = 'DryingSummary';
+        } else if (process.screen === 'Bagging') {
+          routeName = 'BaggingSummary';
+        } else {
+          routeName = process.screen;
+        }
+        console.log('[ProcessingScreen] Navigating to', routeName, 'screen...');
+        navigation.navigate(routeName);
       } catch (error) {
         console.error('[ProcessingScreen] Navigation error:', error);
         Alert.alert('Error', `Failed to navigate to ${process.name} screen`);

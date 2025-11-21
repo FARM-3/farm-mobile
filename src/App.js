@@ -71,6 +71,10 @@ import WashingSummaryScreen from './features/ProcessingScreen/screens/WashingSum
 import WashingFormScreen from './features/ProcessingScreen/screens/WashingFormScreen';
 import NaturalSundryingSummaryScreen from './features/ProcessingScreen/screens/NaturalSundryingSummaryScreen';
 import NaturalSundryingFormScreen from './features/ProcessingScreen/screens/NaturalSundryingFormScreen';
+import DryingSummaryScreen from './features/ProcessingScreen/screens/DryingSummaryScreen';
+import DryingFormScreen from './features/ProcessingScreen/screens/DryingFormScreen';
+import BaggingSummaryScreen from './features/ProcessingScreen/screens/BaggingSummaryScreen';
+import BaggingFormScreen from './features/ProcessingScreen/screens/BaggingFormScreen';
 
 // Initialize the stack navigator
 const Stack = createNativeStackNavigator();
@@ -297,6 +301,32 @@ const App = () => {
                         name="NaturalSundryingForm"
                         component={NaturalSundryingFormScreen}
                         options={{ title: 'Natural Sundrying Form' }}
+                    />
+
+                    {/* Drying screens */}
+                    <Stack.Screen
+                        name="DryingSummary"
+                        component={DryingSummaryScreen}
+                        options={{ title: 'Drying Records' }}
+                    />
+
+                    <Stack.Screen
+                        name="DryingForm"
+                        component={DryingFormScreen}
+                        options={{ title: 'Drying Form' }}
+                    />
+
+                    {/* Bagging screens */}
+                    <Stack.Screen
+                        name="BaggingSummary"
+                        component={BaggingSummaryScreen}
+                        options={{ title: 'Bagging Records' }}
+                    />
+
+                    <Stack.Screen
+                        name="BaggingForm"
+                        component={BaggingFormScreen}
+                        options={{ title: 'Bagging Form' }}
                     />
 
                     {/* Block screens */}
