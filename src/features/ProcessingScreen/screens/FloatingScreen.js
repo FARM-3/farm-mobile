@@ -8,7 +8,10 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import CoffeeColors from '../../../theme/colors';
@@ -18,24 +21,50 @@ import BottomNav from '../../../components/BottomNav';
 import {
   getFloatingRecords,
   addFloatingRecord,
+  getHarvestsWithRipenessScore,
 } from '../../../services/qualityControl';
 
 export default function FloatingScreen({ navigation }) {
   const [records, setRecords] = useState([]);
+  const [harvests, setHarvests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingHarvests, setLoadingHarvests] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [formData, setFormData] = useState({
     harvest_id: '',
-    grade: '',
+    grade: 'A',
     weight: '',
     date: new Date().toISOString().split('T')[0],
-    ripeness_score: '',
-    grade_id: '',
   });
+
+  const formatDateForDisplay = (date) => {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const handleDateChange = (event, date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+
+    if (date) {
+      setSelectedDate(date);
+      setFormData({
+        ...formData,
+        date: date.toISOString().split('T')[0]
+      });
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
       loadRecords();
+      loadHarvests();
     }, [])
   );
 
@@ -46,9 +75,49 @@ export default function FloatingScreen({ navigation }) {
       setRecords(data);
     } catch (error) {
       console.error('Error loading floating records:', error);
-      Alert.alert('Error', 'Failed to load floating records');
+
+      // Check if it's a network error or 404
+      if (error.response?.status === 404) {
+        console.log('[FloatingScreen] No records found (404) - displaying empty state');
+        setRecords([]); // Just show empty state, don't alert
+      } else if (!error.response) {
+        // Network error - backend might be down
+        console.log('[FloatingScreen] Backend not reachable - showing empty state');
+        setRecords([]); // Show empty state instead of error
+      } else {
+        Alert.alert('Error', 'Failed to load floating records');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadHarvests = async () => {
+    try {
+      setLoadingHarvests(true);
+      console.log('[FloatingScreen] Fetching harvests with ripeness scores...');
+      // Only load harvests that have ripeness scores (passed ripeness test stage)
+      const data = await getHarvestsWithRipenessScore();
+      console.log('[FloatingScreen] ✓ Successfully loaded harvests with ripeness scores:', data.length);
+      console.log('[FloatingScreen] First harvest sample:', JSON.stringify(data[0], null, 2));
+      console.log('[FloatingScreen] Sample harvest fields:', data[0] ? Object.keys(data[0]) : 'No harvests');
+      setHarvests(data);
+    } catch (error) {
+      console.error('[FloatingScreen] ✗ Error loading harvests:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+      });
+      // Show error to user so they know what's wrong
+      Alert.alert(
+        'Harvest Loading Failed',
+        `Could not load harvests with ripeness scores.\n\nError: ${error.response?.status || 'Network error'}\n\nYou can still enter Harvest ID manually.`
+      );
+      setHarvests([]);
+    } finally {
+      setLoadingHarvests(false);
     }
   };
 
@@ -66,20 +135,11 @@ export default function FloatingScreen({ navigation }) {
       Alert.alert('Validation Error', 'Please enter a valid Weight');
       return;
     }
-    if (!formData.ripeness_score || parseFloat(formData.ripeness_score) < 0 || parseFloat(formData.ripeness_score) > 100) {
-      Alert.alert('Validation Error', 'Please enter a valid Ripeness Score (0-100)');
-      return;
-    }
-    if (!formData.grade_id.trim()) {
-      Alert.alert('Validation Error', 'Please enter Grade ID');
-      return;
-    }
 
     try {
       const dataToSave = {
         ...formData,
         weight: parseFloat(formData.weight),
-        ripeness_score: parseFloat(formData.ripeness_score),
       };
 
       await addFloatingRecord(dataToSave);
@@ -88,17 +148,43 @@ export default function FloatingScreen({ navigation }) {
       // Reset form
       setFormData({
         harvest_id: '',
-        grade: '',
+        grade: 'A',
         weight: '',
         date: new Date().toISOString().split('T')[0],
-        ripeness_score: '',
-        grade_id: '',
       });
       setShowForm(false);
       loadRecords();
     } catch (error) {
       console.error('Error saving floating record:', error);
-      Alert.alert('Error', 'Failed to save floating record');
+
+      // Show more detailed error message
+      let errorMessage = 'Failed to save floating record';
+
+      if (error.response?.data) {
+        // Backend returned an error response
+        const errorData = error.response.data;
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.harvest) {
+          // Harvest validation error - make it user-friendly
+          const harvestError = Array.isArray(errorData.harvest) ? errorData.harvest[0] : errorData.harvest;
+          if (harvestError.includes('does not exist') || harvestError.includes('Invalid pk')) {
+            errorMessage = `The harvest ID "${formData.harvest_id}" does not exist in the database.\n\nPlease select a valid harvest from the dropdown that has a ripeness score.`;
+          } else {
+            errorMessage = `Harvest error: ${harvestError}`;
+          }
+        } else {
+          errorMessage = JSON.stringify(errorData);
+        }
+      } else if (!error.response) {
+        errorMessage = 'Cannot connect to server. Please check if the backend is running.';
+      }
+
+      Alert.alert('Error', errorMessage);
     }
   };
 
@@ -142,13 +228,32 @@ export default function FloatingScreen({ navigation }) {
 
       <View style={styles.formField}>
         <Text style={styles.formLabel}>Harvest ID *</Text>
-        <TextInput
-          style={styles.formInput}
-          value={formData.harvest_id}
-          onChangeText={(text) => setFormData({ ...formData, harvest_id: text })}
-          placeholder="Enter Harvest ID"
-          placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
-        />
+        {loadingHarvests ? (
+          <View style={styles.pickerLoadingContainer}>
+            <ActivityIndicator size="small" color={CoffeeColors.COFFEE_BROWN} />
+            <Text style={styles.pickerLoadingText}>Loading harvests...</Text>
+          </View>
+        ) : (
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={formData.harvest_id}
+              onValueChange={(value) => setFormData({ ...formData, harvest_id: value })}
+              style={styles.picker}
+            >
+              <Picker.Item
+                label={harvests.length === 0 ? "No harvests with ripeness scores yet" : "Select a harvest..."}
+                value=""
+              />
+              {harvests.map((harvest) => (
+                <Picker.Item
+                  key={harvest.harvest_id || harvest.id}
+                  label={`${harvest.harvest_id || harvest.id} - ${harvest.farmer_name || harvest.name || 'Unknown'}`}
+                  value={harvest.harvest_id || harvest.id}
+                />
+              ))}
+            </Picker>
+          </View>
+        )}
       </View>
 
       <View style={styles.formField}>
@@ -176,36 +281,25 @@ export default function FloatingScreen({ navigation }) {
 
       <View style={styles.formField}>
         <Text style={styles.formLabel}>Date *</Text>
-        <TextInput
-          style={styles.formInput}
-          value={formData.date}
-          onChangeText={(text) => setFormData({ ...formData, date: text })}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
-        />
-      </View>
+        <TouchableOpacity
+          style={styles.datePickerButton}
+          onPress={() => setShowDatePicker(true)}
+        >
+          <MaterialCommunityIcons name="calendar" size={20} color={CoffeeColors.DARK_BROWN} />
+          <Text style={styles.datePickerText}>
+            {formatDateForDisplay(formData.date)}
+          </Text>
+        </TouchableOpacity>
 
-      <View style={styles.formField}>
-        <Text style={styles.formLabel}>Ripeness Score (%) *</Text>
-        <TextInput
-          style={styles.formInput}
-          value={formData.ripeness_score}
-          onChangeText={(text) => setFormData({ ...formData, ripeness_score: text })}
-          placeholder="Enter Ripeness Score (0-100)"
-          keyboardType="decimal-pad"
-          placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
-        />
-      </View>
-
-      <View style={styles.formField}>
-        <Text style={styles.formLabel}>Grade ID *</Text>
-        <TextInput
-          style={styles.formInput}
-          value={formData.grade_id}
-          onChangeText={(text) => setFormData({ ...formData, grade_id: text })}
-          placeholder="Enter Grade ID"
-          placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
-        />
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleDateChange}
+            maximumDate={new Date()} // Prevent future dates
+          />
+        )}
       </View>
 
       <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
@@ -474,6 +568,47 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: CoffeeColors.DARK_BROWN,
     backgroundColor: CoffeeColors.WHITE,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: CoffeeColors.MEDIUM_BROWN + '40',
+    borderRadius: 8,
+    backgroundColor: CoffeeColors.WHITE,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+    color: CoffeeColors.DARK_BROWN,
+  },
+  pickerLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: CoffeeColors.MEDIUM_BROWN + '40',
+    borderRadius: 8,
+    backgroundColor: CoffeeColors.WHITE,
+  },
+  pickerLoadingText: {
+    marginLeft: 10,
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: CoffeeColors.MEDIUM_BROWN,
+  },
+  datePickerButton: {
+    borderWidth: 1,
+    borderColor: CoffeeColors.MEDIUM_BROWN + '40',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: CoffeeColors.WHITE,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  datePickerText: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: CoffeeColors.DARK_BROWN,
+    marginLeft: 10,
   },
   submitButton: {
     backgroundColor: CoffeeColors.DARK_BROWN,
