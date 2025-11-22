@@ -12,11 +12,19 @@ const BORDER_LIGHT = CoffeeColors.VERY_LIGHT_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
 
 /**
- * Capitalize first letter of a string
+ * Capitalize first letter of a string, but preserve all-caps codes (like harvest IDs)
  */
 const capitalizeFirstLetter = (str) => {
     if (!str) return '';
-    return String(str).charAt(0).toUpperCase() + String(str).slice(1).toLowerCase();
+    const strValue = String(str);
+
+    // Check if the string contains uppercase letters with numbers (like harvest IDs: RK1611AA01)
+    // If so, preserve it as-is
+    if (/[A-Z0-9]{3,}/.test(strValue)) {
+        return strValue;
+    }
+
+    return strValue.charAt(0).toUpperCase() + strValue.slice(1).toLowerCase();
 };
 
 /**

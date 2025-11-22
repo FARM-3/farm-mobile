@@ -574,6 +574,14 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
 
                     <TouchableOpacity
+                        style={styles.secondaryButton}
+                        onPress={() => navigation.navigate('QualityControl')}
+                    >
+                        <Ionicons name="beaker" size={20} color={CoffeeColors.PRIMARY_BROWN} />
+                        <Text style={styles.secondaryButtonText}>Proceed to Quality Control</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                         style={styles.backButton}
                         onPress={() => navigation.navigate('Harvests')}
                     >

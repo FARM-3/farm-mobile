@@ -29,6 +29,7 @@ import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, 
 import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
 import { fetchCurrentFarmerPrice } from '../../../services/priceService';
 import { syncAggregationRecords } from '../../../services/aggregationService';
+import { getStaffById } from '../../../services/staffService';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
 
 // ================================================
@@ -119,8 +120,8 @@ const harvestFieldDefinitions = [
         fields: [
             { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
             { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
-            { key: 'location_on_delivery', label: 'Location on Delivery', keyboardType: 'default' },
-            { key: 'gps_coordinates', label: 'GPS Coordinates', keyboardType: 'default', action: 'capture_gps' },
+            { key: 'location_of_delivery', label: 'Location on Delivery', keyboardType: 'default' },
+            { key: 'gps_coordinates_delivery', label: 'GPS Coordinates', keyboardType: 'default', action: 'capture_gps' },
             { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
         ]
     },
@@ -721,16 +722,22 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
             displayName = item.name || `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'N/A';
             displayId = item.uid || item.farmer_id || item.id || 'No ID';
         } else {
-            // Harvest record - lookup farmer name from the farmers list
+            // Harvest record - lookup farmer name and ID from the farmers list
             // Django returns farmer UID in the 'name' field, so we need to find the actual farmer
             const farmerUID = item.name || item.farmer_name || item.farmer_uid;
             if (farmerUID && Array.isArray(farmersList)) {
                 // Try to find the farmer in the farmers list
-                const farmer = farmersList.find(f =>
-                    String(f.farmer_id) === String(farmerUID) ||
-                    String(f.uid) === String(farmerUID) ||
-                    String(f.id) === String(farmerUID)
-                );
+                const farmer = farmersList.find(f => {
+                    // Construct full name from farmer record
+                    const farmerFullName = `${f.first_name || ''} ${f.last_name || ''}`.trim();
+
+                    return (
+                        String(f.farmer_id) === String(farmerUID) ||
+                        String(f.uid) === String(farmerUID) ||
+                        String(f.id) === String(farmerUID) ||
+                        farmerFullName === String(farmerUID)  // Match by full name
+                    );
+                });
 
                 if (farmer) {
                     displayName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || farmer.name || farmerUID;
@@ -741,7 +748,8 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
             } else {
                 displayName = farmerUID || 'N/A';
             }
-            displayId = item.id || item.harvest_id || 'No ID';
+            // For harvest records, always display the harvest ID (not farmer ID)
+            displayId = item.harvest_id || item.id || 'No ID';
         }
 
         const secondKey = fields.length > 1 ? fields[1].key : null;
@@ -1058,28 +1066,87 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
         return String(value);
     };
 
-    // Lookup farmer details from farmersList using the name field (which contains farmer UID)
-    const farmerUID = harvest.name || harvest.farmer_name || harvest.farmer_uid;
+    // Lookup farmer details from farmersList using the harvest.name field (which contains farmer's full name)
+    const harvestFarmerName = harvest.name || harvest.farmer_uid;
     let farmerDetails = null;
-    if (farmerUID && Array.isArray(farmersList)) {
-        farmerDetails = farmersList.find(f =>
-            String(f.farmer_id) === String(farmerUID) ||
-            String(f.uid) === String(farmerUID) ||
-            String(f.id) === String(farmerUID)
-        );
+    let farmerUID = null;
+    if (harvestFarmerName && Array.isArray(farmersList)) {
+        // Try multiple lookup strategies
+        farmerDetails = farmersList.find(f => {
+            // Construct full name from farmer record
+            const farmerFullName = `${f.first_name || ''} ${f.last_name || ''}`.trim();
+
+            return (
+                String(f.farmer_id) === String(harvestFarmerName) ||
+                String(f.uid) === String(harvestFarmerName) ||
+                String(f.id) === String(harvestFarmerName) ||
+                String(f.name) === String(harvestFarmerName) ||
+                farmerFullName === String(harvestFarmerName)  // Match by full name
+            );
+        });
+
+        // Set farmerUID to the actual farmer_id from the matched farmer record
+        if (farmerDetails) {
+            farmerUID = farmerDetails.farmer_id || farmerDetails.uid || farmerDetails.id;
+        }
+
+        // Log for debugging
+        if (!farmerDetails) {
+            console.warn('[HarvestDetailView] Farmer not found for name:', harvestFarmerName);
+            console.log('[HarvestDetailView] Available farmers:', farmersList.map(f => ({
+                farmer_id: f.farmer_id,
+                full_name: `${f.first_name || ''} ${f.last_name || ''}`.trim(),
+                uid: f.uid,
+                id: f.id
+            })));
+        }
     }
 
     const farmerDisplayName = farmerDetails
         ? `${farmerDetails.first_name || ''} ${farmerDetails.last_name || ''}`.trim()
-        : farmerUID || 'Unknown Farmer';
+        : 'Unknown Farmer';
+
+    // Helper function to get staff name from ID using staff service
+    const [staffNameCache, setStaffNameCache] = useState({});
+
+    useEffect(() => {
+        const fetchStaffNames = async () => {
+            if (harvest?.paid_by && !staffNameCache[harvest.paid_by]) {
+                try {
+                    const staff = await getStaffById(harvest.paid_by);
+                    if (staff) {
+                        setStaffNameCache(prev => ({
+                            ...prev,
+                            [harvest.paid_by]: staff.displayName || staff.firstName + ' ' + staff.lastName || 'Unknown Staff'
+                        }));
+                    }
+                } catch (error) {
+                    console.error('[HarvestDetailView] Error fetching staff name:', error);
+                }
+            }
+        };
+        fetchStaffNames();
+    }, [harvest?.paid_by, staffNameCache]);
+
+    const getStaffNameById = (staffId) => {
+        if (!staffId) return 'Not provided';
+        // Check cache first
+        if (staffNameCache[staffId]) {
+            return staffNameCache[staffId];
+        }
+        // Fallback to showing the ID if not in cache yet
+        return 'Loading...';
+    };
 
     // Field sections for organized display
+    // Only display fields that are actually in the harvest form
+    // Match exact field names from the API response
     const sections = [
         {
             title: 'Farmer Information',
             fields: [
-                { label: 'Farmer Name', value: farmerDisplayName },
-                { label: 'Farmer ID', value: farmerUID },
+                { label: 'Farmer Name', value: farmerDisplayName || harvest.name },
+                { label: 'Farmer ID', value: farmerUID || harvest.farmer_uid },
                 { label: 'Contact', value: farmerDetails?.contact || 'Not available' },
                 { label: 'District', value: farmerDetails?.district || 'Not available' },
             ]
@@ -1087,28 +1154,25 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
         {
             title: 'Harvest Details',
             fields: [
-                { label: 'Harvest ID', value: harvest.id || harvest.harvest_id },
-                { label: 'Date of Delivery', value: harvest.date_of_delivery },
+                { label: 'Harvest ID', value: formatValue(harvest.harvest_id || harvest.id || harvest.code) },
+                { label: 'Date of Delivery', value: formatValue(harvest.date_of_delivery) },
                 { label: 'Weight on Delivery', value: harvest.weight_on_delivery ? `${harvest.weight_on_delivery} kg` : 'Not provided' },
-                { label: 'Location on Delivery', value: harvest.location_on_delivery || 'Not provided' },
-                { label: 'GPS Coordinates', value: harvest.gps_coordinates || 'Not captured' },
-                { label: 'Weight After Floating', value: harvest.weight_after_floating ? `${harvest.weight_after_floating} kg` : 'Not provided' },
-                { label: 'Number of Bags', value: harvest.number_of_bags },
+                { label: 'Location on Delivery', value: formatValue(harvest.location_of_delivery || harvest.location_on_delivery) },
+                { label: 'GPS Coordinates', value: harvest.gps_coordinates_delivery || harvest.gps_coordinates || 'Not captured' },
             ]
         },
         {
-            title: 'Coffee Quality',
+            title: 'Coffee Information',
             fields: [
-                { label: 'Coffee Type/Grade', value: harvest.grade || harvest.coffee_type },
-                { label: 'Cherry Color', value: harvest.cherry_color || harvest.cherry_colour },
-                { label: 'Stage', value: harvest.stage },
+                { label: 'Coffee Type', value: harvest.coffee_type || 'Not provided' },
             ]
         },
         {
             title: 'Payment Information',
             fields: [
+                { label: 'Price per kg', value: harvest.price_per_kg ? `UGX ${Number(harvest.price_per_kg).toLocaleString()}` : 'Not provided' },
                 { label: 'Amount Paid', value: harvest.amount_paid ? `UGX ${Number(harvest.amount_paid).toLocaleString()}` : 'Not provided' },
-                { label: 'Paid By', value: harvest.paid_by || harvest.who_paid },
+                { label: 'Paid By', value: getStaffNameById(harvest.paid_by) },
             ]
         }
     ];
@@ -1169,7 +1233,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '4,600', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '' });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_of_delivery: '', gps_coordinates_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '4,600', amount_paid: '', paid_by: '', selectedStaff: null });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1467,7 +1531,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_on_delivery: '', gps_coordinates: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : '4,600', amount_paid: '', paid_by: '', selectedStaff: null, number_of_bags: '',
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_of_delivery: '', gps_coordinates_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : '4,600', amount_paid: '', paid_by: '', selectedStaff: null,
         }));
 
         // Reset price loading state when resetting forms
@@ -1766,8 +1830,6 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             weight_on_delivery: parseFormattedNumber(harvestForm.weight_on_delivery) || 0,
             price_per_kg: parseFormattedNumber(harvestForm.price_per_kg) || 0,
             amount_paid: parseFormattedNumber(harvestForm.amount_paid) || 0,
-            number_of_bags: Number(harvestForm.number_of_bags) || 0,
-            weight_after_floating: Number(harvestForm.weight_after_floating) || 0,
             recorder_id: userId,
             timestamp: Date.now(),
             _isDraft: false,  // Mark as submitted (not a draft)
@@ -2069,7 +2131,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                         }
 
                         // Show button after GPS coordinates field for harvest form
-                        if (field.key === 'gps_coordinates' && !isFarmer) {
+                        if (field.key === 'gps_coordinates_delivery' && !isFarmer) {
                             return (
                                 <View key={field.key}>
                                     {inputElement}
@@ -2077,7 +2139,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                         style={styles.generateButton}
                                         onPress={async () => {
                                             const gpsLocation = await getCurrentGPSLocation();
-                                            updateForm('gps_coordinates', gpsLocation);
+                                            updateForm('gps_coordinates_delivery', gpsLocation);
                                             setAlertConfig({
                                                 visible: true,
                                                 title: 'GPS Coordinates Captured',
@@ -2457,9 +2519,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 farmer_uid: record.name || record.farmer_uid || '',
                 farmer_name: record.farmer_name || '',
                 weight_on_delivery: String(record.weight_on_delivery || ''),
-                location_on_delivery: record.location_on_delivery || '',
-                gps_coordinates: record.gps_coordinates || '',
-                number_of_bags: String(record.number_of_bags || ''),
+                location_of_delivery: record.location_of_delivery || record.location_on_delivery || '',
+                gps_coordinates_delivery: record.gps_coordinates_delivery || record.gps_coordinates || '',
                 date_of_delivery: record.date_of_delivery || '',
                 coffee_type: record.grade || record.coffee_type || '',
                 price_per_kg: record.price_per_kg ? formatNumberWithCommas(String(record.price_per_kg)) : (currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : ''),
@@ -2467,11 +2528,6 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 paid_by: record.paid_by || record.who_paid || '',
                 selectedStaff: null, // Will be set by SearchableStaffPicker
                 harvest_id: record.id || record.harvest_id || '',
-
-                // Store additional fields for update
-                weight_after_floating: String(record.weight_after_floating || ''),
-                cherry_color: record.cherry_color || record.cherry_colour || '',
-                stage: record.stage || '',
 
                 // Store the original ID for update
                 _isEditing: true,
@@ -2545,16 +2601,12 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     farmer_uid: draftRecord.farmer_uid || draftRecord.name || '',
                     farmer_name: draftRecord.farmer_name || '',
                     weight_on_delivery: draftRecord.weight_on_delivery || 0,
-                    location_on_delivery: draftRecord.location_on_delivery || '',
-                    gps_coordinates: draftRecord.gps_coordinates || '',
-                    number_of_bags: draftRecord.number_of_bags || 0,
+                    location_of_delivery: draftRecord.location_of_delivery || '',
+                    gps_coordinates_delivery: draftRecord.gps_coordinates_delivery || '',
                     date_of_delivery: draftRecord.date_of_delivery || '',
                     coffee_type: draftRecord.coffee_type || draftRecord.grade || '',
                     amount_paid: draftRecord.amount_paid || '',
                     paid_by: draftRecord.paid_by || '',
-                    weight_after_floating: draftRecord.weight_after_floating || '',
-                    cherry_color: draftRecord.cherry_color || '',
-                    stage: draftRecord.stage || '',
                 };
 
                 console.log('[handleSyncDraft] Harvest data prepared for submission:', JSON.stringify(harvestData, null, 2));

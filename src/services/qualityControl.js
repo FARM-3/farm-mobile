@@ -20,10 +20,10 @@ import ApiService from './ApiService';
  */
 export const addRipenessScore = async (ripenessData) => {
   try {
-    console.log('[QualityControl] Creating ripeness test with data:', ripenessData);
+    console.log('[QualityControl] Creating ripeness test with data:', JSON.stringify(ripenessData, null, 2));
 
     const payload = {
-      harvest: ripenessData.harvest_id, // Map harvest_id to harvest for API
+      harvest: ripenessData.harvest_id, // harvest_id is set to pk (integer) or harvest_id string
       date: ripenessData.date,
       sample_size: parseInt(ripenessData.sample_size),
       no_of_redcherry: parseInt(ripenessData.no_of_red_cherry)
@@ -32,6 +32,11 @@ export const addRipenessScore = async (ripenessData) => {
     console.log('[QualityControl] Sending payload to backend:', JSON.stringify(payload, null, 2));
     console.log('[QualityControl] harvest value type:', typeof payload.harvest);
     console.log('[QualityControl] harvest value:', payload.harvest);
+    if (typeof payload.harvest === 'number') {
+      console.log('[QualityControl] ✓ Sending integer PK from main Harvest model');
+    } else {
+      console.log('[QualityControl] ℹ Sending harvest_id string (aggregation-only record)');
+    }
 
     const response = await ApiService.post('processing/ripeness/', payload);
     console.log('[QualityControl] Ripeness test created:', response.data);
@@ -273,23 +278,119 @@ export const getHarvestsWithoutRipenessTest = async () => {
 
 /**
  * Get all harvests (for ripeness test selection)
- * Fetches from aggregation/farmer-harvest/ endpoint
- * @returns {Promise<Array>} List of all harvests
+ * Fetches from both /api/harvests/ and /api/aggregation/farmer-harvest/ endpoints
+ * Combines harvests from both sources to ensure comprehensive coverage
+ * NOTE: Includes the database PK from the main Harvest model for backend API calls
+ * @returns {Promise<Array>} List of all harvests with pk field for database references
  */
 export const getAllHarvests = async () => {
   try {
-    const response = await ApiService.get('aggregation/farmer-harvest/');
-    console.log('[QualityControl] Fetched all harvests:', response.data.length || 0);
+    let allHarvests = [];
+    let harvestPkMap = {}; // Map to store harvest_id -> harvest.pk relationships
 
-    // Handle both array and paginated response
-    const harvests = Array.isArray(response.data)
-      ? response.data
-      : (response.data.results || []);
+    // First, fetch from main harvests endpoint to get the authoritative PKs
+    try {
+      console.log('[QualityControl] Fetching from /harvests/ (main endpoint)...');
+      const harvestsResponse = await ApiService.get('harvests/');
 
-    console.log('[QualityControl] Normalized harvests:', harvests.length);
-    return harvests;
+      // Handle response data
+      let productionHarvests = [];
+      if (harvestsResponse && harvestsResponse.data) {
+        productionHarvests = Array.isArray(harvestsResponse.data)
+          ? harvestsResponse.data
+          : (harvestsResponse.data.results || []);
+      } else if (Array.isArray(harvestsResponse)) {
+        productionHarvests = harvestsResponse;
+      } else if (harvestsResponse.results) {
+        productionHarvests = harvestsResponse.results;
+      }
+
+      // Build a map of harvest_id -> pk from main harvests
+      for (const harvest of productionHarvests) {
+        const harvestId = harvest.harvest_id || harvest.id;
+        // The PK is the 'id' field for main harvests
+        const pk = harvest.id;
+        harvestPkMap[harvestId] = pk;
+        console.log(`[QualityControl] Mapped harvest ${harvestId} -> pk ${pk}, harvest object keys: ${Object.keys(harvest).join(', ')}`);
+      }
+
+      // Ensure all production harvests have the pk field set
+      for (const harvest of productionHarvests) {
+        if (!harvest.pk) {
+          harvest.pk = harvest.id; // Set pk to the database id
+        }
+      }
+
+      allHarvests = [...allHarvests, ...productionHarvests];
+      console.log('[QualityControl] Added production harvests:', productionHarvests.length);
+      console.log('[QualityControl] Production harvests sample:', productionHarvests.slice(0, 2));
+    } catch (error) {
+      console.warn('[QualityControl] Could not fetch from harvests endpoint:', error.message);
+    }
+
+    // Then fetch from farmer-harvest endpoint (aggregation)
+    try {
+      console.log('[QualityControl] Fetching from aggregation/farmer-harvest/...');
+      const farmerHarvestResponse = await ApiService.get('aggregation/farmer-harvest/');
+
+      // Handle different response formats
+      let farmerHarvests = [];
+      if (farmerHarvestResponse && farmerHarvestResponse.data) {
+        farmerHarvests = Array.isArray(farmerHarvestResponse.data)
+          ? farmerHarvestResponse.data
+          : (farmerHarvestResponse.data.results || []);
+      } else if (Array.isArray(farmerHarvestResponse)) {
+        farmerHarvests = farmerHarvestResponse;
+      } else if (farmerHarvestResponse.results) {
+        farmerHarvests = farmerHarvestResponse.results;
+      }
+
+      // For farmer harvests, try to look up the PK from the main harvests
+      for (const fh of farmerHarvests) {
+        const farmerHarvestId = fh.harvest_id || fh.id;
+        const pk = harvestPkMap[farmerHarvestId];
+
+        if (pk) {
+          // We found this harvest in the main harvests, attach the PK
+          fh.pk = pk;
+          console.log(`[QualityControl] Farmer harvest ${farmerHarvestId} found in main harvests with pk ${pk}`);
+        } else {
+          // Not found in main harvests
+          // Farmer-harvest records don't have a database PK - they're aggregation views
+          // We'll use the harvest_id string directly since it's not in the main Harvest model
+          console.warn(`[QualityControl] Farmer harvest ${farmerHarvestId} NOT found in main harvests - this is an aggregation-only record`);
+          // Don't set pk - we'll handle this case separately
+        }
+      }
+
+      allHarvests = [...allHarvests, ...farmerHarvests];
+      console.log('[QualityControl] Added farmer-harvest records:', farmerHarvests.length);
+      console.log('[QualityControl] Sample farmer harvest:', farmerHarvests.length > 0 ? farmerHarvests[0] : 'None');
+    } catch (error) {
+      console.warn('[QualityControl] Could not fetch from farmer-harvest endpoint:', error.message);
+    }
+
+    // Remove duplicate harvest IDs (keep first occurrence)
+    const uniqueHarvests = [];
+    const seenIds = new Set();
+
+    for (const harvest of allHarvests) {
+      const harvestId = harvest.harvest_id || harvest.id;
+      if (!seenIds.has(harvestId)) {
+        seenIds.add(harvestId);
+        uniqueHarvests.push(harvest);
+      }
+    }
+
+    console.log('[QualityControl] Total unique harvests:', uniqueHarvests.length);
+
+    if (uniqueHarvests.length === 0) {
+      console.warn('[QualityControl] No harvests found in either endpoint');
+    }
+
+    return uniqueHarvests;
   } catch (error) {
-    console.error('[QualityControl] Error fetching all harvests:', error.response?.data || error.message);
+    console.error('[QualityControl] Error fetching all harvests:', error.message);
     throw error;
   }
 };

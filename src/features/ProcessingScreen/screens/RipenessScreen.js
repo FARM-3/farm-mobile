@@ -11,13 +11,14 @@ import {
   Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Picker } from '@react-native-picker/picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import CustomPicker from '../../../components/CustomPicker';
+import CustomAlert from '../../../components/CustomAlert';
 import {
   getRipenessScores,
   addRipenessScore,
@@ -34,9 +35,19 @@ export default function RipenessScreen({ navigation }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [formData, setFormData] = useState({
     harvest_id: '',
+    harvest_pk: null, // Store the PK for backend submission
     date: new Date().toISOString().split('T')[0],
     sample_size: '100',
     no_of_red_cherry: '',
+  });
+
+  // CustomAlert state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    title: '',
+    message: '',
+    type: 'info',
+    buttons: [],
   });
 
   const formatDateForDisplay = (date) => {
@@ -128,19 +139,53 @@ export default function RipenessScreen({ navigation }) {
   const handleSubmit = async () => {
     // Validation
     if (!formData.harvest_id.trim()) {
-      Alert.alert('Validation Error', 'Please enter Harvest ID');
+      setAlertConfig({
+        title: 'Validation Error',
+        message: 'Please select a Harvest ID',
+        type: 'warning',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
+      return;
+    }
+    if (!formData.harvest_pk) {
+      setAlertConfig({
+        title: 'Validation Error',
+        message: 'Harvest data is incomplete. Please select a harvest again.',
+        type: 'warning',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
       return;
     }
     if (!formData.sample_size || parseInt(formData.sample_size) <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid Sample Size');
+      setAlertConfig({
+        title: 'Validation Error',
+        message: 'Please enter a valid Sample Size',
+        type: 'warning',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
       return;
     }
     if (!formData.no_of_red_cherry || parseInt(formData.no_of_red_cherry) < 0) {
-      Alert.alert('Validation Error', 'Please enter a valid Number of Red Cherry');
+      setAlertConfig({
+        title: 'Validation Error',
+        message: 'Please enter a valid Number of Red Cherry',
+        type: 'warning',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
       return;
     }
     if (parseInt(formData.no_of_red_cherry) > parseInt(formData.sample_size)) {
-      Alert.alert('Validation Error', 'Number of Red Cherry cannot exceed Sample Size');
+      setAlertConfig({
+        title: 'Validation Error',
+        message: 'Number of Red Cherry cannot exceed Sample Size',
+        type: 'warning',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
       return;
     }
 
@@ -151,22 +196,37 @@ export default function RipenessScreen({ navigation }) {
       );
 
       const dataToSave = {
-        ...formData,
+        harvest_id: formData.harvest_pk, // Use PK for API, not the ID string
+        date: formData.date,
+        sample_size: formData.sample_size,
+        no_of_red_cherry: formData.no_of_red_cherry,
         ripeness_score: parseFloat(ripenessScore),
       };
 
       await addRipenessScore(dataToSave);
-      Alert.alert('Success', 'Ripeness score recorded successfully');
 
-      // Reset form
-      setFormData({
-        harvest_id: '',
-        date: new Date().toISOString().split('T')[0],
-        sample_size: '',
-        no_of_red_cherry: '',
+      setAlertConfig({
+        title: 'Success',
+        message: 'Ripeness score recorded successfully',
+        type: 'success',
+        buttons: [{
+          text: 'OK',
+          onPress: () => {
+            setAlertVisible(false);
+            // Reset form
+            setFormData({
+              harvest_id: '',
+              harvest_pk: null,
+              date: new Date().toISOString().split('T')[0],
+              sample_size: '100',
+              no_of_red_cherry: '',
+            });
+            setShowForm(false);
+            loadRecords();
+          }
+        }]
       });
-      setShowForm(false);
-      loadRecords();
+      setAlertVisible(true);
     } catch (error) {
       console.error('Error saving ripeness score:', error);
       console.error('Error details:', {
@@ -178,7 +238,7 @@ export default function RipenessScreen({ navigation }) {
 
       // Show more detailed error message
       let errorMessage = 'Failed to save ripeness score';
-      let errorDetails = '';
+      let errorTitle = 'Error';
 
       if (error.response?.data) {
         // Backend returned an error response
@@ -194,8 +254,9 @@ export default function RipenessScreen({ navigation }) {
         } else if (errorData.harvest) {
           // Harvest validation error - make it user-friendly
           const harvestError = Array.isArray(errorData.harvest) ? errorData.harvest[0] : errorData.harvest;
+          errorTitle = 'Harvest Not Found';
           if (harvestError.includes('does not exist') || harvestError.includes('Invalid pk')) {
-            errorMessage = `Harvest Not Found\n\nThe harvest "${formData.harvest_id}" does not exist in the database.\n\nPossible reasons:\n1. The harvest was deleted\n2. You need to create harvest records first\n3. The harvest list is outdated\n\nPlease refresh the page or contact your administrator.`;
+            errorMessage = `The selected harvest could not be found in the database.\n\nPlease try:\n1. Refreshing the harvest list\n2. Selecting a different harvest\n3. Creating new harvest records`;
           } else {
             errorMessage = `Harvest error: ${harvestError}`;
           }
@@ -204,21 +265,25 @@ export default function RipenessScreen({ navigation }) {
         } else {
           errorMessage = JSON.stringify(errorData).substring(0, 200);
         }
-        errorDetails = `\n\nStatus: ${error.response.status}`;
       } else if (!error.response) {
         errorMessage = 'Cannot connect to server. Please check if the backend is running.';
-        errorDetails = `\n\nAPI URL: http://142.93.94.236:8000/api/processing/ripeness/`;
+        errorTitle = 'Connection Error';
       } else if (error.response?.status) {
         errorMessage = `Server error (${error.response.status})`;
-        errorDetails = error.response.statusText || '';
       }
 
-      Alert.alert('Error', errorMessage + errorDetails);
+      setAlertConfig({
+        title: errorTitle,
+        message: errorMessage,
+        type: 'error',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
     }
   };
 
-  const renderRecordCard = (record) => (
-    <View key={record.id} style={styles.recordCard}>
+  const renderRecordCard = (record, index) => (
+    <View key={`ripeness-${record.id}-${index}`} style={styles.recordCard}>
       <View style={styles.recordHeader}>
         <View style={styles.scoreCircle}>
           <Text style={styles.scoreText}>{record.ripeness_score}%</Text>
@@ -251,7 +316,6 @@ export default function RipenessScreen({ navigation }) {
       </View>
 
       <View style={styles.formField}>
-        <Text style={styles.formLabel}>Harvest ID *</Text>
         {loadingHarvests ? (
           <View style={styles.pickerLoadingContainer}>
             <ActivityIndicator size="small" color={CoffeeColors.COFFEE_BROWN} />
@@ -259,28 +323,45 @@ export default function RipenessScreen({ navigation }) {
           </View>
         ) : (
           <>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.harvest_id}
-                onValueChange={(value) => setFormData({ ...formData, harvest_id: value })}
-                style={styles.picker}
-              >
-                <Picker.Item
-                  label={harvests.length === 0 ? "No harvests available - create harvests first" : "Select a harvest..."}
-                  value=""
-                />
-                {harvests.map((harvest) => (
-                  <Picker.Item
-                    key={harvest.id}
-                    label={`${harvest.harvest_id || harvest.id} - ${harvest.name || harvest.farmer_name || 'Unknown'}`}
-                    value={harvest.harvest_id || harvest.id}
-                  />
-                ))}
-              </Picker>
-            </View>
+            <CustomPicker
+              label="Harvest ID *"
+              selectedValue={formData.harvest_id}
+              onValueChange={(selectedHarvestId) => {
+                // Find the selected harvest object to get its PK
+                const selectedHarvest = harvests.find(h => (h.harvest_id || h.id) === selectedHarvestId);
+
+                // Debug: Log the complete harvest object structure
+                console.log('[RipenessScreen] Selected harvest object:', JSON.stringify(selectedHarvest, null, 2));
+                console.log('[RipenessScreen] Harvest object keys:', selectedHarvest ? Object.keys(selectedHarvest) : 'null');
+                console.log('[RipenessScreen] Selected ID value:', selectedHarvestId);
+                console.log('[RipenessScreen] harvest.pk (database PK):', selectedHarvest?.pk);
+                console.log('[RipenessScreen] harvest.id:', selectedHarvest?.id);
+                console.log('[RipenessScreen] harvest.harvest_id:', selectedHarvest?.harvest_id);
+
+                setFormData({
+                  ...formData,
+                  harvest_id: selectedHarvestId,
+                  // Use the pk field (integer) if available, otherwise use harvest_id string
+                  // Production harvests: pk is an integer from the main Harvest model
+                  // Farmer-harvests in main table: pk is mapped from main table
+                  // Aggregation-only harvests: no pk, use harvest_id string
+                  harvest_pk: selectedHarvest?.pk || selectedHarvestId,
+                });
+              }}
+              items={harvests.map((harvest) => {
+                const harvestId = harvest.harvest_id || harvest.id;
+                const displayName = harvest.name || harvest.farmer_name || harvest.worker_name || 'Unknown';
+                const upperHarvestId = String(harvestId).toUpperCase();
+
+                return {
+                  value: harvestId,
+                  label: `${upperHarvestId} - ${displayName}`,
+                };
+              })}
+            />
             {harvests.length === 0 && (
               <Text style={styles.helperText}>
-                No harvests found. Please create harvest records in the Aggregation section first.
+                No harvests found. Please ensure harvest records exist in the database.
               </Text>
             )}
           </>
@@ -405,7 +486,7 @@ export default function RipenessScreen({ navigation }) {
                 </View>
               ) : (
                 <View style={styles.recordsList}>
-                  {records.map(renderRecordCard)}
+                  {records.map((record, index) => renderRecordCard(record, index))}
                 </View>
               )}
             </>
@@ -416,6 +497,14 @@ export default function RipenessScreen({ navigation }) {
       </View>
 
       <BottomNav activeScreen="Processing" />
+
+      <CustomAlert
+        visible={alertVisible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        buttons={alertConfig.buttons}
+      />
     </View>
   );
 }

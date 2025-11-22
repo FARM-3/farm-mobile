@@ -29,6 +29,7 @@ import {
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomPicker from '../../../components/CustomPicker';
+import { getStaffById, fetchAllStaff } from '../../../services/staffService';
 
 const FILTER_BY_OPTIONS = ["All Records", "Synced Only", "Pending Only"];
 
@@ -41,6 +42,25 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
     // Filter States
     const [searchTerm, setSearchTerm] = useState('');
     const [filterBy, setFilterBy] = useState(FILTER_BY_OPTIONS[0]);
+
+    // Staff name cache - stores lookups for staff by ID
+    const [staffNameCache, setStaffNameCache] = useState({});
+    const [allStaffList, setAllStaffList] = useState([]);
+
+    // Load all staff once at component mount
+    useEffect(() => {
+        const loadAllStaff = async () => {
+            try {
+                const result = await fetchAllStaff();
+                if (result.success && result.staff && Array.isArray(result.staff)) {
+                    setAllStaffList(result.staff);
+                }
+            } catch (error) {
+                console.error('[HarvestDetailsScreen] Error loading staff:', error);
+            }
+        };
+        loadAllStaff();
+    }, []);
 
     // Ref for synchronized scrolling
     const headerScrollRef = useRef(null);
@@ -256,7 +276,32 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
         }
     };
 
-    const renderRow = ({ item, index }) => (
+    // Build staff name cache from pre-loaded staff list
+    useEffect(() => {
+        if (filteredData.length === 0 || allStaffList.length === 0) {
+            return;
+        }
+
+        const newCache = { ...staffNameCache };
+        const uniqueStaffIds = new Set(filteredData.map(r => r.paidBy).filter(id => id && !staffNameCache[id]));
+
+        for (const paidById of uniqueStaffIds) {
+            // Match against staff ID
+            const foundStaff = allStaffList.find(s =>
+                String(s.id) === String(paidById)
+            );
+
+            if (foundStaff) {
+                newCache[paidById] = foundStaff.displayName || 'Unknown Staff';
+            }
+        }
+
+        setStaffNameCache(newCache);
+    }, [filteredData, allStaffList]);
+
+    const renderRow = ({ item, index }) => {
+        const paidByName = staffNameCache[item.paidBy] || item.paidBy || 'N/A';
+        return (
         <ScrollView
             horizontal
             showsHorizontalScrollIndicator={true}
@@ -273,7 +318,7 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
                 <Text style={styles.cell}>{item.date}</Text>
                 <Text style={styles.cell}>{item.name || 'N/A'}</Text>
                 <Text style={styles.cell}>{item.amountPaid ? `${item.amountPaid} UGX` : 'N/A'}</Text>
-                <Text style={styles.cell}>{item.paidBy || 'N/A'}</Text>
+                <Text style={styles.cell}>{paidByName}</Text>
                 <View style={styles.statusCell}>
                     <Ionicons
                         name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
@@ -295,6 +340,7 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
             </View>
         </ScrollView>
     );
+    };
 
     if (isLoading) {
         return (

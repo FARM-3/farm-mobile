@@ -334,6 +334,9 @@ export const fetchHarvests = async () => {
                 // id: prefer numeric id, fallback to harvest id string
                 id: item.id ?? item.harvest ?? null,
 
+                // CRITICAL: harvest_id from aggregation farmer-harvest endpoint
+                harvest_id: item.harvest_id || '',
+
                 // IMPORTANT: 'name' field contains farmer UID from Django
                 name: item.name || '',
                 farmer_name: farmerName,
@@ -343,13 +346,18 @@ export const fetchHarvests = async () => {
                 weight_after_floating: item.weight_after_floating != null ? parseFloat(item.weight_after_floating) : (item.weight_after_floating || 0),
                 date_of_delivery: item.date_of_delivery || item.date_harvested || item.date || '',
 
+                // Location and GPS fields (new field names)
+                location_of_delivery: item.location_of_delivery || item.location_on_delivery || item.location || '',
+                location_on_delivery: item.location_of_delivery || item.location_on_delivery || item.location || '', // Fallback for old field name
+                gps_coordinates_delivery: item.gps_coordinates_delivery || item.gps_coordinates || item.gps || '',
+                gps_coordinates: item.gps_coordinates_delivery || item.gps_coordinates || item.gps || '', // Fallback for old field name
+
                 // Map grade and coffee_type
                 grade: item.grade || '',
-                coffee_type: item.grade || '', // Also expose as coffee_type
+                coffee_type: item.coffee_type || item.grade || '', // Use coffee_type if available
 
-                cherry_color: item.cherry_color || item.cherry_colour || item.cherryColor || '',
-                cherry_colour: item.cherry_color || item.cherry_colour || item.cherryColor || '',
-                stage: item.stage || '',
+                // Price per kg field (new field)
+                price_per_kg: item.price_per_kg != null ? parseFloat(item.price_per_kg) : 0,
 
                 // Keep amount_paid as both number and string
                 amount_paid: item.amount_paid || '0',
