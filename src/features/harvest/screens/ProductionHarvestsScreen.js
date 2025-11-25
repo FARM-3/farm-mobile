@@ -27,6 +27,7 @@ import {
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
+import HarvestActionMenu from '../../../components/HarvestActionMenu';
 
 // ===============================================
 // === HARVEST DETAIL VIEW COMPONENT      ===
@@ -123,6 +124,10 @@ export default function ProductionHarvestsScreen({ navigation }) {
     // State for detail view
     const [selectedHarvest, setSelectedHarvest] = useState(null);
     const [viewMode, setViewMode] = useState('table'); // 'table' or 'detail'
+
+    // State for harvest action menu
+    const [actionMenuVisible, setActionMenuVisible] = useState(false);
+    const [selectedHarvestForAction, setSelectedHarvestForAction] = useState(null);
 
     // State for custom alert
     const [alertConfig, setAlertConfig] = useState({
@@ -561,63 +566,70 @@ export default function ProductionHarvestsScreen({ navigation }) {
         const displayName = item.name || 'Unknown Worker';
 
         return (
-            <TouchableOpacity
-                style={styles.dataListItem}
-                onPress={() => handleViewDetails(item)}
-            >
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.dataListItemTitle}>
-                        {displayName}
-                        <Text style={styles.dataListItemUID}> ({displayId})</Text>
-                    </Text>
-                    <Text style={styles.dataListItemSubtitle}>
-                        Block: {item.block} | Date: {item.date} | {item.weight}
-                    </Text>
-                    <Text style={styles.dataListItemSubtitle}>
-                        Amount: {item.amountPaid ? `${item.amountPaid} UGX` : 'N/A'} | Paid By: {item.paidBy || 'N/A'}
-                    </Text>
-                    <View style={styles.syncStatusInline}>
-                        <Ionicons
-                            name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
-                            size={14}
-                            color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
-                        />
-                        <Text style={[styles.syncStatusText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN }]}>
-                            {item.isSynced ? 'Synced' : 'Pending'}
+            <View style={styles.dataListItem}>
+                <TouchableOpacity
+                    style={{ flex: 1 }}
+                    onPress={() => handleViewDetails(item)}
+                    activeOpacity={0.7}
+                >
+                    <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            <Text style={styles.dataListItemTitle}>
+                                {displayName}
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    console.log('[ProductionHarvests] Harvest ID tapped:', item.id);
+                                    setSelectedHarvestForAction(item);
+                                    setActionMenuVisible(true);
+                                }}
+                                style={styles.harvestIdButton}
+                                activeOpacity={0.6}
+                            >
+                                <Text style={styles.dataListItemUID}> ({displayId})</Text>
+                                <Ionicons name="chevron-down-circle" size={16} color={CoffeeColors.COFFEE_BROWN} style={{ marginLeft: 4 }} />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={styles.dataListItemSubtitle}>
+                            Block: {item.block} | Date: {item.date} | {item.weight}
                         </Text>
+                        <Text style={styles.dataListItemSubtitle}>
+                            Amount: {item.amountPaid ? `${item.amountPaid} UGX` : 'N/A'} | Paid By: {item.paidBy || 'N/A'}
+                        </Text>
+                        <View style={styles.syncStatusInline}>
+                            <Ionicons
+                                name={item.isSynced ? "cloud-done" : "cloud-upload-outline"}
+                                size={14}
+                                color={item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
+                            />
+                            <Text style={[styles.syncStatusText, { color: item.isSynced ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN }]}>
+                                {item.isSynced ? 'Synced' : 'Pending'}
+                            </Text>
+                        </View>
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 <View style={styles.recordActions}>
                     <TouchableOpacity
                         style={styles.iconButton}
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            navigation.navigate('PaymentVoucher', { harvestData: item });
-                        }}
+                        onPress={() => navigation.navigate('PaymentVoucher', { harvestData: item })}
                     >
                         <Ionicons name="document-text" size={20} color={CoffeeColors.PRIMARY_BROWN} />
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.iconButton}
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            handleEdit(item);
-                        }}
+                        onPress={() => handleEdit(item)}
                     >
                         <Ionicons name="pencil" size={20} color={CoffeeColors.MEDIUM_BROWN} />
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.iconButton}
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            handleDelete(item);
-                        }}
+                        onPress={() => handleDelete(item)}
                     >
                         <Ionicons name="trash" size={20} color={CoffeeColors.DARK_BROWN} />
                     </TouchableOpacity>
                 </View>
-            </TouchableOpacity>
+            </View>
         );
     };
 
@@ -750,6 +762,18 @@ export default function ProductionHarvestsScreen({ navigation }) {
             </View>
 
             <BottomNav activeScreen="Harvests" />
+
+            {/* Harvest Action Menu */}
+            <HarvestActionMenu
+                visible={actionMenuVisible}
+                onClose={() => {
+                    setActionMenuVisible(false);
+                    setSelectedHarvestForAction(null);
+                }}
+                harvestId={selectedHarvestForAction?.harvest_id || selectedHarvestForAction?.id}
+                harvestData={selectedHarvestForAction}
+                navigation={navigation}
+            />
 
             {/* Custom Alert Modal */}
             <CustomAlert
@@ -927,6 +951,11 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         fontFamily: Fonts.semiBold,
         color: CoffeeColors.MEDIUM_BROWN,
+    },
+    harvestIdButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 4,
     },
     dataListItemSubtitle: {
         fontSize: 13,
