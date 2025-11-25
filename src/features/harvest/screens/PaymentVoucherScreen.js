@@ -575,7 +575,14 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                         style={styles.secondaryButton}
-                        onPress={() => navigation.navigate('QualityControl')}
+                        onPress={() => {
+                            // Navigate to Ripeness form with harvest ID pre-filled
+                            console.log('[PaymentVoucher] Navigating to Ripeness with harvest:', voucherData.harvestId);
+                            navigation.navigate('RipenessScreen', {
+                                harvestId: voucherData.harvestId,
+                                autoOpenForm: true
+                            });
+                        }}
                     >
                         <Ionicons name="beaker" size={20} color={CoffeeColors.PRIMARY_BROWN} />
                         <Text style={styles.secondaryButtonText}>Proceed to Quality Control</Text>

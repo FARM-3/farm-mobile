@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ import {
   getAllHarvests,
 } from '../../../services/qualityControl';
 
-export default function RipenessScreen({ navigation }) {
+export default function RipenessScreen({ navigation, route }) {
   const [records, setRecords] = useState([]);
   const [harvests, setHarvests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +78,55 @@ export default function RipenessScreen({ navigation }) {
       loadHarvests();
     }, [])
   );
+
+  // Handle navigation params for pre-filling harvest ID from voucher
+  useEffect(() => {
+    if (route.params?.harvestId && route.params?.autoOpenForm) {
+      console.log('[RipenessScreen] Received harvest ID from navigation:', route.params.harvestId);
+
+      // Wait for harvests to load, then pre-fill and open form
+      const setupFormWithHarvest = async () => {
+        // Give harvests time to load
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Find the harvest in the loaded harvests
+        const matchingHarvest = harvests.find(h =>
+          (h.harvest_id || h.id) === route.params.harvestId
+        );
+
+        console.log('[RipenessScreen] Found matching harvest:', matchingHarvest);
+
+        if (matchingHarvest) {
+          const harvestId = matchingHarvest.harvest_id || matchingHarvest.id;
+          setFormData({
+            harvest_id: harvestId,
+            harvest_pk: matchingHarvest.pk || harvestId,
+            date: new Date().toISOString().split('T')[0],
+            sample_size: '100',
+            no_of_red_cherry: '',
+          });
+          setShowForm(true);
+          console.log('[RipenessScreen] Form pre-filled with harvest:', harvestId);
+        } else {
+          // Harvest not found in list, still set the ID and open form
+          setFormData({
+            harvest_id: route.params.harvestId,
+            harvest_pk: route.params.harvestId,
+            date: new Date().toISOString().split('T')[0],
+            sample_size: '100',
+            no_of_red_cherry: '',
+          });
+          setShowForm(true);
+          console.log('[RipenessScreen] Form opened with harvest ID (not in list):', route.params.harvestId);
+        }
+
+        // Clear the params to prevent re-triggering
+        navigation.setParams({ harvestId: undefined, autoOpenForm: undefined });
+      };
+
+      setupFormWithHarvest();
+    }
+  }, [route.params?.harvestId, route.params?.autoOpenForm, harvests]);
 
   const loadRecords = async () => {
     try {
