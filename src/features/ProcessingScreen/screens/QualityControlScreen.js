@@ -50,30 +50,43 @@ export default function QualityControlScreen({ navigation }) {
         </View>
 
         <View style={styles.cardsContainer}>
-          {qualityControlSections.map((section) => (
-            <TouchableOpacity
-              key={section.id}
-              style={styles.card}
-              onPress={() => navigation.navigate(section.screen)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: section.color + '15' }]}>
-                <MaterialCommunityIcons
-                  name={section.icon}
-                  size={40}
-                  color={section.color}
-                />
-              </View>
-              <Text style={styles.cardTitle}>{section.name}</Text>
-              <Text style={styles.cardDescription}>{section.description}</Text>
-              <View style={styles.arrowContainer}>
-                <MaterialCommunityIcons
-                  name="chevron-right"
-                  size={24}
-                  color={CoffeeColors.MEDIUM_BROWN}
-                />
-              </View>
-            </TouchableOpacity>
+          {qualityControlSections.map((section, index) => (
+            <View key={section.id}>
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => navigation.navigate(section.screen)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>{index + 1}</Text>
+                </View>
+                <View style={[styles.iconContainer, { backgroundColor: section.color + '15' }]}>
+                  <MaterialCommunityIcons
+                    name={section.icon}
+                    size={40}
+                    color={section.color}
+                  />
+                </View>
+                <Text style={styles.cardTitle}>{section.name}</Text>
+                <Text style={styles.cardDescription}>{section.description}</Text>
+                <View style={styles.arrowContainer}>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={24}
+                    color={CoffeeColors.MEDIUM_BROWN}
+                  />
+                </View>
+              </TouchableOpacity>
+              {index < qualityControlSections.length - 1 && (
+                <View style={styles.connector}>
+                  <MaterialCommunityIcons
+                    name="arrow-down"
+                    size={20}
+                    color={CoffeeColors.MEDIUM_BROWN}
+                  />
+                </View>
+              )}
+            </View>
           ))}
         </View>
       </ScrollView>
@@ -115,7 +128,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cardsContainer: {
-    gap: 16,
+    gap: 0,
   },
   card: {
     backgroundColor: CoffeeColors.WHITE,
@@ -127,6 +140,29 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     position: 'relative',
+  },
+  stepNumber: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: CoffeeColors.PRIMARY_BROWN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  stepNumberText: {
+    color: CoffeeColors.WHITE,
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: Fonts.bold,
+  },
+  connector: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    backgroundColor: CoffeeColors.LIGHT_GRAY,
   },
   iconContainer: {
     width: 70,

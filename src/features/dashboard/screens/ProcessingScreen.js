@@ -57,6 +57,7 @@ export default function ProcessingScreen({ navigation }) {
       lastRecorded: `Last Recorded by ${userName}`,
       time: currentTime,
       screen: 'QualityControl',
+      color: '#4CAF50', // Green
     },
     {
       id: 2,
@@ -65,6 +66,7 @@ export default function ProcessingScreen({ navigation }) {
       lastRecorded: `Last Recorded by ${userName}`,
       time: currentTime,
       screen: 'ProcessingType',
+      color: '#2196F3', // Blue
     },
     {
       id: 3,
@@ -73,6 +75,7 @@ export default function ProcessingScreen({ navigation }) {
       lastRecorded: `Last Recorded by ${userName}`,
       time: currentTime,
       screen: 'Drying',
+      color: '#FF9800', // Orange (same as natural sundrying)
     },
     {
       id: 4,
@@ -81,6 +84,16 @@ export default function ProcessingScreen({ navigation }) {
       lastRecorded: `Last Recorded by ${userName}`,
       time: currentTime,
       screen: 'Bagging',
+      color: '#9C27B0', // Purple
+    },
+    {
+      id: 5,
+      name: 'Hulling',
+      icon: 'grain',
+      lastRecorded: `Last Recorded by ${userName}`,
+      time: currentTime,
+      screen: 'Hulling',
+      color: '#795548', // Brown
     },
   ];
 
@@ -119,26 +132,47 @@ export default function ProcessingScreen({ navigation }) {
       <SimpleHeader title="Processing" />
 
       <View style={{ flex: 1 }}>
-      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 20 }}>
-        {/* Processing Cards Grid */}
-        <View style={styles.grid}>
-          {processes.map((process) => (
-            <TouchableOpacity
-              key={process.id}
-              style={styles.card}
-              onPress={() => handleCardPress(process)}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons
-                name={process.icon}
-                size={48}
-                color={CoffeeColors.MEDIUM_BROWN}
-                style={styles.cardIcon}
-              />
-              <Text style={styles.cardTitle}>{process.name}</Text>
-              <Text style={styles.cardSubtitle}>{process.lastRecorded}</Text>
-              <Text style={styles.cardTime}>{process.time}</Text>
-            </TouchableOpacity>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Processing Cards */}
+        <View style={styles.cardsContainer}>
+          {processes.map((process, index) => (
+            <View key={process.id}>
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => handleCardPress(process)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.stepNumber}>
+                  <Text style={styles.stepNumberText}>{index + 1}</Text>
+                </View>
+                <View style={[styles.iconContainer, { backgroundColor: CoffeeColors.MEDIUM_BROWN + '20' }]}>
+                  <MaterialCommunityIcons
+                    name={process.icon}
+                    size={40}
+                    color={CoffeeColors.MEDIUM_BROWN}
+                  />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>{process.name}</Text>
+                  <Text style={styles.cardSubtitle}>{process.lastRecorded}</Text>
+                  <Text style={styles.cardTime}>{process.time}</Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color={CoffeeColors.MEDIUM_BROWN}
+                />
+              </TouchableOpacity>
+              {index < processes.length - 1 && (
+                <View style={styles.connector}>
+                  <MaterialCommunityIcons
+                    name="arrow-down"
+                    size={20}
+                    color={CoffeeColors.MEDIUM_BROWN}
+                  />
+                </View>
+              )}
+            </View>
           ))}
         </View>
       </ScrollView>
@@ -159,45 +193,70 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  cardsContainer: {
+    gap: 0,
   },
   card: {
-    width: '48%',
-    backgroundColor: CoffeeColors.WHITE,
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: CoffeeColors.WHITE,
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 5,
+    borderLeftColor: CoffeeColors.MEDIUM_BROWN,
     shadowColor: CoffeeColors.DARK_BROWN,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  cardIcon: {
-    marginBottom: 12,
+  stepNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: CoffeeColors.PRIMARY_BROWN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  cardTitle: {
+  stepNumberText: {
+    color: CoffeeColors.WHITE,
     fontSize: 16,
     fontWeight: '700',
     fontFamily: Fonts.bold,
-    color: CoffeeColors.DARK_BROWN,
-    marginBottom: 8,
-    textAlign: 'center',
   },
-  cardSubtitle: {
-    fontSize: 11,
-    color: CoffeeColors.MEDIUM_BROWN,
-    fontFamily: Fonts.regular,
-    fontStyle: 'italic',
-    textAlign: 'center',
+  connector: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    backgroundColor: CoffeeColors.LIGHT_GRAY,
+  },
+  iconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    color: CoffeeColors.DARK_BROWN,
     marginBottom: 4,
   },
+  cardSubtitle: {
+    fontSize: 12,
+    color: CoffeeColors.GRAY_TEXT,
+    fontFamily: Fonts.regular,
+    fontStyle: 'italic',
+    marginBottom: 2,
+  },
   cardTime: {
-    fontSize: 11,
+    fontSize: 12,
     color: CoffeeColors.MEDIUM_BROWN,
     fontWeight: '600',
     fontFamily: Fonts.semiBold,
