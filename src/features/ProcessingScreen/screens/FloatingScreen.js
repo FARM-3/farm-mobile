@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import {
   getHarvestsWithRipenessScore,
 } from '../../../services/qualityControl';
 
-export default function FloatingScreen({ navigation }) {
+export default function FloatingScreen({ navigation, route }) {
   const [records, setRecords] = useState([]);
   const [harvests, setHarvests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +49,7 @@ export default function FloatingScreen({ navigation }) {
     });
   };
 
-  const handleDateChange = (event, date) => {
+  const handleDateChange = (_event, date) => {
     setShowDatePicker(Platform.OS === 'ios');
 
     if (date) {
@@ -67,6 +67,53 @@ export default function FloatingScreen({ navigation }) {
       loadHarvests();
     }, [])
   );
+
+  // Handle navigation params for pre-filling harvest ID from action menu or voucher
+  useEffect(() => {
+    if (route.params?.harvestId && route.params?.autoOpenForm) {
+      console.log('[FloatingScreen] Received harvest ID from navigation:', route.params.harvestId);
+
+      // Wait for harvests to load, then pre-fill and open form
+      const setupFormWithHarvest = async () => {
+        // Give harvests time to load
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Find the harvest in the loaded harvests
+        const matchingHarvest = harvests.find(h =>
+          (h.harvest_id || h.id) === route.params.harvestId
+        );
+
+        console.log('[FloatingScreen] Found matching harvest:', matchingHarvest);
+
+        if (matchingHarvest) {
+          const harvestId = matchingHarvest.harvest_id || matchingHarvest.id;
+          setFormData({
+            harvest_id: harvestId,
+            grade: 'A',
+            weight: '',
+            date: new Date().toISOString().split('T')[0],
+          });
+          setShowForm(true);
+          console.log('[FloatingScreen] Form pre-filled with harvest:', harvestId);
+        } else {
+          // Harvest not found in list, still set the ID and open form
+          setFormData({
+            harvest_id: route.params.harvestId,
+            grade: 'A',
+            weight: '',
+            date: new Date().toISOString().split('T')[0],
+          });
+          setShowForm(true);
+          console.log('[FloatingScreen] Form opened with harvest ID (not in list):', route.params.harvestId);
+        }
+
+        // Clear the params to prevent re-triggering
+        navigation.setParams({ harvestId: undefined, autoOpenForm: undefined });
+      };
+
+      setupFormWithHarvest();
+    }
+  }, [route.params?.harvestId, route.params?.autoOpenForm, harvests]);
 
   const loadRecords = async () => {
     try {
@@ -137,13 +184,68 @@ export default function FloatingScreen({ navigation }) {
     }
 
     try {
-      const dataToSave = {
-        ...formData,
-        weight: parseFloat(formData.weight),
+      // Find the selected harvest to get gross weight
+      const selectedHarvest = harvests.find(h =>
+        (h.harvest_id || h.id) === formData.harvest_id
+      );
+
+      if (!selectedHarvest) {
+        Alert.alert('Error', 'Selected harvest not found. Please select again.');
+        return;
+      }
+
+      const grossWeight = selectedHarvest.weight_on_delivery || selectedHarvest.weight || 0;
+      const gradeAWeight = parseFloat(formData.weight);
+
+      // Validate that Grade A weight doesn't exceed gross weight
+      if (gradeAWeight > grossWeight) {
+        Alert.alert(
+          'Validation Error',
+          `Grade A weight (${gradeAWeight} kg) cannot exceed gross weight (${grossWeight} kg)`
+        );
+        return;
+      }
+
+      console.log('[FloatingScreen] Submitting Grade A and auto-calculating Grade B...');
+      console.log('[FloatingScreen] Gross weight:', grossWeight);
+      console.log('[FloatingScreen] Grade A weight:', gradeAWeight);
+
+      // Calculate Grade B weight (remaining weight)
+      const gradeBWeight = grossWeight - gradeAWeight;
+      console.log('[FloatingScreen] Grade B weight (auto-calculated):', gradeBWeight);
+
+      // Submit Grade A record
+      const gradeAData = {
+        harvest_id: formData.harvest_id,
+        grade: 'A',
+        weight: gradeAWeight,
+        date: formData.date,
       };
 
-      await addFloatingRecord(dataToSave);
-      Alert.alert('Success', 'Floating record saved successfully');
+      console.log('[FloatingScreen] Submitting Grade A:', gradeAData);
+      const gradeAResponse = await addFloatingRecord(gradeAData);
+      console.log('[FloatingScreen] ✓ Grade A submitted successfully:', gradeAResponse);
+
+      // Automatically submit Grade B record
+      const gradeBData = {
+        harvest_id: formData.harvest_id,
+        grade: 'B',
+        weight: gradeBWeight,
+        date: formData.date,
+      };
+
+      console.log('[FloatingScreen] Auto-submitting Grade B:', gradeBData);
+      const gradeBResponse = await addFloatingRecord(gradeBData);
+      console.log('[FloatingScreen] ✓ Grade B submitted successfully:', gradeBResponse);
+
+      // Show success message with details
+      Alert.alert(
+        'Success',
+        `Both grades recorded successfully!\n\n` +
+        `Grade A: ${gradeAWeight} kg (ID: ${gradeAResponse.grade_id || 'N/A'})\n` +
+        `Grade B: ${gradeBWeight} kg (ID: ${gradeBResponse.grade_id || 'N/A'})\n\n` +
+        `Total: ${grossWeight} kg`
+      );
 
       // Reset form
       setFormData({
@@ -155,7 +257,7 @@ export default function FloatingScreen({ navigation }) {
       setShowForm(false);
       loadRecords();
     } catch (error) {
-      console.error('Error saving floating record:', error);
+      console.error('[FloatingScreen] Error saving floating record:', error);
 
       // Show more detailed error message
       let errorMessage = 'Failed to save floating record';
@@ -217,96 +319,116 @@ export default function FloatingScreen({ navigation }) {
     </View>
   );
 
-  const renderForm = () => (
-    <View style={styles.formContainer}>
-      <View style={styles.formHeader}>
-        <Text style={styles.formTitle}>Add Floating Record</Text>
-        <TouchableOpacity onPress={() => setShowForm(false)}>
-          <MaterialCommunityIcons name="close" size={24} color={CoffeeColors.DARK_BROWN} />
-        </TouchableOpacity>
-      </View>
+  const renderForm = () => {
+    // Get selected harvest to show weight info
+    const selectedHarvest = harvests.find(h =>
+      (h.harvest_id || h.id) === formData.harvest_id
+    );
+    const grossWeight = selectedHarvest?.weight_on_delivery || selectedHarvest?.weight || 0;
+    const gradeAWeight = parseFloat(formData.weight) || 0;
+    const gradeBWeight = grossWeight - gradeAWeight;
 
-      <View style={styles.formField}>
-        <Text style={styles.formLabel}>Harvest ID *</Text>
-        {loadingHarvests ? (
-          <View style={styles.pickerLoadingContainer}>
-            <ActivityIndicator size="small" color={CoffeeColors.COFFEE_BROWN} />
-            <Text style={styles.pickerLoadingText}>Loading harvests...</Text>
-          </View>
-        ) : (
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.harvest_id}
-              onValueChange={(value) => setFormData({ ...formData, harvest_id: value })}
-              style={styles.picker}
-            >
-              <Picker.Item
-                label={harvests.length === 0 ? "No harvests with ripeness scores yet" : "Select a harvest..."}
-                value=""
-              />
-              {harvests.map((harvest) => (
-                <Picker.Item
-                  key={harvest.harvest_id || harvest.id}
-                  label={`${harvest.harvest_id || harvest.id} - ${harvest.farmer_name || harvest.name || 'Unknown'}`}
-                  value={harvest.harvest_id || harvest.id}
-                />
-              ))}
-            </Picker>
-          </View>
-        )}
-      </View>
+    return (
+      <View style={styles.formContainer}>
+        <View style={styles.formHeader}>
+          <Text style={styles.formTitle}>Add Floating Record</Text>
+          <TouchableOpacity onPress={() => setShowForm(false)}>
+            <MaterialCommunityIcons name="close" size={24} color={CoffeeColors.DARK_BROWN} />
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.formField}>
-        <Text style={styles.formLabel}>Grade *</Text>
-        <TextInput
-          style={styles.formInput}
-          value={formData.grade}
-          onChangeText={(text) => setFormData({ ...formData, grade: text })}
-          placeholder="Enter Grade (e.g., A, B, C)"
-          placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
-        />
-      </View>
-
-      <View style={styles.formField}>
-        <Text style={styles.formLabel}>Weight (kg) *</Text>
-        <TextInput
-          style={styles.formInput}
-          value={formData.weight}
-          onChangeText={(text) => setFormData({ ...formData, weight: text })}
-          placeholder="Enter Weight in kg"
-          keyboardType="decimal-pad"
-          placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
-        />
-      </View>
-
-      <View style={styles.formField}>
-        <Text style={styles.formLabel}>Date *</Text>
-        <TouchableOpacity
-          style={styles.datePickerButton}
-          onPress={() => setShowDatePicker(true)}
-        >
-          <MaterialCommunityIcons name="calendar" size={20} color={CoffeeColors.DARK_BROWN} />
-          <Text style={styles.datePickerText}>
-            {formatDateForDisplay(formData.date)}
+        {/* Info banner explaining auto-grading */}
+        <View style={styles.infoBanner}>
+          <MaterialCommunityIcons name="information" size={20} color={CoffeeColors.COFFEE_BROWN} />
+          <Text style={styles.infoBannerText}>
+            Enter Grade A weight. Grade B will be automatically calculated and recorded.
           </Text>
-        </TouchableOpacity>
+        </View>
 
-        {showDatePicker && (
-          <DateTimePicker
-            value={selectedDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleDateChange}
-            maximumDate={new Date()} // Prevent future dates
-          />
+        <View style={styles.formField}>
+          <Text style={styles.formLabel}>Harvest ID *</Text>
+          {loadingHarvests ? (
+            <View style={styles.pickerLoadingContainer}>
+              <ActivityIndicator size="small" color={CoffeeColors.COFFEE_BROWN} />
+              <Text style={styles.pickerLoadingText}>Loading harvests...</Text>
+            </View>
+          ) : (
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={formData.harvest_id}
+                onValueChange={(value) => setFormData({ ...formData, harvest_id: value })}
+                style={styles.picker}
+              >
+                <Picker.Item
+                  label={harvests.length === 0 ? "No harvests with ripeness scores yet" : "Select a harvest..."}
+                  value=""
+                />
+                {harvests.map((harvest) => (
+                  <Picker.Item
+                    key={harvest.harvest_id || harvest.id}
+                    label={`${harvest.harvest_id || harvest.id} - ${harvest.farmer_name || harvest.name || 'Unknown'}`}
+                    value={harvest.harvest_id || harvest.id}
+                  />
+                ))}
+              </Picker>
+            </View>
+          )}
+        </View>
+
+        {/* Show gross weight when harvest is selected */}
+        {selectedHarvest && (
+          <View style={styles.weightInfoBox}>
+            <Text style={styles.weightInfoLabel}>Gross Weight (Total):</Text>
+            <Text style={styles.weightInfoValue}>{grossWeight} kg</Text>
+          </View>
         )}
-      </View>
 
-      <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-        <Text style={styles.submitButtonText}>Save Floating Record</Text>
-      </TouchableOpacity>
-    </View>
-  );
+        <View style={styles.formField}>
+          <Text style={styles.formLabel}>Grade A Weight (kg) *</Text>
+          <TextInput
+            style={styles.formInput}
+            value={formData.weight}
+            onChangeText={(text) => setFormData({ ...formData, weight: text })}
+            placeholder="Enter Grade A weight in kg"
+            keyboardType="decimal-pad"
+            placeholderTextColor={CoffeeColors.MEDIUM_BROWN + '80'}
+          />
+          {selectedHarvest && formData.weight && (
+            <Text style={styles.helperText}>
+              Grade B will be: {gradeBWeight > 0 ? `${gradeBWeight.toFixed(2)} kg` : '0 kg'}
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.formField}>
+          <Text style={styles.formLabel}>Date *</Text>
+          <TouchableOpacity
+            style={styles.datePickerButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <MaterialCommunityIcons name="calendar" size={20} color={CoffeeColors.DARK_BROWN} />
+            <Text style={styles.datePickerText}>
+              {formatDateForDisplay(formData.date)}
+            </Text>
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              maximumDate={new Date()} // Prevent future dates
+            />
+          )}
+        </View>
+
+        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+          <Text style={styles.submitButtonText}>Save Both Grades</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -621,5 +743,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     fontFamily: Fonts.semiBold,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: CoffeeColors.COFFEE_BROWN + '15',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 10,
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: CoffeeColors.DARK_BROWN,
+    lineHeight: 18,
+  },
+  weightInfoBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: CoffeeColors.LIGHT_GRAY,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  weightInfoLabel: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: CoffeeColors.DARK_BROWN,
+  },
+  weightInfoValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    color: CoffeeColors.COFFEE_BROWN,
+  },
+  helperText: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: CoffeeColors.COFFEE_BROWN,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
 });

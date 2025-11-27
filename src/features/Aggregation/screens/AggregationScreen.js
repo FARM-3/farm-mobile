@@ -24,6 +24,7 @@ import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import CustomAlert from '../../../components/CustomAlert';
+import HarvestActionMenu from '../../../components/HarvestActionMenu';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
 import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
 import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
@@ -572,7 +573,7 @@ const StepIndicator = ({ currentStep, totalSteps, steps }) => {
 };
 
 // --- NEW/REPLACED Table Component: Searchable Data List ---
-const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, onVoucher, isFarmer, farmersList = [] }) => {
+const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, onVoucher, isFarmer, farmersList = [], onHarvestAction }) => {
     const [searchText, setSearchText] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -755,14 +756,35 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
         const secondKey = fields.length > 1 ? fields[1].key : null;
         const thirdKey = fields.length > 2 ? fields[2].key : null;
 
+        // Check if this is a harvest record (not a farmer record)
+        const isHarvest = !isFarmer;
+
         return (
-            <TouchableOpacity style={[styles.dataListItem, item._isDraft && styles.draftListItem, !item._isDraft && !item._isSynced && styles.pendingListItem]} onPress={() => onEdit(item)}>
-                <View style={{ flex: 1 }}>
+            <View style={[styles.dataListItem, item._isDraft && styles.draftListItem, !item._isDraft && !item._isSynced && styles.pendingListItem]}>
+                <TouchableOpacity style={{ flex: 1 }} onPress={() => onEdit(item)} activeOpacity={0.7}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <Text style={styles.dataListItemTitle}>
-                            {String(displayName)}
-                            <Text style={styles.dataListItemUID}> ({displayId})</Text>
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            <Text style={styles.dataListItemTitle}>
+                                {String(displayName)}
+                            </Text>
+                            {isHarvest ? (
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        console.log('[AggregationScreen] Harvest ID tapped:', displayId);
+                                        if (onHarvestAction) {
+                                            onHarvestAction(item);
+                                        }
+                                    }}
+                                    style={styles.harvestIdButton}
+                                    activeOpacity={0.6}
+                                >
+                                    <Text style={styles.dataListItemUID}> ({displayId})</Text>
+                                    <Ionicons name="chevron-down-circle" size={16} color={PRIMARY_BROWN} style={{ marginLeft: 4 }} />
+                                </TouchableOpacity>
+                            ) : (
+                                <Text style={styles.dataListItemUID}> ({displayId})</Text>
+                            )}
+                        </View>
                         {/* Draft Badge - Shows only for incomplete draft records */}
                         {item._isDraft && (
                             <View style={styles.draftBadge}>
@@ -787,7 +809,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                             <Text style={[styles.syncStatusText, { color: LIGHT_BROWN }]}>Pending</Text>
                         </View>
                     )}
-                </View>
+                </TouchableOpacity>
 
                 {/* Edit, Sync Draft (if draft), Voucher (for harvests), and Delete Icon Buttons */}
                 <View style={styles.recordActions}>
@@ -795,8 +817,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                     {item._isDraft && onSyncDraft && (
                         <TouchableOpacity
                             style={[styles.iconButton, styles.syncButton]}
-                            onPress={(e) => {
-                                e.stopPropagation(); // Prevent triggering the main onPress
+                            onPress={() => {
                                 onSyncDraft(item); // Sync draft to database
                             }}
                         >
@@ -808,8 +829,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                     {!isFarmer && onVoucher && (
                         <TouchableOpacity
                             style={styles.iconButton}
-                            onPress={(e) => {
-                                e.stopPropagation(); // Prevent triggering the main onPress
+                            onPress={() => {
                                 onVoucher(item);
                             }}
                         >
@@ -819,8 +839,7 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
 
                     <TouchableOpacity
                         style={styles.iconButton}
-                        onPress={(e) => {
-                            e.stopPropagation(); // Prevent triggering the main onPress
+                        onPress={() => {
                             onEdit(item, true); // Pass true to indicate edit mode vs view mode
                         }}
                     >
@@ -828,15 +847,14 @@ const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onE
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.iconButton}
-                        onPress={(e) => {
-                            e.stopPropagation(); // Prevent triggering the main onPress
+                        onPress={() => {
                             onDelete(item);
                         }}
                     >
                         <Ionicons name="trash" size={20} color={'#d32f2f' || '#d32f2f'} />
                     </TouchableOpacity>
                 </View>
-            </TouchableOpacity>
+            </View>
         );
     };
 
@@ -1268,6 +1286,10 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     // State for current farmer price
     const [currentFarmerPrice, setCurrentFarmerPrice] = useState(null);
     const [isPriceLoading, setIsPriceLoading] = useState(false);
+
+    // State for harvest action menu
+    const [actionMenuVisible, setActionMenuVisible] = useState(false);
+    const [selectedHarvestForAction, setSelectedHarvestForAction] = useState(null);
 
     // Handle navigation params from Dashboard quick actions
     useEffect(() => {
@@ -2745,6 +2767,11 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     onExit={() => setViewMode('form')}
                     isFarmer={false}
                     farmersList={farmersList}
+                    onHarvestAction={(item) => {
+                        console.log('[AggregationScreen] Opening action menu for harvest:', item);
+                        setSelectedHarvestForAction(item);
+                        setActionMenuVisible(true);
+                    }}
                     onEdit={(r, isEdit) => {
                         if (isEdit) {
                             // Edit mode - populate form
@@ -2910,6 +2937,18 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 message={alertConfig.message}
                 type={alertConfig.type}
                 buttons={alertConfig.buttons}
+            />
+
+            {/* Harvest Action Menu */}
+            <HarvestActionMenu
+                visible={actionMenuVisible}
+                onClose={() => {
+                    setActionMenuVisible(false);
+                    setSelectedHarvestForAction(null);
+                }}
+                harvestId={selectedHarvestForAction?.harvest_id || selectedHarvestForAction?.id}
+                harvestData={selectedHarvestForAction}
+                navigation={navigation}
             />
         </View>
     );
@@ -3514,6 +3553,12 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         color: PRIMARY_BROWN,
         fontFamily: Fonts.semiBold,
+    },
+    harvestIdButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 4,
+        borderRadius: 4,
     },
     dataListItemSubtitle: {
         fontSize: 13,

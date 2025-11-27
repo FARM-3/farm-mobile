@@ -31,6 +31,7 @@ import SimpleHeader from '../../../components/SimpleHeader';
 import CustomPicker from '../../../components/CustomPicker';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
+import HarvestActionMenu from '../../../components/HarvestActionMenu';
 
 // --- Constants for Filters ---
 const BLOCK_OPTIONS = ["All Blocks", "Block A-1", "Block B-2", "Block C-3"];
@@ -160,6 +161,10 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     // State for success message with auto-dismiss
     const [successMessage, setSuccessMessage] = useState('');
     const successTimeoutRef = useRef(null);
+
+    // State for harvest action menu
+    const [actionMenuVisible, setActionMenuVisible] = useState(false);
+    const [selectedHarvestForAction, setSelectedHarvestForAction] = useState(null);
 
     // Ref for synchronized scrolling
     const headerScrollRef = useRef(null);
@@ -496,19 +501,33 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
     };
 
     const renderRow = ({ item, index }) => (
-        <TouchableOpacity
-            style={[styles.dataListItem, item.isSynced ? styles.syncedRow : styles.pendingRow]}
-            onPress={() => {
-                setSelectedHarvest(item);
-                setViewMode('detail');
-            }}
-        >
-            <View style={{ flex: 1 }}>
+        <View style={[styles.dataListItem, item.isSynced ? styles.syncedRow : styles.pendingRow]}>
+            <TouchableOpacity
+                style={{ flex: 1 }}
+                onPress={() => {
+                    setSelectedHarvest(item);
+                    setViewMode('detail');
+                }}
+                activeOpacity={0.7}
+            >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Text style={styles.dataListItemTitle}>
-                        {item.name || 'N/A'}
-                        <Text style={styles.dataListItemUID}> ({item.id})</Text>
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                        <Text style={styles.dataListItemTitle}>
+                            {item.name || 'N/A'}
+                        </Text>
+                        <TouchableOpacity
+                            onPress={() => {
+                                console.log('[HarvestSummary] Harvest ID tapped:', item.id);
+                                setSelectedHarvestForAction(item);
+                                setActionMenuVisible(true);
+                            }}
+                            style={styles.harvestIdButton}
+                            activeOpacity={0.6}
+                        >
+                            <Text style={styles.dataListItemUID}> ({item.id})</Text>
+                            <Ionicons name="chevron-down-circle" size={16} color={CoffeeColors.COFFEE_BROWN} style={{ marginLeft: 4 }} />
+                        </TouchableOpacity>
+                    </View>
                     {/* Draft Badge - Shows only for incomplete draft records */}
                     {item._isDraft && (
                         <View style={styles.draftBadge}>
@@ -535,7 +554,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                         <Text style={[styles.syncStatusText, { color: CoffeeColors.LIGHT_BROWN }]}>Pending</Text>
                     </View>
                 )}
-            </View>
+            </TouchableOpacity>
 
             {/* Edit, Sync Draft (if draft), Voucher (for harvests), and Delete Icon Buttons */}
             <View style={styles.recordActions}>
@@ -543,8 +562,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                 {item._isDraft && (
                     <TouchableOpacity
                         style={[styles.iconButton, styles.syncButton]}
-                        onPress={(e) => {
-                            e.stopPropagation(); // Prevent triggering the main onPress
+                        onPress={() => {
                             // handleSyncDraft(item); // Sync draft to database
                         }}
                     >
@@ -555,8 +573,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                 {/* Voucher Button - Only shows for harvest records */}
                 <TouchableOpacity
                     style={styles.iconButton}
-                    onPress={(e) => {
-                        e.stopPropagation(); // Prevent triggering the main onPress
+                    onPress={() => {
                         // onVoucher(item);
                     }}
                 >
@@ -565,8 +582,7 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
 
                 <TouchableOpacity
                     style={styles.iconButton}
-                    onPress={(e) => {
-                        e.stopPropagation(); // Prevent triggering the main onPress
+                    onPress={() => {
                         handleEdit(item, true); // Pass true to indicate edit mode vs view mode
                     }}
                 >
@@ -574,15 +590,14 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={styles.iconButton}
-                    onPress={(e) => {
-                        e.stopPropagation(); // Prevent triggering the main onPress
+                    onPress={() => {
                         handleDelete(item);
                     }}
                 >
                     <Ionicons name="trash" size={20} color={'#d32f2f' || '#d32f2f'} />
                 </TouchableOpacity>
             </View>
-        </TouchableOpacity>
+        </View>
     );
 
     if (isLoading) {
@@ -685,6 +700,18 @@ export default function HarvestSummaryScreen({ route = {}, navigation }) {
                 message={alertConfig.message}
                 type={alertConfig.type}
                 buttons={alertConfig.buttons}
+            />
+
+            {/* Harvest Action Menu */}
+            <HarvestActionMenu
+                visible={actionMenuVisible}
+                onClose={() => {
+                    setActionMenuVisible(false);
+                    setSelectedHarvestForAction(null);
+                }}
+                harvestId={selectedHarvestForAction?.id || selectedHarvestForAction?.harvest_id}
+                harvestData={selectedHarvestForAction}
+                navigation={navigation}
             />
         </View>
     );
@@ -894,8 +921,14 @@ const styles = StyleSheet.create({
     dataListItemUID: {
         fontSize: 14,
         fontWeight: '500',
-        color: CoffeeColors.MEDIUM_BROWN,
+        color: CoffeeColors.COFFEE_BROWN,
         fontFamily: Fonts.semiBold,
+    },
+    harvestIdButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 4,
+        borderRadius: 4,
     },
     dataListItemSubtitle: {
         fontSize: 13,
