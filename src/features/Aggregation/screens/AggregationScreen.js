@@ -1331,8 +1331,47 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             const farmerDrafts = farmerDraftsJson ? JSON.parse(farmerDraftsJson) : [];
             console.log('[loadRecords] Loaded farmer drafts count:', farmerDrafts.length);
 
+            // Log any farmer drafts that claim to be synced (this shouldn't happen)
+            const incorrectlySyncedFarmerDrafts = farmerDrafts.filter(f => f._isSynced === true);
+            if (incorrectlySyncedFarmerDrafts.length > 0) {
+                console.warn('[loadRecords] ⚠️ Found farmer drafts incorrectly marked as synced:', incorrectlySyncedFarmerDrafts.map(f => f.uid || f.farmer_id || f.id));
+            }
+
+            // Create a Set of farmer IDs that exist in backend (truly synced)
+            const backendFarmerIds = new Set(syncedFarmers.map(f => f.uid || f.farmer_id || f.id));
+
+            // Filter out any drafts that already exist in backend (avoid duplicates)
+            // Also ensure remaining drafts are marked as not synced
+            const uniqueFarmerDrafts = farmerDrafts
+                .filter(draft => {
+                    const draftId = draft.uid || draft.farmer_id || draft.id;
+                    if (backendFarmerIds.has(draftId)) {
+                        console.log(`[loadRecords] Removing duplicate draft for farmer ${draftId} (already in backend)`);
+                        return false;
+                    }
+                    return true;
+                })
+                .map(draft => ({
+                    ...draft,
+                    // Ensure drafts are not marked as synced if they're still in AsyncStorage
+                    _isSynced: false
+                }));
+
+            console.log('[loadRecords] Unique farmer drafts after deduplication:', uniqueFarmerDrafts.length);
+
+            // If we removed duplicates, update AsyncStorage
+            if (uniqueFarmerDrafts.length !== farmerDrafts.length) {
+                console.log('[loadRecords] Cleaning up farmer duplicates in AsyncStorage...');
+                if (uniqueFarmerDrafts.length > 0) {
+                    await AsyncStorage.setItem('farmer_drafts', JSON.stringify(uniqueFarmerDrafts));
+                } else {
+                    await AsyncStorage.removeItem('farmer_drafts');
+                }
+                console.log('[loadRecords] ✓ Farmer drafts cleaned up');
+            }
+
             // Combine synced farmers from backend and local drafts
-            const allFarmers = [...syncedFarmers, ...farmerDrafts];
+            const allFarmers = [...syncedFarmers, ...uniqueFarmerDrafts];
             console.log('[loadRecords] Total farmers (submitted + drafts):', allFarmers.length);
             setFarmersList(allFarmers);
 
@@ -1358,8 +1397,47 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             const harvestDrafts = harvestDraftsJson ? JSON.parse(harvestDraftsJson) : [];
             console.log('[loadRecords] Loaded harvest drafts count:', harvestDrafts.length);
 
+            // Log any harvest drafts that claim to be synced (this shouldn't happen)
+            const incorrectlySyncedDrafts = harvestDrafts.filter(h => h._isSynced === true);
+            if (incorrectlySyncedDrafts.length > 0) {
+                console.warn('[loadRecords] ⚠️ Found harvest drafts incorrectly marked as synced:', incorrectlySyncedDrafts.map(h => h.harvest_id || h.id));
+            }
+
+            // Create a Set of harvest IDs that exist in backend (truly synced)
+            const backendHarvestIds = new Set(syncedHarvests.map(h => h.harvest_id || h.id));
+
+            // Filter out any drafts that already exist in backend (avoid duplicates)
+            // Also ensure remaining drafts are marked as not synced
+            const uniqueHarvestDrafts = harvestDrafts
+                .filter(draft => {
+                    const draftId = draft.harvest_id || draft.id;
+                    if (backendHarvestIds.has(draftId)) {
+                        console.log(`[loadRecords] Removing duplicate draft for harvest ${draftId} (already in backend)`);
+                        return false;
+                    }
+                    return true;
+                })
+                .map(draft => ({
+                    ...draft,
+                    // Ensure drafts are not marked as synced if they're still in AsyncStorage
+                    _isSynced: false
+                }));
+
+            console.log('[loadRecords] Unique harvest drafts after deduplication:', uniqueHarvestDrafts.length);
+
+            // If we removed duplicates, update AsyncStorage
+            if (uniqueHarvestDrafts.length !== harvestDrafts.length) {
+                console.log('[loadRecords] Cleaning up harvest duplicates in AsyncStorage...');
+                if (uniqueHarvestDrafts.length > 0) {
+                    await AsyncStorage.setItem('harvest_drafts', JSON.stringify(uniqueHarvestDrafts));
+                } else {
+                    await AsyncStorage.removeItem('harvest_drafts');
+                }
+                console.log('[loadRecords] ✓ Harvest drafts cleaned up');
+            }
+
             // Combine synced harvests from backend and local drafts
-            const allHarvests = [...syncedHarvests, ...harvestDrafts];
+            const allHarvests = [...syncedHarvests, ...uniqueHarvestDrafts];
             setHarvestsList(allHarvests);
 
         } catch (e) {
@@ -1449,22 +1527,30 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     ]
                 });
             } else if (syncResult.syncedCount > 0) {
-                // Some synced, some failed
+                // Some synced, some failed - show detailed error info
+                const failedErrors = syncResult.failedRecords
+                    .map(f => `${f.harvest_id || f.id}: ${f.error}`)
+                    .join('\n');
+
                 setAlertConfig({
                     visible: true,
                     title: 'Partial Sync',
-                    message: `Successfully synced ${syncResult.syncedCount} record${syncResult.syncedCount !== 1 ? 's' : ''}, but ${syncResult.failedCount} record${syncResult.failedCount !== 1 ? 's' : ''} failed. The failed records remain in your pending list.`,
+                    message: `Successfully synced ${syncResult.syncedCount} record${syncResult.syncedCount !== 1 ? 's' : ''}, but ${syncResult.failedCount} record${syncResult.failedCount !== 1 ? 's' : ''} failed.\n\nFailed records:\n${failedErrors}\n\nThe failed records remain in your pending list.`,
                     type: 'warning',
                     buttons: [
                         { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }
                     ]
                 });
             } else {
-                // All failed
+                // All failed - show detailed error info
+                const failedErrors = syncResult.failedRecords
+                    .map(f => `${f.harvest_id || f.id}: ${f.error}`)
+                    .join('\n');
+
                 setAlertConfig({
                     visible: true,
                     title: 'Sync Failed',
-                    message: 'All records failed to sync. Please check your internet connection and try again. Your records are still saved locally.',
+                    message: `All records failed to sync.\n\nErrors:\n${failedErrors}\n\nPlease fix the errors and try again. Your records are still saved locally.`,
                     type: 'error',
                     buttons: [
                         { text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }

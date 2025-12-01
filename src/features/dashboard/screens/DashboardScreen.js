@@ -378,11 +378,21 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.rugyeyoText}>Rugyeyo Farm</Text>
               </View>
 
-              {/* Welcome back User */}
-              <Text style={styles.headerMainText}>
-                <Text style={styles.headerBold}>Hello, </Text>
-                <Text style={styles.headerLight}>{userName}</Text>
-              </Text>
+              {/* Welcome back User with Task Button */}
+              <View style={styles.greetingRow}>
+                <Text style={styles.headerMainText}>
+                  <Text style={styles.headerBold}>Hello, </Text>
+                  <Text style={styles.headerLight}>{userName}</Text>
+                </Text>
+                <TouchableOpacity
+                  style={styles.taskButton}
+                  onPress={() => navigation.navigate('TaskCalendar')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="calendar-outline" size={22} color="#fff" />
+                  <Text style={styles.taskButtonLabel}>Tasks</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={styles.headerActions}>
               <TouchableOpacity
@@ -661,11 +671,17 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   headerMainText: {
     fontSize: Fonts.sizes.huge,
     lineHeight: 36,
     color: '#fff',
     fontFamily: Fonts.regular,
+    flex: 1,
   },
   headerBold: {
     fontWeight: Fonts.weights.bold,
@@ -677,6 +693,24 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.huge,
     color: 'rgba(255, 255, 255, 0.9)',
     fontFamily: Fonts.regular,
+  },
+  taskButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    gap: 6,
+    marginLeft: 8,
+  },
+  taskButtonLabel: {
+    color: '#fff',
+    fontSize: Fonts.sizes.small,
+    fontWeight: Fonts.weights.semiBold,
+    fontFamily: Fonts.semiBold,
   },
   headerSubtitle: {
     fontSize: Fonts.sizes.small,

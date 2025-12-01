@@ -723,37 +723,88 @@ export const syncAggregationRecords = async (farmerRecords = [], harvestRecords 
                 }
             }
 
+            // Normalize harvest data to ensure correct field mapping
+            const normalizedHarvest = {
+                id: harvest.harvest_id || harvest.id,
+                harvest_id: harvest.harvest_id || harvest.id,
+                farmer_uid: harvest.farmer_uid || harvest.name || harvest.farmer_name || '',
+                farmer_name: harvest.farmer_name || harvest.name || '',
+                coffee_type: harvest.coffee_type || harvest.grade || null,
+                weight_on_delivery: harvest.weight_on_delivery || harvest.weight || 0,
+                date_of_delivery: harvest.date_of_delivery || harvest.date || '',
+                location_on_delivery: harvest.location_on_delivery || harvest.location || '',
+                gps_coordinates: harvest.gps_coordinates || harvest.gps || '',
+                price_per_kg: harvest.price_per_kg || 0,
+                moisture_content: harvest.moisture_content || null,
+                amount_paid: harvest.amount_paid || '0',
+                paid_by: harvest.paid_by || harvest.who_paid || '',
+                number_of_bags: harvest.number_of_bags || harvest.no_of_bags || null,
+            };
+
+            console.log(`[aggregationService] Normalized harvest data:`, JSON.stringify(normalizedHarvest, null, 2));
+
             if (isExisting) {
                 // UPDATE existing harvest
                 console.log(`[aggregationService] Updating existing harvest: ${harvestId}`);
 
                 // Import updateHarvest dynamically to avoid circular dependency
                 const { updateHarvest } = await import('../utils/firebaseSetup');
-                await updateHarvest(harvestId, harvest);
+                await updateHarvest(harvestId, normalizedHarvest);
 
                 console.log(`[aggregationService] ✓ Harvest updated: ${harvestId}`);
             } else {
-                // CREATE new harvest
+                // CREATE new harvest - use firebaseSetup submitHarvest for consistency
                 console.log('[aggregationService] Creating new harvest');
-                await submitHarvest(harvest);
+
+                // Import submitHarvest from firebaseSetup which has better field mapping
+                const { submitHarvest: submitHarvestFirebase } = await import('../utils/firebaseSetup');
+                await submitHarvestFirebase(normalizedHarvest);
+
                 console.log('[aggregationService] ✓ Harvest created');
             }
 
+            // Track both id and harvest_id to ensure proper removal from AsyncStorage
             syncedHarvestIds.push(harvest.id);
+            if (harvest.harvest_id && harvest.harvest_id !== harvest.id) {
+                syncedHarvestIds.push(harvest.harvest_id);
+            }
             successCount++;
         } catch (error) {
-            console.error(`[aggregationService] ✗ Failed to sync harvest:`, error);
+            console.error(`[aggregationService] ✗ Failed to sync harvest ${harvest.id || harvest.harvest_id}:`, error.message);
 
             // Enhanced error logging for debugging
             if (error.response?.status === 400) {
-                console.error(`[aggregationService] Validation error:`, error.response.data);
+                console.error(`[aggregationService] Validation error:`, JSON.stringify(error.response.data, null, 2));
+            } else if (error.response?.status === 404) {
+                console.error(`[aggregationService] Harvest not found in backend (404)`);
+            } else if (error.response) {
+                console.error(`[aggregationService] Server error ${error.response.status}:`, error.response.data);
+            } else {
+                console.error(`[aggregationService] Network or other error:`, error.message);
             }
 
             failureCount++;
+
+            // Create user-friendly error message
+            let userMessage = error.message;
+            if (error.response?.status === 400) {
+                // Format validation errors
+                const validationErrors = error.response.data;
+                if (typeof validationErrors === 'object') {
+                    userMessage = Object.entries(validationErrors)
+                        .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+                        .join('; ');
+                }
+            } else if (error.response?.status === 404) {
+                userMessage = 'Harvest record not found in database';
+            }
+
             failedRecords.push({
                 type: 'harvest',
                 id: harvest.id || harvest.harvest_id,
-                error: error.message,
+                harvest_id: harvest.harvest_id || harvest.id,
+                error: userMessage,
+                status: error.response?.status,
                 details: error.response?.data
             });
         }
