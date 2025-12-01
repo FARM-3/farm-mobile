@@ -16,7 +16,8 @@
     },
     "updates": {
       "enabled": false,
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/2d047a6b-6ef0-4e31-8932-5769fc56fd3a"
     },
     "ios": {
       "supportsTablet": true,
@@ -24,7 +25,10 @@
         "NSLocationWhenInUseUsageDescription": "This app needs access to your location to capture GPS coordinates for farmer records.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.anonymous.fmismobile"
+      "bundleIdentifier": "com.anonymous.fmismobile",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -37,15 +41,23 @@
         {
           "action": "MAIN",
           "category": "LAUNCHER"
+        },
+        {
+          "action": "MAIN",
+          "category": "LAUNCHER"
         }
       ],
       "allowBackup": true,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.INTERNET"
       ],
-      "networkSecurityConfig": "./android-network-security-config.xml"
+      "networkSecurityConfig": "./android-network-security-config.xml",
+      "runtimeVersion": "1.0.0"
     },
     "web": {
       "favicon": "./src/assets/favicon.png"
