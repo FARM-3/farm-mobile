@@ -42,6 +42,7 @@ import WelcomeScreen from './features/dashboard/screens/WelcomeScreen';
 import LoginScreen from './features/dashboard/screens/LoginScreen';
 import SecurityQuestionsScreen from './features/dashboard/screens/SecurityQuestionsScreen';
 import DashboardScreen from './features/dashboard/screens/DashboardScreen';
+import TaskCalendarScreen from './features/dashboard/screens/TaskCalendarScreen';
 import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 
 // Processing screens
@@ -197,6 +198,13 @@ const App = () => {
                         name="Dashboard"
                         component={DashboardScreen}
                         options={{ title: 'Rugyeyo Farm Dashboard' }}
+                    />
+
+                    {/* Task Calendar screen */}
+                    <Stack.Screen
+                        name="TaskCalendar"
+                        component={TaskCalendarScreen}
+                        options={{ headerShown: false }}
                     />
 
                     {/* Aggregation screen */}
