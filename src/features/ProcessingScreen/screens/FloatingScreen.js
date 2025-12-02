@@ -18,6 +18,8 @@ import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import GradeActionMenu from '../../../components/GradeActionMenu';
+import CustomAlert from '../../../components/CustomAlert';
 import {
   getFloatingRecords,
   addFloatingRecord,
@@ -37,6 +39,19 @@ export default function FloatingScreen({ navigation, route }) {
     grade: 'A',
     weight: '',
     date: new Date().toISOString().split('T')[0],
+  });
+
+  // State for grade action menu
+  const [actionMenuVisible, setActionMenuVisible] = useState(false);
+  const [selectedGradeForAction, setSelectedGradeForAction] = useState(null);
+
+  // CustomAlert state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    title: '',
+    message: '',
+    type: 'info',
+    buttons: [],
   });
 
   const formatDateForDisplay = (date) => {
@@ -171,15 +186,33 @@ export default function FloatingScreen({ navigation, route }) {
   const handleSubmit = async () => {
     // Validation
     if (!formData.harvest_id.trim()) {
-      Alert.alert('Validation Error', 'Please enter Harvest ID');
+      setAlertConfig({
+        title: 'Validation Error',
+        message: 'Please enter Harvest ID',
+        type: 'warning',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
       return;
     }
     if (!formData.grade.trim()) {
-      Alert.alert('Validation Error', 'Please enter Grade');
+      setAlertConfig({
+        title: 'Validation Error',
+        message: 'Please enter Grade',
+        type: 'warning',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
       return;
     }
     if (!formData.weight || parseFloat(formData.weight) <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid Weight');
+      setAlertConfig({
+        title: 'Validation Error',
+        message: 'Please enter a valid Weight',
+        type: 'warning',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
       return;
     }
 
@@ -190,7 +223,13 @@ export default function FloatingScreen({ navigation, route }) {
       );
 
       if (!selectedHarvest) {
-        Alert.alert('Error', 'Selected harvest not found. Please select again.');
+        setAlertConfig({
+          title: 'Error',
+          message: 'Selected harvest not found. Please select again.',
+          type: 'error',
+          buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+        });
+        setAlertVisible(true);
         return;
       }
 
@@ -199,10 +238,13 @@ export default function FloatingScreen({ navigation, route }) {
 
       // Validate that Grade A weight doesn't exceed gross weight
       if (gradeAWeight > grossWeight) {
-        Alert.alert(
-          'Validation Error',
-          `Grade A weight (${gradeAWeight} kg) cannot exceed gross weight (${grossWeight} kg)`
-        );
+        setAlertConfig({
+          title: 'Validation Error',
+          message: `Grade A weight (${gradeAWeight} kg) cannot exceed gross weight (${grossWeight} kg)`,
+          type: 'warning',
+          buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+        });
+        setAlertVisible(true);
         return;
       }
 
@@ -239,13 +281,19 @@ export default function FloatingScreen({ navigation, route }) {
       console.log('[FloatingScreen] ✓ Grade B submitted successfully:', gradeBResponse);
 
       // Show success message with details
-      Alert.alert(
-        'Success',
-        `Both grades recorded successfully!\n\n` +
-        `Grade A: ${gradeAWeight} kg (ID: ${gradeAResponse.grade_id || 'N/A'})\n` +
-        `Grade B: ${gradeBWeight} kg (ID: ${gradeBResponse.grade_id || 'N/A'})\n\n` +
-        `Total: ${grossWeight} kg`
-      );
+      setAlertConfig({
+        title: 'Success',
+        message: `Both grades recorded successfully!\n\n` +
+          `Grade A: ${gradeAWeight} kg (ID: ${gradeAResponse.grade_id || 'N/A'})\n` +
+          `Grade B: ${gradeBWeight} kg (ID: ${gradeBResponse.grade_id || 'N/A'})\n\n` +
+          `Total: ${grossWeight} kg`,
+        type: 'success',
+        buttons: [{
+          text: 'OK',
+          onPress: () => setAlertVisible(false)
+        }]
+      });
+      setAlertVisible(true);
 
       // Reset form
       setFormData({
@@ -286,12 +334,29 @@ export default function FloatingScreen({ navigation, route }) {
         errorMessage = 'Cannot connect to server. Please check if the backend is running.';
       }
 
-      Alert.alert('Error', errorMessage);
+      setAlertConfig({
+        title: 'Error',
+        message: errorMessage,
+        type: 'error',
+        buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+      });
+      setAlertVisible(true);
     }
   };
 
+  const handleOpenActionMenu = (record) => {
+    console.log('[FloatingScreen] Opening action menu for grade:', record.grade_id);
+    setSelectedGradeForAction(record);
+    setActionMenuVisible(true);
+  };
+
   const renderRecordCard = (record) => (
-    <View key={record.id} style={styles.recordCard}>
+    <TouchableOpacity
+      key={record.id}
+      style={styles.recordCard}
+      onPress={() => handleOpenActionMenu(record)}
+      activeOpacity={0.7}
+    >
       <View style={styles.recordHeader}>
         <View style={styles.gradeContainer}>
           <Text style={styles.gradeLabel}>Grade</Text>
@@ -301,6 +366,13 @@ export default function FloatingScreen({ navigation, route }) {
           <Text style={styles.recordHarvestId}>Harvest ID: {record.harvest_id}</Text>
           <Text style={styles.recordDate}>{record.date}</Text>
         </View>
+        <TouchableOpacity
+          style={styles.actionIcon}
+          onPress={() => handleOpenActionMenu(record)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialCommunityIcons name="arrow-right-circle" size={28} color={CoffeeColors.ACCENT} />
+        </TouchableOpacity>
       </View>
       <View style={styles.recordDetails}>
         <View style={styles.recordDetailRow}>
@@ -316,7 +388,7 @@ export default function FloatingScreen({ navigation, route }) {
           <Text style={styles.recordDetailValue}>{record.grade_id}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderForm = () => {
@@ -489,6 +561,29 @@ export default function FloatingScreen({ navigation, route }) {
       </View>
 
       <BottomNav activeScreen="Processing" />
+
+      {/* Grade Action Menu Modal */}
+      {selectedGradeForAction && (
+        <GradeActionMenu
+          visible={actionMenuVisible}
+          onClose={() => {
+            setActionMenuVisible(false);
+            setSelectedGradeForAction(null);
+          }}
+          gradeId={selectedGradeForAction.grade_id}
+          gradeData={selectedGradeForAction}
+          navigation={navigation}
+        />
+      )}
+
+      {/* Custom Alert Modal */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        buttons={alertConfig.buttons}
+      />
     </View>
   );
 }
@@ -614,6 +709,10 @@ const styles = StyleSheet.create({
   },
   recordHeaderInfo: {
     flex: 1,
+    marginRight: 8,
+  },
+  actionIcon: {
+    padding: 4,
   },
   recordHarvestId: {
     fontSize: 16,

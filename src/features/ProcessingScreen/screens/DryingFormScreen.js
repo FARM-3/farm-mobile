@@ -23,7 +23,7 @@ import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
 import CustomPicker from '../../../components/CustomPicker';
-import { getUnsyncedDryingRecords } from '../../../services/dryingService';
+import { getUnsyncedDryingRecords, getAllProcessingIds } from '../../../services/dryingService';
 
 const SYNC_QUEUE_KEY = "drying_records_sync_queue";
 
@@ -105,6 +105,7 @@ export default function DryingFormScreen({ navigation, route = {} }) {
     const [isSaving, setIsSaving] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [editRecordId, setEditRecordId] = useState(null);
+    const [availableProcessingIds, setAvailableProcessingIds] = useState([]);
 
     const [alertVisible, setAlertVisible] = useState(false);
     const [alertConfig, setAlertConfig] = useState({
@@ -121,6 +122,22 @@ export default function DryingFormScreen({ navigation, route = {} }) {
             setFormData(prev => ({ ...prev, lot_id: lotId }));
         }
     }, [formData.date]);
+
+    // Load available processing IDs on component mount
+    useEffect(() => {
+        const loadProcessingIds = async () => {
+            console.log('[DryingForm] Loading processing IDs...');
+            const { success, processingIds } = await getAllProcessingIds();
+            if (success) {
+                setAvailableProcessingIds(processingIds);
+                console.log('[DryingForm] Successfully loaded', processingIds.length, 'processing IDs:', processingIds.map(p => p.id));
+            } else {
+                console.error('[DryingForm] Failed to load processing IDs');
+            }
+        };
+
+        loadProcessingIds();
+    }, []);
 
     // Calculate all fields whenever relevant inputs change
     useEffect(() => {
@@ -403,16 +420,15 @@ export default function DryingFormScreen({ navigation, route = {} }) {
                                 </Text>
                             </View>
 
-                            <Text style={styles.label}>Processing ID (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={formData.processing_id}
-                                onChangeText={(t) => updateField('processing_id', t)}
-                                placeholder="e.g. FERM-20250114-001"
+                            <CustomPicker
+                                label="Processing ID (Optional)"
+                                selectedValue={formData.processing_id}
+                                onValueChange={(val) => updateField('processing_id', val)}
+                                items={[
+                                    { id: '', name: 'Leave blank (continue from previous lot)' },
+                                    ...availableProcessingIds
+                                ]}
                             />
-                            <Text style={styles.helperText}>
-                                Leave blank if continuing from previous week's lot
-                            </Text>
 
                             <CustomPicker
                                 label="Weather Condition"

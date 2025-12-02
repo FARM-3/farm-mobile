@@ -331,6 +331,14 @@ export default function RipenessScreen({ navigation, route }) {
     }
   };
 
+  const handleProceedToFloating = (record) => {
+    console.log('[RipenessScreen] Proceeding to Floating with harvest:', record.harvest_id);
+    navigation.navigate('FloatingScreen', {
+      harvestId: record.harvest_id,
+      autoOpenForm: true
+    });
+  };
+
   const renderRecordCard = (record, index) => (
     <View key={`ripeness-${record.id}-${index}`} style={styles.recordCard}>
       <View style={styles.recordHeader}>
@@ -341,6 +349,13 @@ export default function RipenessScreen({ navigation, route }) {
           <Text style={styles.recordHarvestId}>Harvest ID: {record.harvest_id}</Text>
           <Text style={styles.recordDate}>{record.date}</Text>
         </View>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => handleProceedToFloating(record)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialCommunityIcons name="arrow-right-circle" size={28} color={CoffeeColors.ACCENT} />
+        </TouchableOpacity>
       </View>
       <View style={styles.recordDetails}>
         <View style={styles.recordDetailRow}>
@@ -352,6 +367,15 @@ export default function RipenessScreen({ navigation, route }) {
           <Text style={styles.recordDetailValue}>{record.no_of_red_cherry}</Text>
         </View>
       </View>
+      <TouchableOpacity
+        style={styles.proceedButton}
+        onPress={() => handleProceedToFloating(record)}
+        activeOpacity={0.7}
+      >
+        <MaterialCommunityIcons name="water" size={20} color={CoffeeColors.WHITE} />
+        <Text style={styles.proceedButtonText}>Proceed to Floating Test</Text>
+        <MaterialCommunityIcons name="arrow-right" size={20} color={CoffeeColors.WHITE} />
+      </TouchableOpacity>
     </View>
   );
 
@@ -674,6 +698,10 @@ const styles = StyleSheet.create({
   },
   recordHeaderInfo: {
     flex: 1,
+    marginRight: 8,
+  },
+  actionButton: {
+    padding: 4,
   },
   recordHarvestId: {
     fontSize: 16,
@@ -829,5 +857,27 @@ const styles = StyleSheet.create({
     color: CoffeeColors.MEDIUM_BROWN,
     marginTop: 6,
     fontStyle: 'italic',
+  },
+  proceedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CoffeeColors.ACCENT,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+    shadowColor: CoffeeColors.DARK_BROWN,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  proceedButtonText: {
+    color: CoffeeColors.WHITE,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
   },
 });

@@ -22,6 +22,7 @@ import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
+import { getAvailableGradeIds } from '../../../services/qualityControl';
 
 const SUNDRYING_STORAGE_KEY = 'natural_sundrying_records';
 
@@ -64,12 +65,8 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editRecordId, setEditRecordId] = useState(null);
     const [showGradePicker, setShowGradePicker] = useState(false);
-
-    // Grade options
-    const gradeOptions = [
-        { id: 'A', label: 'Grade A' },
-        { id: 'B', label: 'Grade B' },
-    ];
+    const [availableGrades, setAvailableGrades] = useState([]);
+    const [isLoadingGrades, setIsLoadingGrades] = useState(false);
 
     // Custom Alert state
     const [alertVisible, setAlertVisible] = useState(false);
@@ -80,11 +77,54 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
         buttons: [],
     });
 
+    // Helper function to show alert
+    const showAlert = (title, message, type = 'info') => {
+        setAlertConfig({
+            title,
+            message,
+            type,
+            buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+        });
+        setAlertVisible(true);
+    };
+
     // Handler for selecting a grade
     const handleGradeSelect = (grade) => {
-        updateField('grade', grade.label);
+        updateField('grade', grade.grade_id);
         setShowGradePicker(false);
     };
+
+    // Fetch available grades on component mount
+    useEffect(() => {
+        const fetchAvailableGrades = async () => {
+            setIsLoadingGrades(true);
+            try {
+                const grades = await getAvailableGradeIds();
+                console.log('[NaturalSundryingForm] Available grades:', grades);
+                setAvailableGrades(grades);
+            } catch (error) {
+                console.error('[NaturalSundryingForm] Error loading available grades:', error);
+                showAlert('Error', 'Failed to load available grade IDs', 'error');
+            } finally {
+                setIsLoadingGrades(false);
+            }
+        };
+
+        if (!isEditMode) {
+            fetchAvailableGrades();
+        }
+    }, [isEditMode]);
+
+    // Handle pre-filled grade ID from navigation params (from GradeActionMenu)
+    useEffect(() => {
+        if (route.params?.gradeId && route.params?.autoFillGrade) {
+            console.log('[NaturalSundryingForm] Received grade ID from navigation:', route.params.gradeId);
+            updateField('grade', route.params.gradeId);
+
+            // Clear the params to prevent re-triggering
+            navigation.setParams({ gradeId: undefined, autoFillGrade: undefined });
+        }
+    }, [route.params?.gradeId, route.params?.autoFillGrade]);
 
     // Initialize form with edit data if provided
     useEffect(() => {
@@ -303,26 +343,48 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
                                     </TouchableOpacity>
                                 </View>
                                 <View style={styles.modalBody}>
-                                    {gradeOptions.map((grade) => (
-                                        <TouchableOpacity
-                                            key={grade.id}
-                                            style={[
-                                                styles.gradeOption,
-                                                formData.grade === grade.label && styles.gradeOptionSelected
-                                            ]}
-                                            onPress={() => handleGradeSelect(grade)}
-                                        >
-                                            <Text style={[
-                                                styles.gradeOptionText,
-                                                formData.grade === grade.label && styles.gradeOptionTextSelected
-                                            ]}>
-                                                {grade.label}
+                                    {isLoadingGrades ? (
+                                        <View style={{ padding: 40, alignItems: 'center' }}>
+                                            <ActivityIndicator size="large" color={CoffeeColors.PRIMARY_BROWN} />
+                                            <Text style={{ marginTop: 12, color: CoffeeColors.MEDIUM_BROWN }}>
+                                                Loading available grades...
                                             </Text>
-                                            {formData.grade === grade.label && (
-                                                <Ionicons name="checkmark-circle" size={24} color="#FF9800" />
-                                            )}
-                                        </TouchableOpacity>
-                                    ))}
+                                        </View>
+                                    ) : availableGrades.length === 0 ? (
+                                        <View style={{ padding: 20 }}>
+                                            <Text style={styles.emptyText}>
+                                                No available grade IDs. Please complete floating tests first.
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        <ScrollView style={{ maxHeight: 400 }}>
+                                            {availableGrades.map((grade) => (
+                                                <TouchableOpacity
+                                                    key={grade.grade_id}
+                                                    style={[
+                                                        styles.gradeOption,
+                                                        formData.grade === grade.grade_id && styles.gradeOptionSelected
+                                                    ]}
+                                                    onPress={() => handleGradeSelect(grade)}
+                                                >
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={[
+                                                            styles.gradeOptionText,
+                                                            formData.grade === grade.grade_id && styles.gradeOptionTextSelected
+                                                        ]}>
+                                                            {grade.grade_id}
+                                                        </Text>
+                                                        <Text style={styles.gradeDetailText}>
+                                                            Grade: {grade.grade} | Weight: {grade.weight}kg | Harvest: {grade.harvest}
+                                                        </Text>
+                                                    </View>
+                                                    {formData.grade === grade.grade_id && (
+                                                        <Ionicons name="checkmark-circle" size={24} color="#FF9800" />
+                                                    )}
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    )}
                                 </View>
                             </View>
                         </TouchableOpacity>
@@ -558,5 +620,18 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontFamily: Fonts.bold,
         color: '#FF9800',
+    },
+    gradeDetailText: {
+        fontSize: 12,
+        color: CoffeeColors.MEDIUM_BROWN,
+        fontFamily: Fonts.regular,
+        marginTop: 4,
+    },
+    emptyText: {
+        fontSize: 14,
+        color: CoffeeColors.GRAY_TEXT,
+        fontFamily: Fonts.regular,
+        textAlign: 'center',
+        fontStyle: 'italic',
     },
 });

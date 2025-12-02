@@ -248,6 +248,55 @@ export const deleteFloatingRecord = async (gradeId) => {
   }
 };
 
+/**
+ * Get available (unprocessed) grade IDs from floating tests
+ * Returns grade IDs that haven't been assigned to fermenting, washing, or natural sundrying
+ * @returns {Promise<Array>} List of available grade IDs with their details
+ */
+export const getAvailableGradeIds = async () => {
+  try {
+    // Fetch all floating records
+    const floatingRecords = await getFloatingRecords();
+
+    // Fetch all processing type records to check which grades are already used
+    const [fermentingResponse, washingResponse, sundryingResponse] = await Promise.all([
+      ApiService.get('processing/fermenting/').catch(() => ({ data: [] })),
+      ApiService.get('processing/washing/').catch(() => ({ data: [] })),
+      ApiService.get('processing/naturalsundrying/').catch(() => ({ data: [] }))
+    ]);
+
+    // Extract used grade IDs
+    const usedGradeIds = new Set();
+
+    [fermentingResponse.data, washingResponse.data, sundryingResponse.data].forEach(records => {
+      const recordsList = Array.isArray(records) ? records : (records.results || []);
+      recordsList.forEach(record => {
+        if (record.grade || record.grade_id) {
+          usedGradeIds.add(record.grade || record.grade_id);
+        }
+      });
+    });
+
+    // Filter floating records to get only available ones
+    const availableGrades = floatingRecords
+      .filter(record => !usedGradeIds.has(record.grade_id))
+      .map(record => ({
+        grade_id: record.grade_id,
+        harvest: record.harvest,
+        grade: record.grade,
+        weight: record.weight,
+        date: record.date,
+        ripeness_score: record.ripeness_score
+      }));
+
+    console.log('[QualityControl] Available grade IDs:', availableGrades.length);
+    return availableGrades;
+  } catch (error) {
+    console.error('[QualityControl] Error fetching available grade IDs:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
 // ==================== HARVEST OPERATIONS ====================
 
 /**

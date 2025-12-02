@@ -270,3 +270,48 @@ export const removeDryingRecordFromQueue = async (recordId) => {
         return { success: false };
     }
 };
+
+/**
+ * Get all processing IDs from the three processing forms' local storage
+ */
+export const getAllProcessingIds = async () => {
+    try {
+        const processingIds = [];
+
+        // Storage keys for the three processing forms
+        const storageKeys = [
+            'fermenting_records',
+            'natural_sundrying_records',
+            'washing_records'
+        ];
+
+        for (const key of storageKeys) {
+            const jsonValue = await AsyncStorage.getItem(key);
+            const records = jsonValue != null ? JSON.parse(jsonValue) : [];
+
+            // Extract processing_id from each record
+            records.forEach(record => {
+                if (record.processing_id) {
+                    processingIds.push({
+                        id: record.processing_id,
+                        name: record.processing_id,
+                        type: key.replace('_records', '').replace('natural_', '') // e.g., 'fermenting', 'sundrying', 'washing'
+                    });
+                }
+            });
+        }
+
+        console.log('[getAllProcessingIds] Found', processingIds.length, 'processing IDs');
+
+        return {
+            success: true,
+            processingIds: processingIds
+        };
+    } catch (error) {
+        console.error('[getAllProcessingIds] Error:', error);
+        return {
+            success: false,
+            processingIds: []
+        };
+    }
+};

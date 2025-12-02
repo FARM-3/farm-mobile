@@ -22,6 +22,7 @@ import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
+import { getAvailableGradeIds } from '../../../services/qualityControl';
 
 const FERMENTING_STORAGE_KEY = 'fermenting_records';
 
@@ -76,11 +77,9 @@ export default function FermentingFormScreen({ navigation, route = {} }) {
     const [editRecordId, setEditRecordId] = useState(null);
     const [showGradePicker, setShowGradePicker] = useState(false);
 
-    // Grade options
-    const gradeOptions = [
-        { id: 'A', label: 'Grade A' },
-        { id: 'B', label: 'Grade B' },
-    ];
+    // Available grade IDs from floating tests
+    const [availableGrades, setAvailableGrades] = useState([]);
+    const [isLoadingGrades, setIsLoadingGrades] = useState(false);
 
     // Custom Alert state
     const [alertVisible, setAlertVisible] = useState(false);
@@ -91,11 +90,43 @@ export default function FermentingFormScreen({ navigation, route = {} }) {
         buttons: [],
     });
 
+    // Fetch available grade IDs on component mount
+    useEffect(() => {
+        const fetchAvailableGrades = async () => {
+            setIsLoadingGrades(true);
+            try {
+                const grades = await getAvailableGradeIds();
+                setAvailableGrades(grades);
+                console.log('[FermentingForm] Loaded available grades:', grades.length);
+            } catch (error) {
+                console.error('[FermentingForm] Error loading available grades:', error);
+                showAlert('Error', 'Failed to load available grade IDs', 'error');
+            } finally {
+                setIsLoadingGrades(false);
+            }
+        };
+
+        if (!isEditMode) {
+            fetchAvailableGrades();
+        }
+    }, [isEditMode]);
+
     // Handler for selecting a grade
     const handleGradeSelect = (grade) => {
-        updateField('grade', grade.label);
+        updateField('grade', grade.grade_id);
         setShowGradePicker(false);
     };
+
+    // Handle pre-filled grade ID from navigation params (from GradeActionMenu)
+    useEffect(() => {
+        if (route.params?.gradeId && route.params?.autoFillGrade) {
+            console.log('[FermentingForm] Received grade ID from navigation:', route.params.gradeId);
+            updateField('grade', route.params.gradeId);
+
+            // Clear the params to prevent re-triggering
+            navigation.setParams({ gradeId: undefined, autoFillGrade: undefined });
+        }
+    }, [route.params?.gradeId, route.params?.autoFillGrade]);
 
     // Initialize form with edit data if provided
     useEffect(() => {
@@ -334,32 +365,45 @@ export default function FermentingFormScreen({ navigation, route = {} }) {
                         >
                             <View style={styles.modalContent}>
                                 <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Select Grade</Text>
+                                    <Text style={styles.modalTitle}>Select Grade ID</Text>
                                     <TouchableOpacity onPress={() => setShowGradePicker(false)}>
                                         <Ionicons name="close" size={24} color={CoffeeColors.DARK_BROWN} />
                                     </TouchableOpacity>
                                 </View>
                                 <View style={styles.modalBody}>
-                                    {gradeOptions.map((grade) => (
-                                        <TouchableOpacity
-                                            key={grade.id}
-                                            style={[
-                                                styles.gradeOption,
-                                                formData.grade === grade.label && styles.gradeOptionSelected
-                                            ]}
-                                            onPress={() => handleGradeSelect(grade)}
-                                        >
-                                            <Text style={[
-                                                styles.gradeOptionText,
-                                                formData.grade === grade.label && styles.gradeOptionTextSelected
-                                            ]}>
-                                                {grade.label}
-                                            </Text>
-                                            {formData.grade === grade.label && (
-                                                <Ionicons name="checkmark-circle" size={24} color={CoffeeColors.PRIMARY_BROWN} />
-                                            )}
-                                        </TouchableOpacity>
-                                    ))}
+                                    {isLoadingGrades ? (
+                                        <ActivityIndicator size="large" color={CoffeeColors.PRIMARY_BROWN} />
+                                    ) : availableGrades.length === 0 ? (
+                                        <Text style={styles.emptyText}>No available grade IDs. Please complete floating tests first.</Text>
+                                    ) : (
+                                        <ScrollView style={{ maxHeight: 400 }}>
+                                            {availableGrades.map((grade) => (
+                                                <TouchableOpacity
+                                                    key={grade.grade_id}
+                                                    style={[
+                                                        styles.gradeOption,
+                                                        formData.grade === grade.grade_id && styles.gradeOptionSelected
+                                                    ]}
+                                                    onPress={() => handleGradeSelect(grade)}
+                                                >
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={[
+                                                            styles.gradeOptionText,
+                                                            formData.grade === grade.grade_id && styles.gradeOptionTextSelected
+                                                        ]}>
+                                                            {grade.grade_id}
+                                                        </Text>
+                                                        <Text style={styles.gradeDetailText}>
+                                                            Grade: {grade.grade} | Weight: {grade.weight}kg | Harvest: {grade.harvest}
+                                                        </Text>
+                                                    </View>
+                                                    {formData.grade === grade.grade_id && (
+                                                        <Ionicons name="checkmark-circle" size={24} color={CoffeeColors.PRIMARY_BROWN} />
+                                                    )}
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    )}
                                 </View>
                             </View>
                         </TouchableOpacity>
@@ -625,5 +669,18 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontFamily: Fonts.bold,
         color: CoffeeColors.PRIMARY_BROWN,
+    },
+    gradeDetailText: {
+        fontSize: 12,
+        fontFamily: Fonts.regular,
+        color: CoffeeColors.GRAY_TEXT,
+        marginTop: 4,
+    },
+    emptyText: {
+        fontSize: 14,
+        fontFamily: Fonts.regular,
+        color: CoffeeColors.GRAY_TEXT,
+        textAlign: 'center',
+        padding: 20,
     },
 });
