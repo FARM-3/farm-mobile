@@ -459,7 +459,7 @@ const DashboardScreen = ({ navigation }) => {
       </Animated.View>
 
       <Animated.ScrollView
-        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 70, paddingBottom: 20 }]}
+        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 100, paddingBottom: 20 }]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
