@@ -42,13 +42,13 @@ function formatDateForDisplay(d) {
     return `${day}-${mon}-${year}`;
 }
 
-// Generate processing ID: FERM-{YYYYMMDD}-{SEQ}
+// Generate processing ID: FER{DDMM}{SEQ}
+// Example: FER041200 = Fermenting, 4th December, entry 00
 const generateProcessingId = (date = new Date(), sequence = 0) => {
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
     const seq = String(sequence).padStart(2, '0');
-    return `FERM-${yyyy}${mm}${dd}-${seq}`;
+    return `FER${dd}${mm}${seq}`;
 };
 
 // Calculate days between two dates
@@ -156,10 +156,12 @@ export default function FermentingFormScreen({ navigation, route = {} }) {
                     const existingData = await AsyncStorage.getItem(FERMENTING_STORAGE_KEY);
                     const existingRecords = existingData ? JSON.parse(existingData) : [];
 
-                    // Filter records with same date prefix
-                    const dateStr = formatDateForApi(formData.start_date).replace(/-/g, '');
+                    // Filter records with same date prefix (DDMM format)
+                    const dd = String(formData.start_date.getDate()).padStart(2, '0');
+                    const mm = String(formData.start_date.getMonth() + 1).padStart(2, '0');
+                    const datePrefix = `FER${dd}${mm}`;
                     const sameDate = existingRecords.filter(record =>
-                        record.processing_id && record.processing_id.startsWith(`FERM-${dateStr}`)
+                        record.processing_id && record.processing_id.startsWith(datePrefix)
                     );
 
                     // Calculate next sequence number

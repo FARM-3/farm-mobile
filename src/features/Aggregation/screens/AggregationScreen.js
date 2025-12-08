@@ -5,7 +5,7 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 
-// Suppress all console logs and warnings from appearing on the UI
+// Suppress all console logs and warnings from appearing on UI
 // Logs will still appear in the terminal for debugging
 LogBox.ignoreLogs([
   'VirtualizedLists should never be nested inside plain ScrollViews',

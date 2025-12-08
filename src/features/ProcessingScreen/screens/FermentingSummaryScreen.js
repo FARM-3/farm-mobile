@@ -9,7 +9,8 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
-    ScrollView
+    ScrollView,
+    Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,6 +18,8 @@ import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import CustomAlert from '../../../components/CustomAlert';
+import { syncAllFermentingRecords } from '../../../services/fermentingService';
 
 const FERMENTING_STORAGE_KEY = 'fermenting_records';
 
@@ -93,6 +96,15 @@ export default function FermentingSummaryScreen({ navigation }) {
     const [isLoading, setIsLoading] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [viewMode, setViewMode] = useState('list');
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [unsyncedCount, setUnsyncedCount] = useState(0);
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: [],
+    });
 
     const loadRecords = useCallback(async () => {
         setIsLoading(true);
@@ -104,14 +116,21 @@ export default function FermentingSummaryScreen({ navigation }) {
                 // Sort by created_at descending (newest first)
                 parsedRecords.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
                 setRecords(parsedRecords);
-                console.log('[FermentingSummary] Loaded', parsedRecords.length, 'records');
+
+                // Count unsynced records
+                const unsynced = parsedRecords.filter(r => !r.isSynced).length;
+                setUnsyncedCount(unsynced);
+
+                console.log('[FermentingSummary] Loaded', parsedRecords.length, 'records,', unsynced, 'unsynced');
             } else {
                 setRecords([]);
+                setUnsyncedCount(0);
                 console.log('[FermentingSummary] No records found');
             }
         } catch (error) {
             console.error('[FermentingSummary] Error loading records:', error);
             setRecords([]);
+            setUnsyncedCount(0);
         } finally {
             setIsLoading(false);
         }
@@ -128,6 +147,72 @@ export default function FermentingSummaryScreen({ navigation }) {
         });
         return unsubscribe;
     }, [navigation, loadRecords]);
+
+    const handleDelete = async (record) => {
+        setAlertConfig({
+            title: 'Delete Record',
+            message: `Are you sure you want to delete ${record.processing_id}?`,
+            type: 'warning',
+            buttons: [
+                {
+                    text: 'Cancel',
+                    onPress: () => setAlertVisible(false),
+                    style: 'cancel'
+                },
+                {
+                    text: 'Delete',
+                    onPress: async () => {
+                        setAlertVisible(false);
+                        try {
+                            const storedData = await AsyncStorage.getItem(FERMENTING_STORAGE_KEY);
+                            if (storedData) {
+                                const parsedRecords = JSON.parse(storedData);
+                                const filteredRecords = parsedRecords.filter(
+                                    r => r.processing_id !== record.processing_id
+                                );
+                                await AsyncStorage.setItem(
+                                    FERMENTING_STORAGE_KEY,
+                                    JSON.stringify(filteredRecords)
+                                );
+                                console.log('[FermentingSummary] Deleted record:', record.processing_id);
+                                await loadRecords();
+
+                                // Show success message
+                                setAlertConfig({
+                                    title: 'Success',
+                                    message: 'Record deleted successfully.',
+                                    type: 'success',
+                                    buttons: [
+                                        {
+                                            text: 'OK',
+                                            onPress: () => setAlertVisible(false)
+                                        }
+                                    ]
+                                });
+                                setAlertVisible(true);
+                            }
+                        } catch (error) {
+                            console.error('[FermentingSummary] Delete error:', error);
+                            setAlertConfig({
+                                title: 'Error',
+                                message: 'Failed to delete record.',
+                                type: 'error',
+                                buttons: [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => setAlertVisible(false)
+                                    }
+                                ]
+                            });
+                            setAlertVisible(true);
+                        }
+                    },
+                    style: 'destructive'
+                }
+            ]
+        });
+        setAlertVisible(true);
+    };
 
     const renderRecord = ({ item }) => (
         <TouchableOpacity
@@ -167,9 +252,56 @@ export default function FermentingSummaryScreen({ navigation }) {
                 >
                     <Ionicons name="pencil" size={20} color={CoffeeColors.DARK_BROWN} />
                 </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.iconButton, styles.deleteButton]}
+                    onPress={(e) => {
+                        e.stopPropagation();
+                        handleDelete(item);
+                    }}
+                >
+                    <Ionicons name="trash-outline" size={20} color="#e74c3c" />
+                </TouchableOpacity>
             </View>
         </TouchableOpacity>
     );
+
+    const handleSync = async () => {
+        if (isSyncing) return;
+
+        if (unsyncedCount === 0) {
+            Alert.alert('Nothing to Sync', 'All fermenting records are already synced.');
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            const result = await syncAllFermentingRecords();
+
+            if (result.totalCount === 0) {
+                Alert.alert('Nothing to Sync', 'All fermenting records are already synced.');
+            } else if (result.syncedCount > 0 && result.syncedCount < result.totalCount) {
+                Alert.alert(
+                    'Partial Sync',
+                    `Synced ${result.syncedCount} of ${result.totalCount} records. Some records failed to sync.`
+                );
+            } else if (result.syncedCount === 0 && result.totalCount > 0) {
+                Alert.alert(
+                    'Sync Failed',
+                    'Could not sync records. Please check your internet connection and try again.'
+                );
+            } else if (result.syncedCount === result.totalCount) {
+                Alert.alert('Sync Successful', `All ${result.syncedCount} fermenting records have been synced.`);
+            }
+
+            // Reload records to update sync status
+            await loadRecords();
+        } catch (error) {
+            console.error('[FermentingSummary] Sync error:', error);
+            Alert.alert('Sync Failed', error.message || 'Failed to sync fermenting records.');
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     const handleBackPress = () => {
         if (viewMode === 'detail') {
@@ -194,6 +326,9 @@ export default function FermentingSummaryScreen({ navigation }) {
             <SimpleHeader
                 title="Fermenting Records"
                 onBackPress={handleBackPress}
+                onSync={handleSync}
+                isSyncing={isSyncing}
+                unsyncedCount={unsyncedCount}
             />
 
             <View style={{ flex: 1 }}>
@@ -236,6 +371,15 @@ export default function FermentingSummaryScreen({ navigation }) {
                 </View>
             </View>
             <BottomNav activeScreen="Processing" />
+
+            {/* Custom Alert Modal */}
+            <CustomAlert
+                visible={alertVisible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+            />
         </View>
     );
 }
@@ -346,6 +490,9 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 1,
+    },
+    deleteButton: {
+        backgroundColor: '#ffe6e6',
     },
     emptyContainer: {
         flex: 1,
