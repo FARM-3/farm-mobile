@@ -61,6 +61,20 @@ export default function ProcessingScreen({ navigation }) {
     },
     {
       id: 2,
+      name: 'Create a Batch',
+      icon: 'sack',
+      lastRecorded: 'Group multiple grades',
+      time: 'Batch Processing',
+      screen: 'CreateBatch',
+      color: '#FF6B35', // Vibrant Orange
+      isSpecial: true, // Mark as special for unique styling
+      hasSecondaryAction: true,
+      secondaryActionText: 'View Batches',
+      secondaryActionIcon: 'view-list-outline',
+      secondaryActionScreen: 'ViewBatches',
+    },
+    {
+      id: 3,
       name: 'Processing Type',
       icon: 'cog-outline',
       lastRecorded: `Last Recorded by ${userName}`,
@@ -69,7 +83,7 @@ export default function ProcessingScreen({ navigation }) {
       color: '#2196F3', // Blue
     },
     {
-      id: 3,
+      id: 4,
       name: 'Drying',
       icon: 'weather-sunny',
       lastRecorded: `Last Recorded by ${userName}`,
@@ -78,7 +92,7 @@ export default function ProcessingScreen({ navigation }) {
       color: '#FF9800', // Orange (same as natural sundrying)
     },
     {
-      id: 4,
+      id: 6,
       name: 'Bagging',
       icon: 'package-variant-closed',
       lastRecorded: `Last Recorded by ${userName}`,
@@ -87,7 +101,7 @@ export default function ProcessingScreen({ navigation }) {
       color: '#9C27B0', // Purple
     },
     {
-      id: 5,
+      id: 7,
       name: 'Hulling',
       icon: 'grain',
       lastRecorded: `Last Recorded by ${userName}`,
@@ -101,7 +115,7 @@ export default function ProcessingScreen({ navigation }) {
     console.log('[ProcessingScreen] Card pressed:', process.name, 'Screen:', process.screen);
 
     // Navigate to available screens, show "Coming Soon" for others
-    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType' || process.screen === 'Drying' || process.screen === 'Bagging') {
+    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType' || process.screen === 'Drying' || process.screen === 'Bagging' || process.screen === 'CreateBatch' || process.screen === 'ViewBatches') {
       try {
         let routeName;
         if (process.screen === 'Drying') {
@@ -126,6 +140,12 @@ export default function ProcessingScreen({ navigation }) {
     }
   };
 
+  const handleSecondaryAction = (process, e) => {
+    e.stopPropagation();
+    console.log('[ProcessingScreen] Secondary action pressed:', process.secondaryActionText);
+    navigation.navigate(process.secondaryActionScreen);
+  };
+
   return (
     <View style={styles.container}>
       {/* Simple White Header */}
@@ -138,29 +158,58 @@ export default function ProcessingScreen({ navigation }) {
           {processes.map((process, index) => (
             <View key={process.id}>
               <TouchableOpacity
-                style={styles.card}
+                style={[
+                  styles.card,
+                  process.isSpecial && styles.specialCard
+                ]}
                 onPress={() => handleCardPress(process)}
                 activeOpacity={0.7}
               >
-                <View style={styles.stepNumber}>
+                <View style={[
+                  styles.stepNumber,
+                  process.isSpecial && styles.specialStepNumber
+                ]}>
                   <Text style={styles.stepNumberText}>{index + 1}</Text>
                 </View>
-                <View style={[styles.iconContainer, { backgroundColor: CoffeeColors.MEDIUM_BROWN + '20' }]}>
+                <View style={[
+                  styles.iconContainer,
+                  { backgroundColor: process.isSpecial ? process.color + '20' : CoffeeColors.MEDIUM_BROWN + '20' }
+                ]}>
                   <MaterialCommunityIcons
                     name={process.icon}
-                    size={40}
-                    color={CoffeeColors.MEDIUM_BROWN}
+                    size={process.isSpecial ? 50 : 40}
+                    color={process.isSpecial ? process.color : CoffeeColors.MEDIUM_BROWN}
                   />
                 </View>
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle}>{process.name}</Text>
+                  <Text style={[
+                    styles.cardTitle,
+                    process.isSpecial && styles.specialCardTitle
+                  ]}>{process.name}</Text>
                   <Text style={styles.cardSubtitle}>{process.lastRecorded}</Text>
-                  <Text style={styles.cardTime}>{process.time}</Text>
+                  <Text style={[
+                    styles.cardTime,
+                    process.isSpecial && { color: process.color }
+                  ]}>{process.time}</Text>
+                  {process.hasSecondaryAction && (
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={(e) => handleSecondaryAction(process, e)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialCommunityIcons
+                        name={process.secondaryActionIcon}
+                        size={16}
+                        color={CoffeeColors.WHITE}
+                      />
+                      <Text style={styles.secondaryButtonText}>{process.secondaryActionText}</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
                 <MaterialCommunityIcons
                   name="chevron-right"
                   size={24}
-                  color={CoffeeColors.MEDIUM_BROWN}
+                  color={process.isSpecial ? process.color : CoffeeColors.MEDIUM_BROWN}
                 />
               </TouchableOpacity>
               {index < processes.length - 1 && (
@@ -210,6 +259,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  specialCard: {
+    padding: 20,
+    borderLeftWidth: 6,
+    borderLeftColor: '#FF6B35',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
+    backgroundColor: '#FFF9F5',
+  },
   stepNumber: {
     width: 32,
     height: 32,
@@ -224,6 +283,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     fontFamily: Fonts.bold,
+  },
+  specialStepNumber: {
+    backgroundColor: '#FF6B35',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
   },
   connector: {
     alignItems: 'center',
@@ -248,6 +313,10 @@ const styles = StyleSheet.create({
     color: CoffeeColors.DARK_BROWN,
     marginBottom: 4,
   },
+  specialCardTitle: {
+    fontSize: 20,
+    color: '#FF6B35',
+  },
   cardSubtitle: {
     fontSize: 12,
     color: CoffeeColors.GRAY_TEXT,
@@ -258,6 +327,23 @@ const styles = StyleSheet.create({
   cardTime: {
     fontSize: 12,
     color: CoffeeColors.MEDIUM_BROWN,
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF6B35',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginTop: 8,
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  secondaryButtonText: {
+    color: CoffeeColors.WHITE,
+    fontSize: 12,
     fontWeight: '600',
     fontFamily: Fonts.semiBold,
   },

@@ -66,6 +66,8 @@ import AggregationScreen from './features/Aggregation/screens/AggregationScreen'
 
 // Processing screens
 import ProcessingTypeScreen from './features/ProcessingScreen/screens/ProcessingTypeScreen';
+import CreateBatchScreen from './features/ProcessingScreen/screens/CreateBatchScreen';
+import ViewBatchesScreen from './features/ProcessingScreen/screens/ViewBatchesScreen';
 import FermentingSummaryScreen from './features/ProcessingScreen/screens/FermentingSummaryScreen';
 import FermentingFormScreen from './features/ProcessingScreen/screens/FermentingFormScreen';
 import WashingSummaryScreen from './features/ProcessingScreen/screens/WashingSummaryScreen';
@@ -270,6 +272,19 @@ const App = () => {
                         name="ProcessingType"
                         component={ProcessingTypeScreen}
                         options={{ title: 'Processing Types' }}
+                    />
+
+                    {/* Batch screens */}
+                    <Stack.Screen
+                        name="CreateBatch"
+                        component={CreateBatchScreen}
+                        options={{ title: 'Create a Batch' }}
+                    />
+
+                    <Stack.Screen
+                        name="ViewBatches"
+                        component={ViewBatchesScreen}
+                        options={{ title: 'View Batches' }}
                     />
 
                     {/* Fermenting screens */}

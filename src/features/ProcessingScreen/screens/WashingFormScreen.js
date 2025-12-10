@@ -23,6 +23,7 @@ import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
 import { getAvailableGradeIds } from '../../../services/qualityControl';
+import { getAvailableBatches } from '../../../services/batchService';
 
 const WASHING_STORAGE_KEY = 'washing_records';
 
@@ -52,7 +53,9 @@ const generateProcessingId = (date = new Date(), sequence = 0) => {
 };
 
 const initialFormState = {
-    grade: '', // ForeignKey to Floating.grade_id
+    grade: '', // ForeignKey to Floating.grade_id OR Batch.batch_id (backward compatibility)
+    grade_ids: [], // Array of grade IDs for multi-select in single grade mode
+    isBatch: false, // Flag to indicate if grade is a batch
     date: new Date(),
     weight: '', // after washing
     processing_id: '', // auto-generated
@@ -65,8 +68,14 @@ export default function WashingFormScreen({ navigation, route = {} }) {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editRecordId, setEditRecordId] = useState(null);
     const [showGradePicker, setShowGradePicker] = useState(false);
+
+    // Available grade IDs from floating tests
     const [availableGrades, setAvailableGrades] = useState([]);
     const [isLoadingGrades, setIsLoadingGrades] = useState(false);
+
+    // Available batches
+    const [availableBatches, setAvailableBatches] = useState([]);
+    const [selectionMode, setSelectionMode] = useState('grade'); // 'grade' or 'batch'
 
     // Custom Alert state
     const [alertVisible, setAlertVisible] = useState(false);
@@ -88,30 +97,59 @@ export default function WashingFormScreen({ navigation, route = {} }) {
         setAlertVisible(true);
     };
 
-    // Handler for selecting a grade
+    // Handler for selecting a grade (supports multi-select)
     const handleGradeSelect = (grade) => {
-        updateField('grade', grade.grade_id);
+        const gradeId = grade.grade_id;
+        const currentGradeIds = formData.grade_ids || [];
+
+        // Toggle selection
+        let updatedGradeIds;
+        if (currentGradeIds.includes(gradeId)) {
+            // Deselect
+            updatedGradeIds = currentGradeIds.filter(id => id !== gradeId);
+        } else {
+            // Select
+            updatedGradeIds = [...currentGradeIds, gradeId];
+        }
+
+        updateField('grade_ids', updatedGradeIds);
+        updateField('isBatch', false);
+
+        // Keep backward compatibility with grade field (use first selection or empty)
+        updateField('grade', updatedGradeIds.length > 0 ? updatedGradeIds[0] : '');
+    };
+
+    // Handler for selecting a batch
+    const handleBatchSelect = (batch) => {
+        updateField('grade', batch.batch_id);
+        updateField('grade_ids', batch.grade_ids); // Populate grade_ids from batch
+        updateField('isBatch', true);
         setShowGradePicker(false);
     };
 
-    // Fetch available grades on component mount
+    // Fetch available grades and batches on component mount
     useEffect(() => {
-        const fetchAvailableGrades = async () => {
+        const fetchAvailableData = async () => {
             setIsLoadingGrades(true);
             try {
-                const grades = await getAvailableGradeIds();
-                console.log('[WashingForm] Available grades:', grades);
+                const [grades, batches] = await Promise.all([
+                    getAvailableGradeIds(),
+                    getAvailableBatches()
+                ]);
                 setAvailableGrades(grades);
+                setAvailableBatches(batches);
+                console.log('[WashingForm] Loaded available grades:', grades.length);
+                console.log('[WashingForm] Loaded available batches:', batches.length);
             } catch (error) {
-                console.error('[WashingForm] Error loading available grades:', error);
-                showAlert('Error', 'Failed to load available grade IDs', 'error');
+                console.error('[WashingForm] Error loading available data:', error);
+                showAlert('Error', 'Failed to load available grade IDs and batches', 'error');
             } finally {
                 setIsLoadingGrades(false);
             }
         };
 
         if (!isEditMode) {
-            fetchAvailableGrades();
+            fetchAvailableData();
         }
     }, [isEditMode]);
 
@@ -125,6 +163,19 @@ export default function WashingFormScreen({ navigation, route = {} }) {
             navigation.setParams({ gradeId: undefined, autoFillGrade: undefined });
         }
     }, [route.params?.gradeId, route.params?.autoFillGrade]);
+
+    // Handle pre-filled batch from ViewBatchesScreen
+    useEffect(() => {
+        if (route.params?.batchId && route.params?.autoFillBatch) {
+            console.log('[WashingForm] Received batch from navigation:', route.params.batchId);
+            updateField('grade', route.params.batchId);
+            updateField('grade_ids', route.params.gradeIds || []);
+            updateField('isBatch', true);
+
+            // Clear the params to prevent re-triggering
+            navigation.setParams({ batchId: undefined, gradeIds: undefined, autoFillBatch: undefined });
+        }
+    }, [route.params?.batchId, route.params?.autoFillBatch]);
 
     // Initialize form with edit data if provided
     useEffect(() => {
@@ -196,8 +247,15 @@ export default function WashingFormScreen({ navigation, route = {} }) {
     };
 
     const validateForm = () => {
-        if (!formData.grade || formData.grade.trim() === '') {
-            return 'Please select a grade.';
+        // Check if either batch or grade_ids is selected
+        if (formData.isBatch) {
+            if (!formData.grade || formData.grade.trim() === '') {
+                return 'Please select a batch.';
+            }
+        } else {
+            if (!formData.grade_ids || formData.grade_ids.length === 0) {
+                return 'Please select at least one grade.';
+            }
         }
         if (!formData.date) {
             return 'Please select a date.';
@@ -232,7 +290,9 @@ export default function WashingFormScreen({ navigation, route = {} }) {
 
         try {
             const washingData = {
-                grade: formData.grade.trim(),
+                grade: formData.isBatch ? formData.grade.trim() : '', // Only for backward compatibility
+                grade_ids: formData.grade_ids, // Array of grade IDs (supports both single and multi-select)
+                is_batch: formData.isBatch, // Flag to indicate if this is a batch
                 date: formatDateForApi(formData.date),
                 weight: Number(formData.weight),
                 processing_id: formData.processing_id,
@@ -308,22 +368,27 @@ export default function WashingFormScreen({ navigation, route = {} }) {
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
                     <Text style={styles.mainTitle}>Washing Details</Text>
 
-                    {/* Grade Selection */}
-                    <Text style={styles.label}>Grade *</Text>
+                    {/* Grade or Batch Selection */}
+                    <Text style={styles.label}>Grade / Batch *</Text>
                     <View style={styles.pickerWrap}>
                         <TouchableOpacity
                             style={styles.pickerButton}
                             onPress={() => setShowGradePicker(true)}
                         >
-                            <Text style={[styles.pickerButtonText, !formData.grade && styles.placeholderText]}>
-                                {formData.grade || 'Select Grade'}
+                            <Text style={[styles.pickerButtonText, !formData.grade && formData.grade_ids.length === 0 && styles.placeholderText]}>
+                                {formData.isBatch ?
+                                    `Batch: ${formData.grade}` :
+                                    formData.grade_ids.length > 0 ?
+                                        `${formData.grade_ids.length} grade(s): ${formData.grade_ids.join(', ')}` :
+                                        'Select Grade(s) or Batch'
+                                }
                             </Text>
                             <Ionicons name="chevron-down" size={20} color={CoffeeColors.MEDIUM_BROWN} />
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.helperText}>Select the coffee grade</Text>
+                    <Text style={styles.helperText}>Select one or more grade IDs, or choose a batch</Text>
 
-                    {/* Grade Picker Modal */}
+                    {/* Grade/Batch Picker Modal */}
                     <Modal
                         visible={showGradePicker}
                         transparent={true}
@@ -337,53 +402,138 @@ export default function WashingFormScreen({ navigation, route = {} }) {
                         >
                             <View style={styles.modalContent}>
                                 <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>Select Grade</Text>
+                                    <Text style={styles.modalTitle}>
+                                        {selectionMode === 'grade' ? 'Select Grade(s)' : 'Select Batch'}
+                                    </Text>
                                     <TouchableOpacity onPress={() => setShowGradePicker(false)}>
                                         <Ionicons name="close" size={24} color={CoffeeColors.DARK_BROWN} />
                                     </TouchableOpacity>
                                 </View>
+
+                                {/* Mode Toggle */}
+                                <View style={styles.modeToggle}>
+                                    <TouchableOpacity
+                                        style={[styles.modeButton, selectionMode === 'grade' && styles.modeButtonActive]}
+                                        onPress={() => setSelectionMode('grade')}
+                                    >
+                                        <Ionicons
+                                            name="cube-outline"
+                                            size={20}
+                                            color={selectionMode === 'grade' ? '#fff' : CoffeeColors.MEDIUM_BROWN}
+                                        />
+                                        <Text style={[
+                                            styles.modeButtonText,
+                                            selectionMode === 'grade' && styles.modeButtonTextActive
+                                        ]}>
+                                            Single Grade
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.modeButton, selectionMode === 'batch' && styles.modeButtonActive]}
+                                        onPress={() => setSelectionMode('batch')}
+                                    >
+                                        <Ionicons
+                                            name="layers-outline"
+                                            size={20}
+                                            color={selectionMode === 'batch' ? '#fff' : CoffeeColors.MEDIUM_BROWN}
+                                        />
+                                        <Text style={[
+                                            styles.modeButtonText,
+                                            selectionMode === 'batch' && styles.modeButtonTextActive
+                                        ]}>
+                                            Batch
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
                                 <View style={styles.modalBody}>
                                     {isLoadingGrades ? (
-                                        <View style={{ padding: 40, alignItems: 'center' }}>
-                                            <ActivityIndicator size="large" color={CoffeeColors.PRIMARY_BROWN} />
-                                            <Text style={{ marginTop: 12, color: CoffeeColors.MEDIUM_BROWN }}>
-                                                Loading available grades...
-                                            </Text>
-                                        </View>
-                                    ) : availableGrades.length === 0 ? (
-                                        <View style={{ padding: 20 }}>
-                                            <Text style={styles.emptyText}>
-                                                No available grade IDs. Please complete floating tests first.
-                                            </Text>
-                                        </View>
-                                    ) : (
-                                        <ScrollView style={{ maxHeight: 400 }}>
-                                            {availableGrades.map((grade) => (
+                                        <ActivityIndicator size="large" color={CoffeeColors.PRIMARY_BROWN} />
+                                    ) : selectionMode === 'grade' ? (
+                                        <>
+                                            {availableGrades.length === 0 ? (
+                                                <Text style={styles.emptyText}>No available grade IDs. Please complete floating tests first.</Text>
+                                            ) : (
+                                                <ScrollView style={{ maxHeight: 400 }}>
+                                                    {availableGrades.map((grade) => {
+                                                        const isSelected = !formData.isBatch && formData.grade_ids.includes(grade.grade_id);
+                                                        return (
+                                                            <TouchableOpacity
+                                                                key={grade.grade_id}
+                                                                style={[
+                                                                    styles.gradeOption,
+                                                                    isSelected && styles.gradeOptionSelected
+                                                                ]}
+                                                                onPress={() => handleGradeSelect(grade)}
+                                                            >
+                                                                <View style={{ flex: 1 }}>
+                                                                    <Text style={[
+                                                                        styles.gradeOptionText,
+                                                                        isSelected && styles.gradeOptionTextSelected
+                                                                    ]}>
+                                                                        {grade.grade_id}
+                                                                    </Text>
+                                                                    <Text style={styles.gradeDetailText}>
+                                                                        Grade: {grade.grade} | Weight: {grade.weight}kg | Harvest: {grade.harvest}
+                                                                    </Text>
+                                                                </View>
+                                                                {isSelected && (
+                                                                    <Ionicons name="checkmark-circle" size={24} color={CoffeeColors.PRIMARY_BROWN} />
+                                                                )}
+                                                            </TouchableOpacity>
+                                                        );
+                                                    })}
+                                                </ScrollView>
+                                            )}
+                                            {/* Done button for multi-select mode */}
+                                            {availableGrades.length > 0 && (
                                                 <TouchableOpacity
-                                                    key={grade.grade_id}
-                                                    style={[
-                                                        styles.gradeOption,
-                                                        formData.grade === grade.grade_id && styles.gradeOptionSelected
-                                                    ]}
-                                                    onPress={() => handleGradeSelect(grade)}
+                                                    style={styles.doneButton}
+                                                    onPress={() => setShowGradePicker(false)}
                                                 >
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={[
-                                                            styles.gradeOptionText,
-                                                            formData.grade === grade.grade_id && styles.gradeOptionTextSelected
-                                                        ]}>
-                                                            {grade.grade_id}
-                                                        </Text>
-                                                        <Text style={styles.gradeDetailText}>
-                                                            Grade: {grade.grade} | Weight: {grade.weight}kg | Harvest: {grade.harvest}
-                                                        </Text>
-                                                    </View>
-                                                    {formData.grade === grade.grade_id && (
-                                                        <Ionicons name="checkmark-circle" size={24} color={CoffeeColors.ACCENT} />
-                                                    )}
+                                                    <Text style={styles.doneButtonText}>
+                                                        Done ({formData.grade_ids.length} selected)
+                                                    </Text>
                                                 </TouchableOpacity>
-                                            ))}
-                                        </ScrollView>
+                                            )}
+                                        </>
+                                    ) : (
+                                        availableBatches.length === 0 ? (
+                                            <Text style={styles.emptyText}>No available batches. Create a batch first.</Text>
+                                        ) : (
+                                            <ScrollView style={{ maxHeight: 400 }}>
+                                                {availableBatches.map((batch) => (
+                                                    <TouchableOpacity
+                                                        key={batch.batch_id}
+                                                        style={[
+                                                            styles.gradeOption,
+                                                            formData.isBatch && formData.grade === batch.batch_id && styles.gradeOptionSelected
+                                                        ]}
+                                                        onPress={() => handleBatchSelect(batch)}
+                                                    >
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={[
+                                                                styles.gradeOptionText,
+                                                                formData.isBatch && formData.grade === batch.batch_id && styles.gradeOptionTextSelected
+                                                            ]}>
+                                                                {batch.batch_id}
+                                                            </Text>
+                                                            <Text style={styles.gradeDetailText}>
+                                                                Contains {batch.grade_ids.length} grade(s): {batch.grade_ids.join(', ')}
+                                                            </Text>
+                                                            {batch.notes && (
+                                                                <Text style={styles.gradeDetailText}>
+                                                                    Notes: {batch.notes}
+                                                                </Text>
+                                                            )}
+                                                        </View>
+                                                        {formData.isBatch && formData.grade === batch.batch_id && (
+                                                            <Ionicons name="checkmark-circle" size={24} color={CoffeeColors.PRIMARY_BROWN} />
+                                                        )}
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        )
                                     )}
                                 </View>
                             </View>
@@ -633,5 +783,46 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.regular,
         textAlign: 'center',
         fontStyle: 'italic',
+    },
+    modeToggle: {
+        flexDirection: 'row',
+        padding: 10,
+        paddingHorizontal: 20,
+        gap: 10,
+    },
+    modeButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderRadius: 8,
+        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        gap: 6,
+    },
+    modeButtonActive: {
+        backgroundColor: CoffeeColors.PRIMARY_BROWN,
+    },
+    modeButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
+        color: CoffeeColors.MEDIUM_BROWN,
+    },
+    modeButtonTextActive: {
+        color: '#fff',
+    },
+    doneButton: {
+        backgroundColor: CoffeeColors.PRIMARY_BROWN,
+        padding: 14,
+        margin: 10,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    doneButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
     },
 });

@@ -287,7 +287,20 @@ export const getAvailableGradeIds = async () => {
         weight: record.weight,
         date: record.date,
         ripeness_score: record.ripeness_score
-      }));
+      }))
+      // Sort: Grade A first, then Grade B; within each grade, highest ripeness score first
+      .sort((a, b) => {
+        // First, sort by grade (A before B)
+        if (a.grade !== b.grade) {
+          return a.grade.localeCompare(b.grade);
+        }
+
+        // Within same grade, sort by ripeness score (highest first)
+        // Handle null/undefined ripeness scores by treating them as 0
+        const scoreA = a.ripeness_score ?? 0;
+        const scoreB = b.ripeness_score ?? 0;
+        return scoreB - scoreA; // Descending order (highest first)
+      });
 
     console.log('[QualityControl] Available grade IDs:', availableGrades.length);
     return availableGrades;
