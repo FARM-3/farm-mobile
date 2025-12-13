@@ -12,13 +12,24 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+// Conditionally import BarCodeScanner - it may not be available in Expo Go
+let BarCodeScanner;
+try {
+  BarCodeScanner = require('expo-barcode-scanner').BarCodeScanner;
+} catch (e) {
+  console.log('[TaskCalendar] BarCodeScanner not available - using manual input only');
+  BarCodeScanner = null;
+}
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
+import { fetchBlocks } from '../../../services/blockService';
+import { fetchAllStaff } from '../../../services/staffService';
 
 const TASKS_STORAGE_KEY = 'daily_tasks';
 
@@ -40,6 +51,7 @@ export default function TaskCalendarScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
@@ -52,16 +64,98 @@ export default function TaskCalendarScreen({ navigation }) {
   // New task form state
   const [newTask, setNewTask] = useState({
     title: '',
-    activity: '',
+    activity: [], // Changed to array for multiple selection
+    customActivity: '',
+    block: '',
     description: '',
     time: '',
+    assignedTo: [], // Array for multiple staff members
     priority: 'medium',
     date: selectedDate,
   });
 
+  // Blocks state
+  const [blocks, setBlocks] = useState([]);
+  const [loadingBlocks, setLoadingBlocks] = useState(false);
+  const [showBlockDropdown, setShowBlockDropdown] = useState(false);
+
+  // Staff state
+  const [staff, setStaff] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [showStaffDropdown, setShowStaffDropdown] = useState(false);
+
+  // Activity state
+  const [showActivityDropdown, setShowActivityDropdown] = useState(false);
+
+  // QR Scanner state
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [hasPermission, setHasPermission] = useState(null);
+
   useEffect(() => {
     loadTasks();
   }, [selectedDate]);
+
+  useEffect(() => {
+    loadBlocksFromAPI();
+    loadStaffFromAPI();
+    requestCameraPermission();
+  }, []);
+
+  const loadBlocksFromAPI = async () => {
+    try {
+      setLoadingBlocks(true);
+      const blocksData = await fetchBlocks();
+      setBlocks(blocksData);
+      console.log('[TaskCalendar] Blocks loaded:', blocksData.length);
+    } catch (error) {
+      console.error('[TaskCalendar] Error loading blocks:', error);
+      setAlertConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to load blocks from server',
+        type: 'error',
+        buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }],
+      });
+    } finally {
+      setLoadingBlocks(false);
+    }
+  };
+
+  const loadStaffFromAPI = async () => {
+    try {
+      setLoadingStaff(true);
+      const response = await fetchAllStaff(true);
+      if (response.success && response.staff) {
+        setStaff(response.staff);
+        console.log('[TaskCalendar] Staff loaded:', response.staff.length);
+      }
+    } catch (error) {
+      console.error('[TaskCalendar] Error loading staff:', error);
+      setAlertConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to load staff from server',
+        type: 'error',
+        buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }],
+      });
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  const requestCameraPermission = async () => {
+    if (!BarCodeScanner) {
+      setHasPermission(false);
+      return;
+    }
+    try {
+      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      setHasPermission(status === 'granted');
+    } catch (error) {
+      console.error('[TaskCalendar] Error requesting camera permission:', error);
+      setHasPermission(false);
+    }
+  };
 
   const loadTasks = async () => {
     try {
@@ -147,6 +241,8 @@ export default function TaskCalendarScreen({ navigation }) {
       setNewTask({
         title: '',
         activity: '',
+        customActivity: '',
+        block: '',
         description: '',
         time: '',
         priority: 'medium',
@@ -235,6 +331,37 @@ export default function TaskCalendarScreen({ navigation }) {
     return activity ? activity.label : activityId;
   };
 
+  const handleBarCodeScanned = ({ type, data }) => {
+    setShowQRScanner(false);
+    console.log('[TaskCalendar] QR Code scanned:', data);
+
+    // Try to find the block by ID or name from scanned data
+    const foundBlock = blocks.find(block =>
+      block.id?.toString() === data ||
+      block.block_id?.toString() === data ||
+      block.name === data
+    );
+
+    if (foundBlock) {
+      setNewTask({ ...newTask, block: foundBlock.id || foundBlock.block_id });
+      setAlertConfig({
+        visible: true,
+        title: 'Success',
+        message: `Block selected: ${foundBlock.name || foundBlock.block_id}`,
+        type: 'success',
+        buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }],
+      });
+    } else {
+      setAlertConfig({
+        visible: true,
+        title: 'Error',
+        message: 'Block not found. Please select manually.',
+        type: 'error',
+        buttons: [{ text: 'OK', onPress: () => setAlertConfig({ ...alertConfig, visible: false }) }],
+      });
+    }
+  };
+
   const renderTaskItem = ({ item }) => (
     <View style={[styles.taskCard, item.completed && styles.taskCardCompleted]}>
       <TouchableOpacity
@@ -297,7 +424,7 @@ export default function TaskCalendarScreen({ navigation }) {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add New Task</Text>
+            <Text style={styles.modalTitle}>Start New Task</Text>
             <TouchableOpacity onPress={() => setShowAddModal(false)}>
               <Ionicons name="close" size={28} color={CoffeeColors.DARK_BROWN} />
             </TouchableOpacity>
@@ -349,13 +476,35 @@ export default function TaskCalendarScreen({ navigation }) {
 
             {/* Time Input */}
             <Text style={styles.inputLabel}>Time (Optional)</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g., 9:00 AM"
-              value={newTask.time}
-              onChangeText={(text) => setNewTask({ ...newTask, time: text })}
-              placeholderTextColor={CoffeeColors.GRAY_TEXT}
-            />
+            <TouchableOpacity
+              style={styles.dateInput}
+              onPress={() => setShowTimePicker(true)}
+            >
+              <Text style={styles.dateText}>
+                {newTask.time || 'Select Time'}
+              </Text>
+              <Ionicons name="time-outline" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+            </TouchableOpacity>
+
+            {showTimePicker && (
+              <DateTimePicker
+                value={newTask.time ? new Date(`2000-01-01T${newTask.time}`) : new Date()}
+                mode="time"
+                is24Hour={false}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_, selectedTime) => {
+                  setShowTimePicker(Platform.OS === 'ios');
+                  if (selectedTime) {
+                    const hours = selectedTime.getHours();
+                    const minutes = selectedTime.getMinutes();
+                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                    const displayHours = hours % 12 || 12;
+                    const formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+                    setNewTask({ ...newTask, time: formattedTime });
+                  }
+                }}
+              />
+            )}
 
             {/* Priority Selection */}
             <Text style={styles.inputLabel}>Priority</Text>
@@ -495,23 +644,27 @@ export default function TaskCalendarScreen({ navigation }) {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Add New Task</Text>
+                <Text style={styles.modalTitle}>Start New Task</Text>
                 <TouchableOpacity onPress={() => setShowAddModal(false)}>
                   <Ionicons name="close" size={28} color={CoffeeColors.DARK_BROWN} />
                 </TouchableOpacity>
               </View>
 
               <ScrollView style={styles.modalBody}>
-                {/* Title Input */}
-                <Text style={styles.inputLabel}>Task Title *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Enter task title"
-                  value={newTask.title}
-                  onChangeText={(text) => setNewTask({ ...newTask, title: text })}
-                  placeholderTextColor={CoffeeColors.GRAY_TEXT}
-                />
-    
+                {/* Custom Activity Input - shown when "Other" is selected - AT TOP */}
+                {newTask.activity.includes('other') && (
+                  <>
+                    <Text style={styles.inputLabel}>Specify Activity *</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Enter the custom activity"
+                      value={newTask.customActivity}
+                      onChangeText={(text) => setNewTask({ ...newTask, customActivity: text })}
+                      placeholderTextColor={CoffeeColors.GRAY_TEXT}
+                    />
+                  </>
+                )}
+
                 {/* Date Input */}
                 <Text style={styles.inputLabel}>Date *</Text>
                 <TouchableOpacity
@@ -529,48 +682,229 @@ export default function TaskCalendarScreen({ navigation }) {
                   <Ionicons name="calendar" size={20} color={CoffeeColors.MEDIUM_BROWN} />
                 </TouchableOpacity>
 
-                {/* Activity Selection */}
-                <Text style={styles.inputLabel}>Activity *</Text>
-                <View style={styles.activityGrid}>
-                  {activityOptions.map((activity) => (
+                {/* Block Selection */}
+                <Text style={styles.inputLabel}>Block *</Text>
+                <View style={styles.blockInputRow}>
+                  <View style={styles.blockPickerContainer}>
                     <TouchableOpacity
-                      key={activity.id}
-                      style={[
-                        styles.activityOption,
-                        newTask.activity === activity.id && styles.activityOptionSelected,
-                      ]}
-                      onPress={() => setNewTask({ ...newTask, activity: activity.id })}
+                      style={styles.blockPicker}
+                      onPress={() => {
+                        console.log('[TaskCalendar] Block picker pressed, current state:', showBlockDropdown);
+                        console.log('[TaskCalendar] Blocks available:', blocks.length);
+                        setShowBlockDropdown(!showBlockDropdown);
+                      }}
                     >
-                      <Ionicons
-                        name={activity.icon}
-                        size={24}
-                        color={
-                          newTask.activity === activity.id
-                            ? CoffeeColors.WHITE
-                            : CoffeeColors.MEDIUM_BROWN
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.activityOptionText,
-                          newTask.activity === activity.id && styles.activityOptionTextSelected,
-                        ]}
-                      >
-                        {activity.label}
-                      </Text>
+                      {loadingBlocks ? (
+                        <ActivityIndicator size="small" color={CoffeeColors.MEDIUM_BROWN} />
+                      ) : (
+                        <>
+                          <Text style={newTask.block ? styles.blockSelectedText : styles.blockPlaceholderText}>
+                            {newTask.block
+                              ? blocks.find(b => (b.id || b.block_id) === newTask.block)?.name ||
+                                blocks.find(b => (b.id || b.block_id) === newTask.block)?.block_id ||
+                                'Select Block'
+                              : 'Select Block'}
+                          </Text>
+                          <Ionicons name="chevron-down" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                        </>
+                      )}
                     </TouchableOpacity>
-                  ))}
+                    {showBlockDropdown && !loadingBlocks && blocks.length > 0 && (
+                      <ScrollView style={styles.blockDropdown} nestedScrollEnabled>
+                        {blocks.map((block) => (
+                          <TouchableOpacity
+                            key={block.id || block.block_id}
+                            style={styles.blockOption}
+                            onPress={() => {
+                              console.log('[TaskCalendar] Block selected:', block.name || block.block_id);
+                              setNewTask({ ...newTask, block: block.id || block.block_id });
+                              setShowBlockDropdown(false);
+                            }}
+                          >
+                            <Text style={styles.blockOptionText}>
+                              {block.name || block.block_id}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    )}
+                    {showBlockDropdown && blocks.length === 0 && !loadingBlocks && (
+                      <View style={styles.blockDropdown}>
+                        <Text style={[styles.blockOptionText, { padding: 16, color: CoffeeColors.GRAY_TEXT }]}>
+                          No blocks available
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  {BarCodeScanner && (
+                    <TouchableOpacity
+                      style={styles.qrButton}
+                      onPress={() => {
+                        if (hasPermission) {
+                          setShowQRScanner(true);
+                        } else {
+                          requestCameraPermission();
+                        }
+                      }}
+                    >
+                      <MaterialCommunityIcons name="qrcode-scan" size={24} color={CoffeeColors.WHITE} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Activity Selection - Multiple Selection */}
+                <Text style={styles.inputLabel}>Activity * (Select one or more)</Text>
+                <View style={styles.blockPickerContainer}>
+                  <TouchableOpacity
+                    style={styles.blockPicker}
+                    onPress={() => setShowActivityDropdown(!showActivityDropdown)}
+                  >
+                    <Text style={newTask.activity.length > 0 ? styles.blockSelectedText : styles.blockPlaceholderText}>
+                      {newTask.activity.length > 0
+                        ? newTask.activity.map(id => activityOptions.find(a => a.id === id)?.label).join(', ')
+                        : 'Select Activities'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                  </TouchableOpacity>
+                  {showActivityDropdown && (
+                    <ScrollView
+                      style={styles.activityDropdownScrollable}
+                      nestedScrollEnabled={true}
+                      scrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                    >
+                      {activityOptions.map((activity) => {
+                        const isSelected = newTask.activity.includes(activity.id);
+                        return (
+                          <TouchableOpacity
+                            key={activity.id}
+                            style={[styles.blockOption, isSelected && styles.selectedActivityOption]}
+                            onPress={() => {
+                              const newActivities = isSelected
+                                ? newTask.activity.filter(id => id !== activity.id)
+                                : [...newTask.activity, activity.id];
+                              setNewTask({ ...newTask, activity: newActivities });
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <Ionicons name={activity.icon} size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                              <Text style={[styles.blockOptionText, isSelected && styles.selectedActivityText]}>
+                                {activity.label}
+                              </Text>
+                            </View>
+                            {isSelected && (
+                              <Ionicons name="checkmark-circle" size={20} color={CoffeeColors.PRIMARY_BROWN} />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  )}
                 </View>
 
                 {/* Time Input */}
                 <Text style={styles.inputLabel}>Time (Optional)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="e.g., 9:00 AM"
-                  value={newTask.time}
-                  onChangeText={(text) => setNewTask({ ...newTask, time: text })}
-                  placeholderTextColor={CoffeeColors.GRAY_TEXT}
-                />
+                <TouchableOpacity
+                  style={styles.dateInput}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Text style={styles.dateText}>
+                    {newTask.time || 'Select Time'}
+                  </Text>
+                  <Ionicons name="time-outline" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                </TouchableOpacity>
+
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={newTask.time ? new Date(`2000-01-01T${newTask.time}`) : new Date()}
+                    mode="time"
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_, selectedTime) => {
+                      setShowTimePicker(Platform.OS === 'ios');
+                      if (selectedTime) {
+                        const hours = selectedTime.getHours();
+                        const minutes = selectedTime.getMinutes();
+                        const ampm = hours >= 12 ? 'PM' : 'AM';
+                        const displayHours = hours % 12 || 12;
+                        const formattedTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+                        setNewTask({ ...newTask, time: formattedTime });
+                      }
+                    }}
+                  />
+                )}
+
+                {/* Assigned To - Multiple Staff Selection */}
+                <Text style={styles.inputLabel}>Assigned To (Optional)</Text>
+                <View style={styles.blockPickerContainer}>
+                  <TouchableOpacity
+                    style={styles.blockPicker}
+                    onPress={() => setShowStaffDropdown(!showStaffDropdown)}
+                  >
+                    <Text style={newTask.assignedTo.length > 0 ? styles.blockSelectedText : styles.blockPlaceholderText}>
+                      {newTask.assignedTo.length > 0
+                        ? newTask.assignedTo.map(id => staff.find(s => s.id === id)?.displayName).filter(Boolean).join(', ')
+                        : 'Select Staff Members'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                  </TouchableOpacity>
+                  {showStaffDropdown && (
+                    <ScrollView
+                      style={styles.activityDropdownScrollable}
+                      nestedScrollEnabled={true}
+                      scrollEnabled={true}
+                      showsVerticalScrollIndicator={true}
+                    >
+                      {loadingStaff ? (
+                        <View style={{ padding: 16, alignItems: 'center' }}>
+                          <ActivityIndicator size="small" color={CoffeeColors.PRIMARY_BROWN} />
+                          <Text style={[styles.blockOptionText, { marginTop: 8, color: CoffeeColors.GRAY_TEXT }]}>
+                            Loading staff...
+                          </Text>
+                        </View>
+                      ) : staff.length === 0 ? (
+                        <View style={styles.blockOption}>
+                          <Text style={[styles.blockOptionText, { color: CoffeeColors.GRAY_TEXT }]}>
+                            No staff members available
+                          </Text>
+                        </View>
+                      ) : (
+                        staff.map((staffMember) => {
+                          const isSelected = newTask.assignedTo.includes(staffMember.id);
+                          return (
+                            <TouchableOpacity
+                              key={staffMember.id}
+                              style={[styles.blockOption, isSelected && styles.selectedActivityOption]}
+                              onPress={() => {
+                                const newAssigned = isSelected
+                                  ? newTask.assignedTo.filter(id => id !== staffMember.id)
+                                  : [...newTask.assignedTo, staffMember.id];
+                                setNewTask({ ...newTask, assignedTo: newAssigned });
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <Ionicons name="person" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.blockOptionText, isSelected && styles.selectedActivityText]}>
+                                    {staffMember.displayName}
+                                  </Text>
+                                  {staffMember.role && (
+                                    <Text style={{ fontSize: 12, color: CoffeeColors.GRAY_TEXT, fontFamily: Fonts.regular }}>
+                                      {staffMember.role}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+                              {isSelected && (
+                                <Ionicons name="checkmark-circle" size={20} color={CoffeeColors.PRIMARY_BROWN} />
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })
+                      )}
+                    </ScrollView>
+                  )}
+                </View>
 
                 {/* Priority Selection */}
                 <Text style={styles.inputLabel}>Priority</Text>
@@ -644,6 +978,43 @@ export default function TaskCalendarScreen({ navigation }) {
           onChange={handleDateChange}
           minimumDate={new Date()}
         />
+      )}
+
+      {/* QR Scanner Modal - Only show if BarCodeScanner is available */}
+      {BarCodeScanner && (
+        <Modal
+          visible={showQRScanner}
+          animationType="slide"
+          onRequestClose={() => setShowQRScanner(false)}
+        >
+          <View style={styles.qrScannerContainer}>
+            <View style={styles.qrScannerHeader}>
+              <Text style={styles.qrScannerTitle}>Scan Block QR Code</Text>
+              <TouchableOpacity onPress={() => setShowQRScanner(false)}>
+                <Ionicons name="close" size={28} color={CoffeeColors.WHITE} />
+              </TouchableOpacity>
+            </View>
+            {hasPermission ? (
+              <BarCodeScanner
+                onBarCodeScanned={handleBarCodeScanned}
+                style={StyleSheet.absoluteFillObject}
+              />
+            ) : (
+              <View style={styles.qrPermissionContainer}>
+                <Ionicons name="camera-outline" size={64} color={CoffeeColors.MEDIUM_BROWN} />
+                <Text style={styles.qrPermissionText}>
+                  Camera permission is required to scan QR codes
+                </Text>
+                <TouchableOpacity
+                  style={styles.qrPermissionButton}
+                  onPress={requestCameraPermission}
+                >
+                  <Text style={styles.qrPermissionButtonText}>Grant Permission</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </Modal>
       )}
     </View>
   );
@@ -901,10 +1272,12 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   inputLabel: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
     fontFamily: Fonts.semiBold,
     color: CoffeeColors.DARK_BROWN,
+    marginTop: 15,
+    marginBottom: 8,
   },
   activityOption: {
     flexDirection: 'row',
@@ -981,10 +1354,12 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
   },
   dateInput: {
-    backgroundColor: CoffeeColors.LIGHT_GRAY,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    backgroundColor: CoffeeColors.WHITE,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: CoffeeColors.LIGHT_BROWN,
+    paddingHorizontal: 15,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -994,5 +1369,163 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: CoffeeColors.DARK_BROWN,
     fontFamily: Fonts.regular,
+  },
+  // Text Input Styles
+  textInput: {
+    backgroundColor: CoffeeColors.WHITE,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: CoffeeColors.LIGHT_BROWN,
+    paddingHorizontal: 15,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
+    fontSize: 16,
+    color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.regular,
+    marginBottom: 16,
+  },
+  textAreaInput: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  activityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  // Block Selection Styles
+  blockInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  blockPickerContainer: {
+    flex: 1,
+  },
+  blockPicker: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: CoffeeColors.VERY_LIGHT_BROWN,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  blockSelectedText: {
+    fontSize: 16,
+    color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.regular,
+    flex: 1,
+  },
+  blockPlaceholderText: {
+    fontSize: 16,
+    color: CoffeeColors.MEDIUM_BROWN,
+    fontFamily: Fonts.regular,
+    flex: 1,
+  },
+  blockDropdown: {
+    maxHeight: 200,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: CoffeeColors.VERY_LIGHT_BROWN,
+    marginTop: 8,
+    shadowColor: CoffeeColors.DARK_BROWN,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  activityDropdownScrollable: {
+    maxHeight: 250,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: CoffeeColors.VERY_LIGHT_BROWN,
+    marginTop: 8,
+    shadowColor: CoffeeColors.DARK_BROWN,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    marginBottom: 16,
+  },
+  blockOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: CoffeeColors.VERY_LIGHT_BROWN,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  blockOptionText: {
+    fontSize: 14,
+    color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.regular,
+  },
+  selectedActivityOption: {
+    backgroundColor: '#fef5f0',
+  },
+  selectedActivityText: {
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
+    color: CoffeeColors.PRIMARY_BROWN,
+  },
+  qrButton: {
+    width: 50,
+    height: 50,
+    backgroundColor: CoffeeColors.DARK_BROWN,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // QR Scanner Styles
+  qrScannerContainer: {
+    flex: 1,
+    backgroundColor: CoffeeColors.DARK_BROWN,
+  },
+  qrScannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: CoffeeColors.DARK_BROWN,
+    zIndex: 1,
+  },
+  qrScannerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    color: CoffeeColors.WHITE,
+  },
+  qrPermissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: CoffeeColors.LIGHT_GRAY,
+  },
+  qrPermissionText: {
+    fontSize: 16,
+    color: CoffeeColors.MEDIUM_BROWN,
+    fontFamily: Fonts.regular,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  qrPermissionButton: {
+    backgroundColor: CoffeeColors.DARK_BROWN,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  qrPermissionButtonText: {
+    color: CoffeeColors.WHITE,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
   },
 });

@@ -155,6 +155,42 @@ export default function CreateBatchScreen({ navigation }) {
         }
     };
 
+    /**
+     * Select recommended batch - Grade A with ripeness > 50%
+     * Best practice: Auto-selects high-quality grades for optimal processing
+     */
+    const selectRecommendedBatch = () => {
+        const recommended = availableGrades.filter(grade => {
+            // Check if grade is 'A' or 'Grade A' (case-insensitive)
+            const isGradeA = grade.grade &&
+                            (grade.grade.toUpperCase() === 'A' ||
+                             grade.grade.toUpperCase() === 'GRADE A');
+
+            // Check if ripeness score is above 50%
+            const hasHighRipeness = grade.ripeness_score != null &&
+                                   grade.ripeness_score > 50;
+
+            return isGradeA && hasHighRipeness;
+        });
+
+        if (recommended.length === 0) {
+            showAlert(
+                'No Recommendations',
+                'No grades meet the recommended criteria (Grade A with ripeness > 50%). Try adjusting your selection manually.',
+                'info'
+            );
+            return;
+        }
+
+        setSelectedGrades(recommended.map(g => g.grade_id));
+
+        showAlert(
+            'Recommended Batch Selected',
+            `${recommended.length} grade(s) selected based on quality criteria:\n• Grade A\n• Ripeness > 50%`,
+            'success'
+        );
+    };
+
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
             <SimpleHeader title="Create a Batch" />
@@ -176,16 +212,22 @@ export default function CreateBatchScreen({ navigation }) {
                     </Text>
                 </View>
 
-                {/* Selected Count */}
+                {/* Selected Count and Actions */}
                 <View style={styles.selectionHeader}>
                     <Text style={styles.selectionText}>
                         Selected: {selectedGrades.length} grade{selectedGrades.length !== 1 ? 's' : ''}
                     </Text>
-                    <TouchableOpacity onPress={selectAll} style={styles.selectAllButton}>
-                        <Text style={styles.selectAllText}>
-                            {selectedGrades.length === availableGrades.length ? 'Deselect All' : 'Select All'}
-                        </Text>
-                    </TouchableOpacity>
+                    <View style={styles.actionButtons}>
+                        <TouchableOpacity onPress={selectRecommendedBatch} style={styles.recommendedButton}>
+                            <Ionicons name="star" size={16} color="#fff" style={{ marginRight: 4 }} />
+                            <Text style={styles.recommendedButtonText}>Recommended</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={selectAll} style={styles.selectAllButton}>
+                            <Text style={styles.selectAllText}>
+                                {selectedGrades.length === availableGrades.length ? 'Deselect All' : 'Select All'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {/* Grade Selection List */}
@@ -338,12 +380,37 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 12,
+        flexWrap: 'wrap',
+        gap: 8,
     },
     selectionText: {
         fontSize: 16,
         fontWeight: '600',
         fontFamily: Fonts.semiBold,
         color: CoffeeColors.DARK_BROWN,
+    },
+    actionButtons: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    recommendedButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        backgroundColor: '#FF6B35',
+        shadowColor: '#FF6B35',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    recommendedButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        fontFamily: Fonts.semiBold,
+        color: '#fff',
     },
     selectAllButton: {
         paddingHorizontal: 12,

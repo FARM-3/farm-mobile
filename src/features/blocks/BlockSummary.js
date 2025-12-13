@@ -167,7 +167,7 @@ const BlockSummary = ({ route = {}, navigation }) => {
 
       // Fetch remote data (no auto-sync)
       try {
-        const remoteResponse = await ApiService.get('harvests/blocks/');
+        const remoteResponse = await ApiService.get('blocks/');
         if (remoteResponse.data && Array.isArray(remoteResponse.data.results)) {
           remoteRecords = remoteResponse.data.results.map(r => ({
             // Keep all original field names for detail view
@@ -305,7 +305,7 @@ const BlockSummary = ({ route = {}, navigation }) => {
       // Sync each pending block
       for (const block of pendingBlocks) {
         try {
-          await ApiService.post('harvests/blocks/', block);
+          await ApiService.post('blocks/', block);
           syncedCount++;
         } catch (error) {
           console.error(`Failed to sync block ${block.block_id}:`, error);
@@ -374,7 +374,7 @@ const BlockSummary = ({ route = {}, navigation }) => {
                 const netState = await NetInfo.fetch();
                 if (netState.isConnected && netState.isInternetReachable) {
                   try {
-                    await ApiService.delete(`harvests/blocks/${item.block_id}/`);
+                    await ApiService.delete(`blocks/${item.block_id}/`);
                   } catch (apiError) {
                     console.error('API delete failed:', apiError);
                     showAlert('Warning', 'Could not delete from cloud, but will remove from local records.', 'warning');
