@@ -195,7 +195,8 @@ export default function CreateBatchScreen({ navigation }) {
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
             <SimpleHeader title="Create a Batch" />
 
-            <ScrollView contentContainerStyle={styles.container}>
+            {/* Scrollable Content Area */}
+            <ScrollView style={styles.scrollableContent} contentContainerStyle={styles.scrollContentContainer}>
                 <View style={styles.headerSection}>
                     <Ionicons name="layers" size={48} color="#FF6B35" />
                     <Text style={styles.mainTitle}>Create a New Batch</Text>
@@ -283,38 +284,40 @@ export default function CreateBatchScreen({ navigation }) {
                         ))}
                     </View>
                 )}
-
-                {/* Notes */}
-                <Text style={styles.label}>Notes (Optional)</Text>
-                <TextInput
-                    style={styles.notesInput}
-                    value={notes}
-                    onChangeText={setNotes}
-                    placeholder="Add any notes about this batch..."
-                    placeholderTextColor={CoffeeColors.GRAY_TEXT}
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                />
-
-                {/* Create Batch Button */}
-                <TouchableOpacity
-                    style={[styles.createButton, selectedGrades.length === 0 && styles.createButtonDisabled]}
-                    onPress={handleCreateBatch}
-                    disabled={isSaving || selectedGrades.length === 0}
-                >
-                    {isSaving ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <>
-                            <Ionicons name="add-circle-outline" size={24} color="#fff" />
-                            <Text style={styles.createButtonText}>Create Batch</Text>
-                        </>
-                    )}
-                </TouchableOpacity>
-
-                <View style={{ height: 100 }} />
             </ScrollView>
+
+            {/* Fixed Bottom Section - Notes and Create Button */}
+            <View style={styles.fixedBottomSection}>
+                <View style={styles.bottomSectionContent}>
+                    <Text style={styles.label}>Notes (Optional)</Text>
+                    <TextInput
+                        style={styles.notesInput}
+                        value={notes}
+                        onChangeText={setNotes}
+                        placeholder="Add any notes about this batch..."
+                        placeholderTextColor={CoffeeColors.GRAY_TEXT}
+                        multiline
+                        numberOfLines={2}
+                        textAlignVertical="top"
+                    />
+
+                    {/* Create Batch Button */}
+                    <TouchableOpacity
+                        style={[styles.createButton, selectedGrades.length === 0 && styles.createButtonDisabled]}
+                        onPress={handleCreateBatch}
+                        disabled={isSaving || selectedGrades.length === 0}
+                    >
+                        {isSaving ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <>
+                                <Ionicons name="add-circle-outline" size={24} color="#fff" />
+                                <Text style={styles.createButtonText}>Create Batch</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </View>
 
             <BottomNav activeScreen="Processing" />
 
@@ -331,10 +334,28 @@ export default function CreateBatchScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-    container: {
+    scrollableContent: {
+        flex: 1,
+    },
+    scrollContentContainer: {
         padding: 16,
-        paddingBottom: 32,
-        backgroundColor: CoffeeColors.LIGHT_GRAY,
+        paddingBottom: 16,
+    },
+    fixedBottomSection: {
+        backgroundColor: CoffeeColors.WHITE,
+        borderTopWidth: 1,
+        borderTopColor: CoffeeColors.VERY_LIGHT_BROWN,
+        paddingBottom: 5, // Space for BottomNav (reduced from 80)
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    bottomSectionContent: {
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 8,
     },
     headerSection: {
         alignItems: 'center',
@@ -425,12 +446,12 @@ const styles = StyleSheet.create({
         color: '#FF6B35',
     },
     label: {
-        marginTop: 15,
-        marginBottom: 12,
+        marginTop: 0,
+        marginBottom: 8,
         fontWeight: '600',
         fontFamily: Fonts.semiBold,
         color: CoffeeColors.DARK_BROWN,
-        fontSize: 16,
+        fontSize: 14,
     },
     loadingContainer: {
         padding: 40,
@@ -494,31 +515,33 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.semiBold,
     },
     notesInput: {
-        backgroundColor: CoffeeColors.WHITE,
-        paddingHorizontal: 15,
-        paddingVertical: 12,
-        borderRadius: 10,
+        backgroundColor: '#F9F9F9',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 8,
         borderWidth: 1,
         borderColor: CoffeeColors.LIGHT_BROWN,
-        fontSize: 14,
+        fontSize: 13,
         fontFamily: Fonts.regular,
         color: CoffeeColors.DARK_BROWN,
-        minHeight: 80,
+        minHeight: 50,
+        maxHeight: 70,
+        marginBottom: 12,
     },
     createButton: {
-        marginTop: 24,
         backgroundColor: '#FF6B35',
-        padding: 16,
-        borderRadius: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 10,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 5,
-        elevation: 6,
+        shadowColor: '#FF6B35',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 4,
     },
     createButtonDisabled: {
         backgroundColor: CoffeeColors.GRAY_TEXT,

@@ -43,13 +43,10 @@ function formatDateForDisplay(d) {
     return `${day}-${mon}-${year}`;
 }
 
-// Generate processing ID: FER{DDMM}{SEQ}
-// Example: FER041200 = Fermenting, 4th December, entry 00
-const generateProcessingId = (date = new Date(), sequence = 0) => {
-    const dd = String(date.getDate()).padStart(2, '0');
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const seq = String(sequence).padStart(2, '0');
-    return `FER${dd}${mm}${seq}`;
+// Generate processing ID: {BATCH_ID}-FER
+// Example: BA001-FER
+const generateProcessingId = (batchId) => {
+    return `${batchId}-FER`;
 };
 
 // Calculate days between two dates
@@ -207,45 +204,16 @@ export default function FermentingFormScreen({ navigation, route = {} }) {
         }
     }, [route.params?.editData]);
 
-    // Auto-generate processing ID when start date changes
+    // Auto-generate processing ID when batch/grade is selected
     useEffect(() => {
-        if (!isEditMode) {
-            const generateUniqueId = async () => {
-                try {
-                    // Load existing records to determine next sequence number
-                    const existingData = await AsyncStorage.getItem(FERMENTING_STORAGE_KEY);
-                    const existingRecords = existingData ? JSON.parse(existingData) : [];
-
-                    // Filter records with same date prefix (DDMM format)
-                    const dd = String(formData.start_date.getDate()).padStart(2, '0');
-                    const mm = String(formData.start_date.getMonth() + 1).padStart(2, '0');
-                    const datePrefix = `FER${dd}${mm}`;
-                    const sameDate = existingRecords.filter(record =>
-                        record.processing_id && record.processing_id.startsWith(datePrefix)
-                    );
-
-                    // Calculate next sequence number
-                    const nextSeq = sameDate.length;
-                    const newId = generateProcessingId(formData.start_date, nextSeq);
-
-                    setFormData(prev => ({
-                        ...prev,
-                        processing_id: newId
-                    }));
-                } catch (error) {
-                    console.error('[FermentingForm] Error generating ID:', error);
-                    // Fallback to timestamp-based ID
-                    const newId = `FERM-${Date.now()}`;
-                    setFormData(prev => ({
-                        ...prev,
-                        processing_id: newId
-                    }));
-                }
-            };
-
-            generateUniqueId();
+        if (!isEditMode && formData.grade) {
+            const newId = generateProcessingId(formData.grade);
+            setFormData(prev => ({
+                ...prev,
+                processing_id: newId
+            }));
         }
-    }, [formData.start_date, isEditMode]);
+    }, [formData.grade, isEditMode]);
 
     // Auto-calculate days when dates change
     useEffect(() => {

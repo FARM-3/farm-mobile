@@ -48,7 +48,7 @@ const numberToWords = (num) => {
 };
 
 const PaymentVoucherScreen = ({ route, navigation }) => {
-    const { harvestData } = route.params || {};
+    const { harvestData, source } = route.params || {};
     const [isGenerating, setIsGenerating] = useState(false);
     const [paidByName, setPaidByName] = useState('Staff Member');
     const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
@@ -56,6 +56,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
     // Debug: Log the harvestData received
     useEffect(() => {
         console.log('[PaymentVoucher] Received harvestData:', JSON.stringify(harvestData, null, 2));
+        console.log('[PaymentVoucher] Source:', source);
     }, []);
 
     // Fetch staff name when component mounts
@@ -590,7 +591,29 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
 
                     <TouchableOpacity
                         style={styles.backButton}
-                        onPress={() => navigation.navigate('Harvests')}
+                        onPress={() => {
+                            console.log('[PaymentVoucher] Back button pressed, source:', source);
+                            // Navigate back based on source
+                            if (source === 'Aggregation') {
+                                console.log('[PaymentVoucher] Navigating to Aggregation with params');
+                                // Use replace to ensure clean navigation
+                                navigation.reset({
+                                    index: 0,
+                                    routes: [
+                                        {
+                                            name: 'Aggregation',
+                                            params: {
+                                                activeTab: 'harvests',
+                                                viewMode: 'table'
+                                            }
+                                        }
+                                    ]
+                                });
+                            } else {
+                                console.log('[PaymentVoucher] Navigating to Harvests');
+                                navigation.navigate('Harvests');
+                            }
+                        }}
                     >
                         <Ionicons name="arrow-back" size={20} color={CoffeeColors.PRIMARY_BROWN} />
                         <Text style={styles.backButtonText}>Back to Records</Text>

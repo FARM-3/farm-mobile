@@ -172,10 +172,12 @@ export const syncAllFermentingRecords = async () => {
                     console.log('[FermentingService] Original record:', JSON.stringify(record, null, 2));
 
                     // Prepare data for API - match backend model schema
-                    // Backend expects: processing_id (from frontend), grade, start_date, end_date, weight
+                    // Backend expects: processing_id, grade_ids (array), start_date, end_date, weight
+                    // The 'grade' field is deprecated and only for backward compatibility
                     const recordData = {
                         processing_id: record.processing_id, // Send frontend-generated ID
-                        grade: record.grade,
+                        grade_ids: record.grade_ids || [], // Array of grade IDs for batch processing
+                        grade: record.is_batch ? null : (record.grade || null), // Only for single grade (backward compatibility)
                         start_date: record.start_date,
                         end_date: record.end_date,
                         weight: String(record.weight),
@@ -203,41 +205,55 @@ export const syncAllFermentingRecords = async () => {
                 console.error(`[FermentingService] ❌ Sync failed for record ${record.processing_id}:`, error.message);
                 console.error('[FermentingService] Full error object:', error);
 
-                if (error.response) {
-                    console.error('[FermentingService] Error status:', error.response.status);
-                    console.error('[FermentingService] Error headers:', error.response.headers);
+                // Check if this is a duplicate error (record already exists)
+                if (error.response?.status === 400 &&
+                    error.response?.data?.processing_id &&
+                    error.response?.data?.processing_id[0]?.includes('already exists')) {
 
-                    // Try to extract meaningful error from HTML response
-                    if (typeof error.response.data === 'string') {
-                        // Extract first 500 chars of HTML error
-                        const preview = error.response.data.substring(0, 500);
-                        console.error('[FermentingService] Error response preview:', preview);
-
-                        // Try to find error message in HTML
-                        const errorMatch = error.response.data.match(/<h1>(.*?)<\/h1>/);
-                        if (errorMatch) {
-                            console.error('[FermentingService] Error title:', errorMatch[1]);
-                        }
-
-                        // Look for exception value
-                        const exceptionMatch = error.response.data.match(/<pre class="exception_value">(.*?)<\/pre>/s);
-                        if (exceptionMatch) {
-                            console.error('[FermentingService] Exception:', exceptionMatch[1]);
-                        }
-                    } else {
-                        console.error('[FermentingService] Error data:', error.response.data);
-                    }
-                }
-
-                if (error.config) {
-                    console.error('[FermentingService] Request config:', {
-                        url: error.config.url,
-                        method: error.config.method,
-                        data: error.config.data,
+                    console.log('[FermentingService] ⚠️ Record already exists on backend, marking as synced locally');
+                    updatedRecords.push({
+                        ...record,
+                        isSynced: true, // Mark as synced since it exists on backend
                     });
-                }
+                    syncedCount++;
+                } else {
+                    // Other errors - log details
+                    if (error.response) {
+                        console.error('[FermentingService] Error status:', error.response.status);
+                        console.error('[FermentingService] Error headers:', error.response.headers);
 
-                updatedRecords.push(record); // Keep failed record in queue
+                        // Try to extract meaningful error from HTML response
+                        if (typeof error.response.data === 'string') {
+                            // Extract first 500 chars of HTML error
+                            const preview = error.response.data.substring(0, 500);
+                            console.error('[FermentingService] Error response preview:', preview);
+
+                            // Try to find error message in HTML
+                            const errorMatch = error.response.data.match(/<h1>(.*?)<\/h1>/);
+                            if (errorMatch) {
+                                console.error('[FermentingService] Error title:', errorMatch[1]);
+                            }
+
+                            // Look for exception value
+                            const exceptionMatch = error.response.data.match(/<pre class="exception_value">(.*?)<\/pre>/s);
+                            if (exceptionMatch) {
+                                console.error('[FermentingService] Exception:', exceptionMatch[1]);
+                            }
+                        } else {
+                            console.error('[FermentingService] Error data:', error.response.data);
+                        }
+                    }
+
+                    if (error.config) {
+                        console.error('[FermentingService] Request config:', {
+                            url: error.config.url,
+                            method: error.config.method,
+                            data: error.config.data,
+                        });
+                    }
+
+                    updatedRecords.push(record); // Keep failed record in queue
+                }
             }
         }
 

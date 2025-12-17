@@ -43,13 +43,10 @@ function formatDateForDisplay(d) {
     return `${day}-${mon}-${year}`;
 }
 
-// Generate processing ID: WASH-{YYYYMMDD}-{SEQ}
-const generateProcessingId = (date = new Date(), sequence = 0) => {
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    const seq = String(sequence).padStart(2, '0');
-    return `WASH-${yyyy}${mm}${dd}-${seq}`;
+// Generate processing ID: {BATCH_ID}-WSH
+// Example: BA001-WSH
+const generateProcessingId = (batchId) => {
+    return `${batchId}-WSH`;
 };
 
 const initialFormState = {
@@ -194,43 +191,16 @@ export default function WashingFormScreen({ navigation, route = {} }) {
         }
     }, [route.params?.editData]);
 
-    // Auto-generate processing ID when date changes
+    // Auto-generate processing ID when batch/grade is selected
     useEffect(() => {
-        if (!isEditMode) {
-            const generateUniqueId = async () => {
-                try {
-                    // Load existing records to determine next sequence number
-                    const existingData = await AsyncStorage.getItem(WASHING_STORAGE_KEY);
-                    const existingRecords = existingData ? JSON.parse(existingData) : [];
-
-                    // Filter records with same date prefix
-                    const dateStr = formatDateForApi(formData.date).replace(/-/g, '');
-                    const sameDate = existingRecords.filter(record =>
-                        record.processing_id && record.processing_id.startsWith(`WASH-${dateStr}`)
-                    );
-
-                    // Calculate next sequence number
-                    const nextSeq = sameDate.length;
-                    const newId = generateProcessingId(formData.date, nextSeq);
-
-                    setFormData(prev => ({
-                        ...prev,
-                        processing_id: newId
-                    }));
-                } catch (error) {
-                    console.error('[WashingForm] Error generating ID:', error);
-                    // Fallback to timestamp-based ID
-                    const newId = `WASH-${Date.now()}`;
-                    setFormData(prev => ({
-                        ...prev,
-                        processing_id: newId
-                    }));
-                }
-            };
-
-            generateUniqueId();
+        if (!isEditMode && formData.grade) {
+            const newId = generateProcessingId(formData.grade);
+            setFormData(prev => ({
+                ...prev,
+                processing_id: newId
+            }));
         }
-    }, [formData.date, isEditMode]);
+    }, [formData.grade, isEditMode]);
 
     const updateField = useCallback((key, value) => {
         setFormData(prev => ({

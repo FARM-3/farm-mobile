@@ -32,7 +32,8 @@ const SimpleHeader = ({ title = 'Screen', onBackPress, unsyncedCount = 0, onSync
       <TouchableOpacity
         style={styles.backButton}
         onPress={handleBackPress}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+        activeOpacity={0.6}
       >
         <Ionicons name="chevron-back" size={28} color={CoffeeColors.WHITE} />
       </TouchableOpacity>

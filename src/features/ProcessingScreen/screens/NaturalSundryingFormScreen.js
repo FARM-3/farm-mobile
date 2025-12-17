@@ -43,13 +43,10 @@ function formatDateForDisplay(d) {
     return `${day}-${mon}-${year}`;
 }
 
-// Generate processing ID: SUND-{YYYYMMDD}-{SEQ}
-const generateProcessingId = (date = new Date(), sequence = 0) => {
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    const seq = String(sequence).padStart(2, '0');
-    return `SUND-${yyyy}${mm}${dd}-${seq}`;
+// Generate processing ID: {BATCH_ID}-SUN
+// Example: BA001-SUN
+const generateProcessingId = (batchId) => {
+    return `${batchId}-SUN`;
 };
 
 const initialFormState = {
@@ -195,43 +192,16 @@ export default function NaturalSundryingFormScreen({ navigation, route = {} }) {
         }
     }, [route.params?.editData]);
 
-    // Auto-generate processing ID when start date changes
+    // Auto-generate processing ID when batch/grade is selected
     useEffect(() => {
-        if (!isEditMode) {
-            const generateUniqueId = async () => {
-                try {
-                    // Load existing records to determine next sequence number
-                    const existingData = await AsyncStorage.getItem(SUNDRYING_STORAGE_KEY);
-                    const existingRecords = existingData ? JSON.parse(existingData) : [];
-
-                    // Filter records with same date prefix
-                    const dateStr = formatDateForApi(formData.start_date).replace(/-/g, '');
-                    const sameDate = existingRecords.filter(record =>
-                        record.processing_id && record.processing_id.startsWith(`SUND-${dateStr}`)
-                    );
-
-                    // Calculate next sequence number
-                    const nextSeq = sameDate.length;
-                    const newId = generateProcessingId(formData.start_date, nextSeq);
-
-                    setFormData(prev => ({
-                        ...prev,
-                        processing_id: newId
-                    }));
-                } catch (error) {
-                    console.error('[NaturalSundryingForm] Error generating ID:', error);
-                    // Fallback to timestamp-based ID
-                    const newId = `SUND-${Date.now()}`;
-                    setFormData(prev => ({
-                        ...prev,
-                        processing_id: newId
-                    }));
-                }
-            };
-
-            generateUniqueId();
+        if (!isEditMode && formData.grade) {
+            const newId = generateProcessingId(formData.grade);
+            setFormData(prev => ({
+                ...prev,
+                processing_id: newId
+            }));
         }
-    }, [formData.start_date, isEditMode]);
+    }, [formData.grade, isEditMode]);
 
     const updateField = useCallback((key, value) => {
         setFormData(prev => ({

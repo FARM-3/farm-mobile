@@ -31,6 +31,8 @@ import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../.
 import { fetchCurrentFarmerPrice } from '../../../services/priceService';
 import { syncAggregationRecords } from '../../../services/aggregationService';
 import { getStaffById } from '../../../services/staffService';
+import ApiService from '../../../services/ApiService';
+import AuthService from '../../../services/AuthService';
 // import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
 
 // ================================================
@@ -121,7 +123,8 @@ const harvestFieldDefinitions = [
         fields: [
             { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
             { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
-            { key: 'location_of_delivery', label: 'Location on Delivery', keyboardType: 'default' },
+            { key: 'location_of_delivery', label: 'Location on Delivery', type: 'picker', pickerKey: 'location_on_delivery', required: true },
+            { key: 'custom_location', label: 'Specify Location', keyboardType: 'default', dependsOn: { field: 'location_of_delivery', value: 'Other' } },
             { key: 'gps_coordinates_delivery', label: 'GPS Coordinates', keyboardType: 'default', action: 'capture_gps' },
             { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
         ]
@@ -133,7 +136,8 @@ const harvestFieldDefinitions = [
             { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type', required: true },
             { key: 'price_per_kg', label: 'Price per Kg (UGX)', keyboardType: 'numeric', required: true },
             { key: 'amount_paid', label: 'Amount Paid (UGX)', keyboardType: 'numeric', readOnly: true, calculated: true },
-            { key: 'paid_by', label: 'Paid By', type: 'searchable-staff', required: true },
+            { key: 'paid_by_option', label: 'Paid By', type: 'picker', pickerKey: 'paid_by_option', required: true },
+            { key: 'paid_by', label: 'Select Staff Member', type: 'searchable-staff', required: true, dependsOn: { field: 'paid_by_option', value: 'Other Staff Member' } },
             { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
         ]
     }
@@ -1240,7 +1244,7 @@ const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
 // ===============================================
 
 const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) => {
-    const onNavigate = onNavigateProp ?? ((screen) => { if (navigation && navigation.navigate) navigation.navigate(screen); });
+    const onNavigate = onNavigateProp ?? ((screen, params) => { if (navigation && navigation.navigate) navigation.navigate(screen, params); });
 
     // --- State declarations ---
     const [farmersList, setFarmersList] = useState([]);
@@ -1251,7 +1255,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         district: '', sub_county: '', parish: '', village: '', gps: '', nearest_landmark: '', uid: '',
         coffee_variety: '', no_of_trees: '', all_your_trees: false, other_farms: '', planted_date: '', spacing: '', land_ownership: '', deforested: false, seedling_source: '', seedling_type: [], age_of_seedlings: '', practices: [], irrigation: '', fertilizers: [], uses_pesticides: false, pesticides: [],
     });
-    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_of_delivery: '', gps_coordinates_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '4,600', amount_paid: '', paid_by: '', selectedStaff: null });
+    const [harvestForm, setHarvestForm] = useState({ farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_of_delivery: '', custom_location: '', gps_coordinates_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: '4,600', amount_paid: '', paid_by_option: '', paid_by: '', selectedStaff: null });
 
     const [farmerStep, setFarmerStep] = useState(0);
     const [harvestStep, setHarvestStep] = useState(0);
@@ -1291,14 +1295,28 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     const [actionMenuVisible, setActionMenuVisible] = useState(false);
     const [selectedHarvestForAction, setSelectedHarvestForAction] = useState(null);
 
-    // Handle navigation params from Dashboard quick actions
+    // State for current logged-in user
+    const [currentUser, setCurrentUser] = useState(null);
+
+    // Handle navigation params from Dashboard quick actions and PaymentVoucher back navigation
     useEffect(() => {
         if (route?.params?.activeTab || route?.params?.viewMode) {
+            console.log('[AggregationScreen] Received navigation params:', {
+                activeTab: route.params.activeTab,
+                viewMode: route.params.viewMode,
+                alreadyProcessed: paramsProcessedRef.current
+            });
             if (!paramsProcessedRef.current) {
                 paramsProcessedRef.current = true;
                 const { activeTab: tab, viewMode: mode } = route.params;
-                if (tab) setActiveTab(tab);
-                if (mode) setViewMode(mode);
+                if (tab) {
+                    console.log('[AggregationScreen] Setting activeTab to:', tab);
+                    setActiveTab(tab);
+                }
+                if (mode) {
+                    console.log('[AggregationScreen] Setting viewMode to:', mode);
+                    setViewMode(mode);
+                }
                 // Clear params after handling to prevent re-triggering
                 navigation.setParams({ activeTab: undefined, viewMode: undefined });
             }
@@ -1307,6 +1325,63 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             paramsProcessedRef.current = false;
         }
     }, [route?.params?.activeTab, route?.params?.viewMode, navigation]);
+
+    // Fetch current logged-in user from /users/me/ API on mount
+    useEffect(() => {
+        const fetchCurrentUser = async () => {
+            try {
+                console.log('[AggregationScreen] Fetching current user from /users/me/ API...');
+                const result = await AuthService.getCurrentUser();
+                if (result.success && result.user) {
+                    setCurrentUser(result.user);
+                    console.log('[AggregationScreen] Current user loaded from API:', {
+                        phone: result.user.phone,
+                        first_name: result.user.first_name,
+                        last_name: result.user.last_name,
+                        username: result.user.username
+                    });
+                }
+            } catch (error) {
+                console.error('[AggregationScreen] Error fetching current user from API:', error);
+            }
+        };
+        fetchCurrentUser();
+    }, []);
+
+    // Auto-populate paid_by when user's name is selected
+    useEffect(() => {
+        if (currentUser && harvestForm.paid_by_option) {
+            // Get user's name using same logic as Dashboard
+            let userName = 'Me';
+            if (currentUser.name) {
+                userName = currentUser.name;
+            } else if (currentUser.first_name) {
+                userName = currentUser.first_name;
+                if (currentUser.last_name) {
+                    userName += ' ' + currentUser.last_name;
+                }
+            } else if (currentUser.username) {
+                userName = currentUser.username;
+            }
+
+            // Check if user selected their own name (or "Me" as fallback)
+            if (harvestForm.paid_by_option === userName || harvestForm.paid_by_option === 'Me') {
+                setHarvestForm(prev => ({
+                    ...prev,
+                    paid_by: userName,
+                    selectedStaff: currentUser // Store full user object
+                }));
+                console.log('[AggregationScreen] Auto-populated paid_by with current user:', userName);
+            } else if (harvestForm.paid_by_option === 'Other Staff Member') {
+                // Clear paid_by when switching to "Other Staff Member"
+                setHarvestForm(prev => ({
+                    ...prev,
+                    paid_by: '',
+                    selectedStaff: null
+                }));
+            }
+        }
+    }, [harvestForm.paid_by_option, currentUser]);
 
     // --- Data Loading and Initialization ---
     const loadRecords = async () => {
@@ -1639,7 +1714,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         setHarvestForm(p => ({
             ...p,
-            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_of_delivery: '', gps_coordinates_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : '4,600', amount_paid: '', paid_by: '', selectedStaff: null,
+            farmer_uid: '', farmer_name: '', weight_on_delivery: '', location_of_delivery: '', custom_location: '', gps_coordinates_delivery: '', harvest_id: '', date_of_delivery: new Date().toISOString().slice(0,10), coffee_type: '', price_per_kg: currentFarmerPrice ? formatNumberWithCommas(currentFarmerPrice.toString()) : '4,600', amount_paid: '', paid_by_option: '', paid_by: '', selectedStaff: null,
         }));
 
         // Reset price loading state when resetting forms
@@ -1981,7 +2056,10 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 paidBy: harvestForm.paid_by,
                 date: harvestForm.date_of_delivery,
             };
-            onNavigate('PaymentVoucher', { harvestData: voucherData });
+            onNavigate('PaymentVoucher', {
+                harvestData: voucherData,
+                source: 'Aggregation' // Indicate where voucher was generated from
+            });
         } catch (e) {
             console.error(`[handleHarvestSubmit] ❌ Save error:`, e);
             console.error('[handleHarvestSubmit] Error details:', {
@@ -2123,6 +2201,29 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                 items = PARISHES_BY_SUB_COUNTY[formData.sub_county] || [];
                             } else if (field.dynamic && field.pickerKey === 'parish' && !formData.sub_county) {
                                 items = [{ label: 'Select Sub-county first', value: '', disabled: true }];
+                            }
+
+                            // Dynamic options for paid_by_option - show actual user name instead of "Me"
+                            if (field.pickerKey === 'paid_by_option') {
+                                let userName = 'Me'; // Default fallback
+
+                                if (currentUser) {
+                                    // Use same logic as Dashboard for consistency
+                                    if (currentUser.name) {
+                                        userName = currentUser.name;
+                                    } else if (currentUser.first_name) {
+                                        userName = currentUser.first_name;
+                                        // Add last name if available
+                                        if (currentUser.last_name) {
+                                            userName += ' ' + currentUser.last_name;
+                                        }
+                                    } else if (currentUser.username) {
+                                        userName = currentUser.username;
+                                    }
+                                    console.log('[AggregationScreen] Picker showing user name:', userName);
+                                }
+
+                                items = [userName, 'Other Staff Member'];
                             }
 
                             return <CustomPicker key={field.key} label={field.label} selectedValue={formData[field.key]} onValueChange={(v) => updateForm(field.key, v)} items={items} />;
@@ -2871,8 +2972,11 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     onDelete={(r) => handleDelete(r, 'harvest')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
                     onVoucher={(r) => {
+                        // Extract data from __raw if it exists (from Firebase), otherwise use r directly
+                        const rawData = r.__raw || r;
+
                         // Prepare harvest data for voucher - lookup farmer name from farmersList
-                        const farmerUID = r.name || r.farmer_name || r.farmer_uid;
+                        const farmerUID = rawData.name || rawData.farmer_name || rawData.farmer_uid || r.farmer_uid;
                         let farmerName = farmerUID || 'Unknown';
 
                         // Look up farmer name from farmersList
@@ -2889,18 +2993,26 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                         }
 
                         const voucherData = {
-                            ...r,
+                            ...rawData, // Spread raw data first
                             farmer_name: farmerName, // Use farmer_name to match PaymentVoucherScreen expectations
                             blockId: 'N/A', // Aggregation might not have blocks
-                            price_per_kg: parseFormattedNumber(r.price_per_kg) || 0, // Parse formatted strings from API
-                            amount_paid: parseFormattedNumber(r.amount_paid) || 0, // Parse formatted strings from API
-                            weight_on_delivery: parseFormattedNumber(r.weight_on_delivery) || 0, // Parse formatted strings from API
-                            pricePerKg: parseFormattedNumber(r.price_per_kg) || 0,
-                            amountPaid: parseFormattedNumber(r.amount_paid) || 0,
-                            paidBy: r.paid_by || 'N/A',
-                            date: r.date_of_delivery || r.date,
+                            harvest_id: rawData.harvest_id || r.harvest_id,
+                            price_per_kg: parseFormattedNumber(rawData.price_per_kg) || 0, // Parse formatted strings from API
+                            amount_paid: parseFormattedNumber(rawData.amount_paid) || 0, // Parse formatted strings from API
+                            weight_on_delivery: parseFormattedNumber(rawData.weight_on_delivery) || 0, // Parse formatted strings from API
+                            pricePerKg: parseFormattedNumber(rawData.price_per_kg) || 0,
+                            amountPaid: parseFormattedNumber(rawData.amount_paid) || 0,
+                            paidBy: rawData.paid_by || 'N/A',
+                            date: rawData.date_of_delivery || rawData.date,
+                            date_of_delivery: rawData.date_of_delivery || rawData.date,
+                            coffee_type: rawData.coffee_type || 'Coffee',
                         };
-                        onNavigate('PaymentVoucher', { harvestData: voucherData });
+
+                        console.log('[AggregationScreen] Prepared voucherData:', JSON.stringify(voucherData, null, 2));
+                        onNavigate('PaymentVoucher', {
+                            harvestData: voucherData,
+                            source: 'Aggregation' // Indicate where voucher was generated from
+                        });
                     }}
                 />
             );

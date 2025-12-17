@@ -17,6 +17,8 @@ import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
+import CustomAlert from '../../../components/CustomAlert';
+import { syncAllWashingRecords } from '../../../services/washingService';
 
 const WASHING_STORAGE_KEY = 'washing_records';
 
@@ -91,6 +93,17 @@ export default function WashingSummaryScreen({ navigation }) {
     const [isLoading, setIsLoading] = useState(false);
     const [selectedRecord, setSelectedRecord] = useState(null);
     const [viewMode, setViewMode] = useState('list');
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [unsyncedCount, setUnsyncedCount] = useState(0);
+
+    // CustomAlert state
+    const [alertVisible, setAlertVisible] = useState(false);
+    const [alertConfig, setAlertConfig] = useState({
+        title: '',
+        message: '',
+        type: 'info',
+        buttons: [],
+    });
 
     const loadRecords = useCallback(async () => {
         setIsLoading(true);
@@ -102,14 +115,21 @@ export default function WashingSummaryScreen({ navigation }) {
                 // Sort by created_at descending (newest first)
                 parsedRecords.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
                 setRecords(parsedRecords);
-                console.log('[WashingSummary] Loaded', parsedRecords.length, 'records');
+
+                // Count unsynced records
+                const unsynced = parsedRecords.filter(r => !r.isSynced).length;
+                setUnsyncedCount(unsynced);
+
+                console.log('[WashingSummary] Loaded', parsedRecords.length, 'records,', unsynced, 'unsynced');
             } else {
                 setRecords([]);
+                setUnsyncedCount(0);
                 console.log('[WashingSummary] No records found');
             }
         } catch (error) {
             console.error('[WashingSummary] Error loading records:', error);
             setRecords([]);
+            setUnsyncedCount(0);
         } finally {
             setIsLoading(false);
         }
@@ -126,6 +146,74 @@ export default function WashingSummaryScreen({ navigation }) {
         });
         return unsubscribe;
     }, [navigation, loadRecords]);
+
+    const handleSync = async () => {
+        if (isSyncing) return;
+
+        if (unsyncedCount === 0) {
+            setAlertConfig({
+                title: 'Nothing to Sync',
+                message: 'All washing records are already synced.',
+                type: 'info',
+                buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+            });
+            setAlertVisible(true);
+            return;
+        }
+
+        setIsSyncing(true);
+        try {
+            const result = await syncAllWashingRecords();
+
+            if (result.totalCount === 0) {
+                setAlertConfig({
+                    title: 'Nothing to Sync',
+                    message: 'All washing records are already synced.',
+                    type: 'info',
+                    buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+                });
+                setAlertVisible(true);
+            } else if (result.syncedCount > 0 && result.syncedCount < result.totalCount) {
+                setAlertConfig({
+                    title: 'Partial Sync',
+                    message: `Synced ${result.syncedCount} of ${result.totalCount} records. Some records failed to sync.`,
+                    type: 'warning',
+                    buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+                });
+                setAlertVisible(true);
+            } else if (result.syncedCount === 0 && result.totalCount > 0) {
+                setAlertConfig({
+                    title: 'Sync Failed',
+                    message: 'Could not sync records. Please check your internet connection and try again.',
+                    type: 'error',
+                    buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+                });
+                setAlertVisible(true);
+            } else if (result.syncedCount === result.totalCount) {
+                setAlertConfig({
+                    title: 'Sync Successful',
+                    message: `All ${result.syncedCount} washing records have been synced.`,
+                    type: 'success',
+                    buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+                });
+                setAlertVisible(true);
+            }
+
+            // Reload records to update sync status
+            await loadRecords();
+        } catch (error) {
+            console.error('[WashingSummary] Sync error:', error);
+            setAlertConfig({
+                title: 'Sync Failed',
+                message: error.message || 'Failed to sync washing records.',
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+            });
+            setAlertVisible(true);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     const renderRecord = ({ item }) => (
         <TouchableOpacity
@@ -192,6 +280,9 @@ export default function WashingSummaryScreen({ navigation }) {
             <SimpleHeader
                 title="Washing Records"
                 onBackPress={handleBackPress}
+                unsyncedCount={unsyncedCount}
+                onSync={handleSync}
+                isSyncing={isSyncing}
             />
 
             <View style={{ flex: 1 }}>
@@ -233,6 +324,16 @@ export default function WashingSummaryScreen({ navigation }) {
                     )}
                 </View>
             </View>
+
+            <CustomAlert
+                visible={alertVisible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                buttons={alertConfig.buttons}
+                onClose={() => setAlertVisible(false)}
+            />
+
             <BottomNav activeScreen="Processing" />
         </View>
     );

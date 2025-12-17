@@ -9,8 +9,7 @@ import {
     TouchableOpacity,
     StyleSheet,
     ActivityIndicator,
-    ScrollView,
-    Alert
+    ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -269,7 +268,13 @@ export default function FermentingSummaryScreen({ navigation }) {
         if (isSyncing) return;
 
         if (unsyncedCount === 0) {
-            Alert.alert('Nothing to Sync', 'All fermenting records are already synced.');
+            setAlertConfig({
+                title: 'Nothing to Sync',
+                message: 'All fermenting records are already synced.',
+                type: 'info',
+                buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+            });
+            setAlertVisible(true);
             return;
         }
 
@@ -278,26 +283,50 @@ export default function FermentingSummaryScreen({ navigation }) {
             const result = await syncAllFermentingRecords();
 
             if (result.totalCount === 0) {
-                Alert.alert('Nothing to Sync', 'All fermenting records are already synced.');
+                setAlertConfig({
+                    title: 'Nothing to Sync',
+                    message: 'All fermenting records are already synced.',
+                    type: 'info',
+                    buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+                });
+                setAlertVisible(true);
             } else if (result.syncedCount > 0 && result.syncedCount < result.totalCount) {
-                Alert.alert(
-                    'Partial Sync',
-                    `Synced ${result.syncedCount} of ${result.totalCount} records. Some records failed to sync.`
-                );
+                setAlertConfig({
+                    title: 'Partial Sync',
+                    message: `Synced ${result.syncedCount} of ${result.totalCount} records. Some records failed to sync.`,
+                    type: 'warning',
+                    buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+                });
+                setAlertVisible(true);
             } else if (result.syncedCount === 0 && result.totalCount > 0) {
-                Alert.alert(
-                    'Sync Failed',
-                    'Could not sync records. Please check your internet connection and try again.'
-                );
+                setAlertConfig({
+                    title: 'Sync Failed',
+                    message: 'Could not sync records. Please check your internet connection and try again.',
+                    type: 'error',
+                    buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+                });
+                setAlertVisible(true);
             } else if (result.syncedCount === result.totalCount) {
-                Alert.alert('Sync Successful', `All ${result.syncedCount} fermenting records have been synced.`);
+                setAlertConfig({
+                    title: 'Sync Successful',
+                    message: `All ${result.syncedCount} fermenting records have been synced.`,
+                    type: 'success',
+                    buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+                });
+                setAlertVisible(true);
             }
 
             // Reload records to update sync status
             await loadRecords();
         } catch (error) {
             console.error('[FermentingSummary] Sync error:', error);
-            Alert.alert('Sync Failed', error.message || 'Failed to sync fermenting records.');
+            setAlertConfig({
+                title: 'Sync Failed',
+                message: error.message || 'Failed to sync fermenting records.',
+                type: 'error',
+                buttons: [{ text: 'OK', onPress: () => setAlertVisible(false) }]
+            });
+            setAlertVisible(true);
         } finally {
             setIsSyncing(false);
         }

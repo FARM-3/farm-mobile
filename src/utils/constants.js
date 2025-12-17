@@ -83,6 +83,7 @@ export const GRADES = ['A', 'B', 'C', 'D'];
 export const CHERRY_COLORS = ['Red', 'Yellow', 'Green'];
 export const STAGES = ['dried', 'fresh_cherry'];
 export const LOCATION_ON_DELIVERY_OPTIONS = ['Rugyeyo Farm', 'Other'];
+export const PAID_BY_OPTIONS = ['Me', 'Other Staff Member'];
 
 export const PICKER_MAP = {
     district: DISTRICTS,
@@ -99,6 +100,7 @@ export const PICKER_MAP = {
     spacing: SPACING_OPTIONS,
     practices: STANDARD_PRACTICES,
     location_on_delivery: LOCATION_ON_DELIVERY_OPTIONS,
+    paid_by_option: PAID_BY_OPTIONS,
 };
 
 export default {

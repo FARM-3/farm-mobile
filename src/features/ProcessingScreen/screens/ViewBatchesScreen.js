@@ -106,7 +106,7 @@ export default function ViewBatchesScreen({ navigation }) {
                     activeOpacity={0.7}
                 >
                     <View style={styles.batchHeaderLeft}>
-                        <Ionicons name="sack" size={24} color={CoffeeColors.PRIMARY_BROWN} />
+                        <Ionicons name="layers" size={24} color={CoffeeColors.PRIMARY_BROWN} />
                         <View style={styles.batchHeaderText}>
                             <Text style={styles.batchId}>{batch.batch_id}</Text>
                             <Text style={styles.batchSubText}>
@@ -269,8 +269,10 @@ export default function ViewBatchesScreen({ navigation }) {
                                 <View style={[styles.processOptionIcon, { backgroundColor: '#E8F5E9' }]}>
                                     <Ionicons name="water-outline" size={32} color="#4CAF50" />
                                 </View>
-                                <Text style={styles.processOptionText}>Fermenting</Text>
-                                <Text style={styles.processOptionDesc}>Start fermenting process</Text>
+                                <View style={styles.processOptionTextContainer}>
+                                    <Text style={styles.processOptionText}>Fermenting</Text>
+                                    <Text style={styles.processOptionDesc}>Start fermenting process</Text>
+                                </View>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -281,8 +283,10 @@ export default function ViewBatchesScreen({ navigation }) {
                                 <View style={[styles.processOptionIcon, { backgroundColor: '#E3F2FD' }]}>
                                     <Ionicons name="water" size={32} color="#2196F3" />
                                 </View>
-                                <Text style={styles.processOptionText}>Washing</Text>
-                                <Text style={styles.processOptionDesc}>Start washing process</Text>
+                                <View style={styles.processOptionTextContainer}>
+                                    <Text style={styles.processOptionText}>Washing</Text>
+                                    <Text style={styles.processOptionDesc}>Start washing process</Text>
+                                </View>
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -293,8 +297,10 @@ export default function ViewBatchesScreen({ navigation }) {
                                 <View style={[styles.processOptionIcon, { backgroundColor: '#FFF3E0' }]}>
                                     <Ionicons name="sunny-outline" size={32} color="#FF9800" />
                                 </View>
-                                <Text style={styles.processOptionText}>Natural Sundrying</Text>
-                                <Text style={styles.processOptionDesc}>Start sundrying process</Text>
+                                <View style={styles.processOptionTextContainer}>
+                                    <Text style={styles.processOptionText}>Natural Sundrying</Text>
+                                    <Text style={styles.processOptionDesc}>Start sundrying process</Text>
+                                </View>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -568,15 +574,20 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginRight: 16,
     },
-    processOptionText: {
+    processOptionTextContainer: {
         flex: 1,
+        flexDirection: 'column',
+        justifyContent: 'center',
+    },
+    processOptionText: {
         fontSize: 16,
         fontWeight: '600',
         fontFamily: Fonts.semiBold,
         color: CoffeeColors.DARK_BROWN,
+        marginBottom: 4,
     },
     processOptionDesc: {
-        fontSize: 12,
+        fontSize: 13,
         color: CoffeeColors.MEDIUM_BROWN,
         fontFamily: Fonts.regular,
         marginTop: 2,
