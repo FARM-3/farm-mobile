@@ -26,6 +26,7 @@ import {
     Platform,
     KeyboardAvoidingView,
     ActivityIndicator,
+    Switch,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
@@ -210,6 +211,12 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
 
     useEffect(() => {
         const loadPrice = async () => {
+            // Only fetch price if payLabour is enabled
+            if (!formData.payLabour) {
+                setProductionPrice(null);
+                return;
+            }
+
             setLoadingPrice(true);
             try {
                 const price = await fetchCurrentPrice();
@@ -235,7 +242,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
         };
 
         loadPrice();
-    }, [priceRefreshKey]);
+    }, [priceRefreshKey, formData.payLabour]);
 
     return (
         <View style={stepStyles.stepContainer}>
@@ -250,79 +257,107 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
                 placeholder="e.g. 12.5"
             />
 
-            <Text style={styles.label}>Price per Kg (UGX) *</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                {productionPrice !== null ? (
-                    // Price is set in database - show as read-only with the fetched price
-                    <View style={[styles.input, { flex: 1, backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
-                        {loadingPrice ? (
-                            <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
-                        ) : (
-                            <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
-                                {formData.pricePerKg || productionPrice}
-                            </Text>
-                        )}
-                    </View>
-                ) : (
-                    // No price in database - make field editable
-                    <TextInput
-                        style={[styles.input, { flex: 1 }]}
-                        keyboardType="numeric"
-                        value={formData.pricePerKg}
-                        onChangeText={(value) => {
-                            // Remove any non-numeric characters except decimal point
-                            const cleaned = value.replace(/[^0-9.]/g, '');
-                            updateField('pricePerKg', cleaned);
-                        }}
-                        placeholder="Enter price per kg"
-                        editable={!loadingPrice}
-                    />
-                )}
-                <TouchableOpacity
-                    style={{
-                        backgroundColor: CoffeeColors.PRIMARY_BROWN,
-                        paddingHorizontal: 16,
-                        paddingVertical: 12,
-                        borderRadius: 8,
-                        justifyContent: 'center',
-                        alignItems: 'center'
+            {/* Pay Labour Toggle */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 20, marginBottom: 10 }}>
+                <Text style={[styles.label, { marginTop: 0, marginBottom: 0, flex: 1 }]}>Pay Labour</Text>
+                <Switch
+                    value={formData.payLabour || false}
+                    onValueChange={(value) => {
+                        updateField('payLabour', value);
+                        // Clear payment fields when toggled off
+                        if (!value) {
+                            updateField('pricePerKg', '');
+                            updateField('amountPaid', '');
+                            updateField('paidBy', '');
+                            updateField('selectedStaff', null);
+                        }
                     }}
-                    onPress={() => setPriceRefreshKey(prev => prev + 1)}
-                    disabled={loadingPrice}
-                >
-                    <Ionicons
-                        name={loadingPrice ? "hourglass" : "refresh"}
-                        size={20}
-                        color={CoffeeColors.WHITE}
-                    />
-                </TouchableOpacity>
+                    trackColor={{ false: CoffeeColors.LIGHT_BROWN, true: CoffeeColors.PRIMARY_BROWN }}
+                    thumbColor={formData.payLabour ? CoffeeColors.ACCENT : CoffeeColors.LIGHT_GRAY}
+                />
             </View>
-            {productionPrice !== null ? (
-                <Text style={styles.helperText}>
-                    Price fetched from database (latest production price). Tap refresh to update.
-                </Text>
-            ) : (
-                <Text style={styles.helperText}>
-                    No price set in database - enter manually or tap refresh to check again.
-                </Text>
+            <Text style={styles.helperText}>
+                Toggle on if you want to record labour payment for this harvest
+            </Text>
+
+            {/* Conditionally show payment fields only if Pay Labour is enabled */}
+            {formData.payLabour && (
+                <>
+                    <Text style={styles.label}>Price per Kg (UGX) *</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        {productionPrice !== null ? (
+                            // Price is set in database - show as read-only with the fetched price
+                            <View style={[styles.input, { flex: 1, backgroundColor: CoffeeColors.VERY_LIGHT_BROWN, justifyContent: 'center' }]}>
+                                {loadingPrice ? (
+                                    <ActivityIndicator color={CoffeeColors.PRIMARY_BROWN} />
+                                ) : (
+                                    <Text style={{ color: CoffeeColors.DARK_BROWN, fontWeight: '600', fontSize: 16 }}>
+                                        {formData.pricePerKg || productionPrice}
+                                    </Text>
+                                )}
+                            </View>
+                        ) : (
+                            // No price in database - make field editable
+                            <TextInput
+                                style={[styles.input, { flex: 1 }]}
+                                keyboardType="numeric"
+                                value={formData.pricePerKg}
+                                onChangeText={(value) => {
+                                    // Remove any non-numeric characters except decimal point
+                                    const cleaned = value.replace(/[^0-9.]/g, '');
+                                    updateField('pricePerKg', cleaned);
+                                }}
+                                placeholder="Enter price per kg"
+                                editable={!loadingPrice}
+                            />
+                        )}
+                        <TouchableOpacity
+                            style={{
+                                backgroundColor: CoffeeColors.PRIMARY_BROWN,
+                                paddingHorizontal: 16,
+                                paddingVertical: 12,
+                                borderRadius: 8,
+                                justifyContent: 'center',
+                                alignItems: 'center'
+                            }}
+                            onPress={() => setPriceRefreshKey(prev => prev + 1)}
+                            disabled={loadingPrice}
+                        >
+                            <Ionicons
+                                name={loadingPrice ? "hourglass" : "refresh"}
+                                size={20}
+                                color={CoffeeColors.WHITE}
+                            />
+                        </TouchableOpacity>
+                    </View>
+                    {productionPrice !== null ? (
+                        <Text style={styles.helperText}>
+                            Price fetched from database (latest production price). Tap refresh to update.
+                        </Text>
+                    ) : (
+                        <Text style={styles.helperText}>
+                            No price set in database - enter manually or tap refresh to check again.
+                        </Text>
+                    )}
+
+                    <Text style={styles.label}>Amount Paid (UGX)</Text>
+                    <TextInput
+                        style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
+                        keyboardType="numeric"
+                        value={formData.amountPaid}
+                        editable={false}
+                        placeholder="Auto-calculated"
+                    />
+                    <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
+
+                    <SearchableStaffPicker
+                        label="Paid By *"
+                        selectedStaffId={formData.paidBy}
+                        onStaffSelect={(staff) => updateField('paidBy', staff.id)}
+                        selectedStaff={formData.selectedStaff}
+                    />
+                </>
             )}
-
-            <Text style={styles.label}>Amount Paid (UGX)</Text>
-            <TextInput
-                style={[styles.input, { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN }]}
-                keyboardType="numeric"
-                value={formData.amountPaid}
-                editable={false}
-                placeholder="Auto-calculated"
-            />
-            <Text style={styles.helperText}>Calculated: Weight × Price per Kg</Text>
-
-            <SearchableStaffPicker
-                label="Paid By *"
-                selectedStaffId={formData.paidBy}
-                onStaffSelect={(staff) => updateField('paidBy', staff.id)}
-                selectedStaff={formData.selectedStaff}
-            />
         </View>
     );
 };
@@ -333,7 +368,7 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
 // New steps structure based on the required fields
 const STEPS = [
     { title: 'Worker & Block', Component: Step1_WorkerAndBlock, requiredFields: ['workerName', 'date', 'blockId'] },
-    { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight', 'pricePerKg', 'paidBy'] },
+    { title: 'Delivery & Finance', Component: Step2_DeliveryAndFinance, requiredFields: ['weight'] }, // Payment fields are conditionally required
 ];
 
 const initialFormState = {
@@ -343,8 +378,9 @@ const initialFormState = {
     blockId: BLOCK_DATA[0].id, // Integer PK from blocks table
     weight: "", // maps to weight_on_delivery
     date: new Date(), // maps to date_of_delivery
-    pricePerKg: "", // maps to price_per_kg
-    amountPaid: "", // maps to amount_paid (auto-calculated)
+    payLabour: false, // Toggle to show/hide payment fields
+    pricePerKg: "", // Frontend-only field for calculation
+    amountPaid: "", // maps to amount_paid (auto-calculated, optional)
     paidBy: "", // Staff ID - will be set by SearchableStaffPicker
     selectedStaff: null, // Full staff object from SearchableStaffPicker
 
@@ -381,6 +417,9 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             const dateStr = editData.date || editData.dateReadable || new Date().toISOString();
             const dateObj = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
 
+            // Determine if labour was paid based on existence of amountPaid
+            const hasPayment = editData.amountPaid && parseFormattedNumber(editData.amountPaid) > 0;
+
             setFormData(prev => ({
                 ...prev,
                 workerName: editData.name || editData.workerName || '',
@@ -388,6 +427,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 blockId: editData.block || editData.blockId || BLOCK_DATA[0].id,
                 weight: String(editData.weight || ''),
                 date: dateObj,
+                payLabour: hasPayment, // Set based on whether payment exists
                 pricePerKg: editData.pricePerKg ? formatNumberWithCommas(String(editData.pricePerKg)) : '',
                 amountPaid: editData.amountPaid ? formatNumberWithCommas(String(editData.amountPaid)) : '',
                 paidBy: editData.paidBy || '',
@@ -473,9 +513,17 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             if (isNaN(Number(formData.weight)) || Number(formData.weight) <= 0) {
                 return "Enter a valid weight (> 0 kg) on delivery.";
             }
-            const pricePerKgValue = parseFormattedNumber(formData.pricePerKg);
-            if (formData.pricePerKg === "" || isNaN(pricePerKgValue) || pricePerKgValue <= 0) {
-                return "Enter a valid price per kg (> 0 UGX).";
+
+            // Only validate payment fields if Pay Labour is enabled
+            if (formData.payLabour) {
+                const pricePerKgValue = parseFormattedNumber(formData.pricePerKg);
+                if (formData.pricePerKg === "" || isNaN(pricePerKgValue) || pricePerKgValue <= 0) {
+                    return "Enter a valid price per kg (> 0 UGX) when paying labour.";
+                }
+
+                if (!formData.paidBy || formData.paidBy === "") {
+                    return "Please select who paid when paying labour.";
+                }
             }
         }
 
@@ -650,9 +698,10 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 blockId: formData.blockId, // Integer PK
                 weight: Number(formData.weight),
                 date: formData.date,
-                pricePerKg: parseFormattedNumber(formData.pricePerKg),
-                amountPaid: parseFormattedNumber(formData.amountPaid),
-                paidBy: formData.paidBy, // Integer PK (don't trim)
+                // Only include payment fields if payLabour is enabled
+                pricePerKg: formData.payLabour ? parseFormattedNumber(formData.pricePerKg) : null,
+                amountPaid: formData.payLabour ? parseFormattedNumber(formData.amountPaid) : null,
+                paidBy: formData.payLabour ? formData.paidBy : null, // Integer PK (don't trim)
                 id: formData.generatedId,
 
                 // System/Internal fields
@@ -714,8 +763,39 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
                 setFormData(initialFormState);
                 setCurrentStep(0);
 
-                // Auto-navigate to Payment Voucher
-                navigation.navigate('PaymentVoucher', { harvestData });
+                // Show different flow based on whether labour was paid
+                if (formData.payLabour) {
+                    // Labour was paid - navigate to Payment Voucher
+                    navigation.navigate('PaymentVoucher', { harvestData });
+                } else {
+                    // No labour payment - show success dialog with options
+                    setAlertConfig({
+                        title: "Harvest Recorded!",
+                        message: "Harvest record saved successfully without labour payment.",
+                        type: 'success',
+                        buttons: [
+                            {
+                                text: "Proceed to Quality Control",
+                                onPress: () => {
+                                    setAlertVisible(false);
+                                    navigation.navigate('RipenessScreen', {
+                                        harvestId: harvestData.id,
+                                        autoOpenForm: true
+                                    });
+                                }
+                            },
+                            {
+                                text: "Back to Records",
+                                onPress: () => {
+                                    setAlertVisible(false);
+                                    navigation.navigate('Harvests');
+                                }
+                            }
+                        ]
+                    });
+                    setAlertVisible(true);
+                }
+                setIsSaving(false);
             }
 
         } catch (error) {
