@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert, Modal, Pressable, Switch, FlatList, KeyboardAvoidingView, Platform, LogBox } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Modal, Pressable, Switch, FlatList, KeyboardAvoidingView, Platform, LogBox } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Location from 'expo-location';
 
 // Suppress all console logs and warnings from appearing on UI
 // Logs will still appear in the terminal for debugging
@@ -18,7 +17,6 @@ LogBox.ignoreAllLogs(true);
 // --- UTILITIES AND THEME IMPORTS ---
 // NOTE: Assuming these imports are correctly path-resolved in your environment
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Fonts from '../../../theme/fonts';
 import CoffeeColors from '../../../theme/colors';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
@@ -26,14 +24,18 @@ import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import CustomAlert from '../../../components/CustomAlert';
 import HarvestActionMenu from '../../../components/HarvestActionMenu';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
-import { initializeAuth, generateRecordId, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest, updateFarmer, updateHarvest } from '../../../utils/firebaseSetup';
-import { formatNumberWithCommas, removeCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
+import { initializeAuth, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest } from '../../../utils/firebaseSetup';
+import { formatNumberWithCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
 import { fetchCurrentFarmerPrice } from '../../../services/priceService';
 import { syncAggregationRecords } from '../../../services/aggregationService';
-import { getStaffById } from '../../../services/staffService';
-import ApiService from '../../../services/ApiService';
 import AuthService from '../../../services/AuthService';
-// import { getSingleFieldMode, setSingleFieldMode } from '../../../utils/settings'; // Removed unused setting import
+
+// --- AGGREGATION FEATURE IMPORTS ---
+import { farmerFieldDefinitions, harvestFieldDefinitions, farmerTableFields, harvestTableFields } from '../utils/fieldDefinitions';
+import { getCurrentGPSLocation, capitalizeFirstLetter } from '../utils/aggregationHelpers';
+import styles from '../styles/aggregationStyles';
+import { CustomInput, CustomPicker, CustomToggle, CustomMultiSelect, CustomDatePicker, AutocompleteInput, StepIndicator } from '../components/FormComponents';
+import SearchableDataList from '../components/SearchableDataList';
 
 // ================================================
 // === DASHBOARD COLOR PALETTE & TYPOGRAPHY ===
@@ -42,1205 +44,29 @@ const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
 const DARK_BROWN = CoffeeColors.DARK_BROWN;
 const LIGHT_BROWN = CoffeeColors.LIGHT_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
-const CREAM_BG = CoffeeColors.CREAM;
-const LIGHT_GRAY_BG = CoffeeColors.LIGHT_GRAY;
 const BORDER_LIGHT = CoffeeColors.VERY_LIGHT_BROWN;
-const TEXT_DARK = CoffeeColors.DARK_BROWN;
 const TEXT_GRAY = CoffeeColors.GRAY_TEXT;
 
+// ===============================================
+// === EXTRACTED COMPONENTS ===
+// ===============================================
+// Field definitions moved to ../utils/fieldDefinitions.js
+// Helper functions moved to ../utils/aggregationHelpers.js
+// Styles moved to ../styles/aggregationStyles.js
+// Form components moved to ../components/FormComponents.js
+// SearchableDataList moved to ../components/SearchableDataList.js
 
 // ===============================================
-// === 1. FORM & TABLE FIELD DEFINITIONS (NEW) ===
+// === DETAIL VIEW COMPONENTS - NOW SEPARATE SCREENS ===
 // ===============================================
+// FarmerDetailView moved to FarmerDetailScreen.js
+// HarvestDetailView moved to FarmerHarvestDetailScreen.js
+// These components are now standalone screens with proper navigation
 
-// NOTE: Adjusted fields for better consistency (e.g., using 'Yes'/'No' for boolean pickers)
-
-const farmerFieldDefinitions = [
-    // Step 1: Personal Info
-    {
-        title: 'Personal Info',
-        fields: [
-            { key: 'first_name', label: 'First Name', keyboardType: 'default', required: true },
-            { key: 'last_name', label: 'Last Name', keyboardType: 'default', required: true },
-            { key: 'gender', label: 'Gender', type: 'picker', pickerKey: 'gender' },
-            { key: 'nin', label: 'NIN', keyboardType: 'default', required: true },
-            { key: 'date_of_birth', label: 'Date of Birth', type: 'date', required: true },
-            { key: 'contact', label: 'Phone Number', keyboardType: 'phone-pad', required: true, placeholder: 'Example: 0770123456' },
-            { key: 'email', label: 'Email (optional)', keyboardType: 'email-address', placeholder: 'Example: johnkato@gmail.com' },
-            { key: 'in_cooperative', label: 'Are you in a cooperative?', type: 'yes-no' },
-            { key: 'cooperative', label: 'Cooperative Name', keyboardType: 'default', dependsOn: { field: 'in_cooperative', value: true } },
-            { key: 'started_farming', label: 'When did you start coffee farming?', type: 'date', required: true },
-        ]
-    },
-    // Step 2: Location & UID
-    {
-        title: 'Location & ID',
-        fields: [
-            { key: 'district', label: 'District', type: 'picker', pickerKey: 'district', required: true },
-            { key: 'sub_county', label: 'Sub-county', type: 'picker', pickerKey: 'sub_county', required: true },
-            // Parish will dynamically filter based on sub_county
-            { key: 'parish', label: 'Parish', type: 'picker', pickerKey: 'parish', dynamic: true, required: true },
-            { key: 'village', label: 'Village', keyboardType: 'default' },
-            { key: 'gps', label: 'GPS Location (optional)', keyboardType: 'default' },
-            { key: 'nearest_landmark', label: 'Nearest Landmark', keyboardType: 'default', required: true },
-            { key: 'uid', label: 'Farmer UID (Generated)', special: 'generate_uid', readOnly: true },
-        ]
-    },
-    // Step 3: Farm Details
-    {
-        title: 'Farm Details',
-        fields: [
-            { key: 'coffee_variety', label: 'Coffee Variety', type: 'picker', pickerKey: 'coffee_variety', required: true },
-            { key: 'no_of_trees', label: 'Number of Trees', keyboardType: 'numeric', required: true },
-            { key: 'all_your_trees', label: 'Are these all your trees?', type: 'yes-no', required: true },
-            { key: 'other_farms', label: 'If no, which farms (location, owner)', keyboardType: 'default', dependsOn: { field: 'all_your_trees', value: false } },
-            { key: 'planted_date', label: 'Date planted', type: 'date', required: true },
-            { key: 'spacing', label: 'Spacing', type: 'picker', pickerKey: 'spacing', required: true },
-            { key: 'land_ownership', label: 'Land Ownership', type: 'picker', pickerKey: 'land_ownership', required: true },
-            { key: 'deforested', label: 'Has the land ever been deforested?', type: 'yes-no', required: true },
-            { key: 'seedling_source', label: 'Source of seedlings', type: 'picker', pickerKey: 'seedling_source', required: true },
-            { key: 'seedling_type', label: 'Type of seedlings', type: 'multi-select', pickerKey: 'seedling_type', required: true },
-            { key: 'age_of_seedlings', label: 'Age of seedlings (Days)', keyboardType: 'numeric', required: true },
-        ]
-    },
-    // Step 4: Practices & Chemicals
-    {
-        title: 'Farming Practices',
-        fields: [
-            { key: 'practices', label: 'Standard practices carried out', type: 'multi-select', pickerKey: 'practices', required: true },
-            { key: 'irrigation', label: 'Irrigation source', type: 'picker', pickerKey: 'irrigation', required: true },
-            { key: 'fertilizers', label: 'Fertilizers', type: 'picker', pickerKey: 'fertilizers', array: true, required: true },
-            { key: 'uses_pesticides', label: 'Use pesticides?', type: 'yes-no', required: true },
-            { key: 'pesticides', label: 'If yes, list pesticides (comma separated)', array: true, dependsOn: { field: 'uses_pesticides', value: true } },
-        ]
-    }
-];
-
-const harvestFieldDefinitions = [
-    // Step 1: Farmer & Weight
-    {
-        title: "Harvest Details",
-        fields: [
-            { key: 'farmer_uid', label: 'Farmer UID', keyboardType: 'default', required: true, action: 'lookup' },
-            { key: 'weight_on_delivery', label: 'Weight on Delivery (kg)', keyboardType: 'numeric', required: true },
-            { key: 'location_of_delivery', label: 'Location on Delivery', type: 'picker', pickerKey: 'location_on_delivery', required: true },
-            { key: 'custom_location', label: 'Specify Location', keyboardType: 'default', dependsOn: { field: 'location_of_delivery', value: 'Other' } },
-            { key: 'gps_coordinates_delivery', label: 'GPS Coordinates', keyboardType: 'default', action: 'capture_gps' },
-            { key: 'date_of_delivery', label: 'Date of Delivery', type: 'date', required: true },
-        ]
-    },
-    // Step 2: Quality & Payment
-    {
-        title: 'Quality & Payment',
-        fields: [
-            { key: 'coffee_type', label: 'Coffee Type', type: 'picker', pickerKey: 'coffee_type', required: true },
-            { key: 'price_per_kg', label: 'Price per Kg (UGX)', keyboardType: 'numeric', required: true },
-            { key: 'amount_paid', label: 'Amount Paid (UGX)', keyboardType: 'numeric', readOnly: true, calculated: true },
-            { key: 'paid_by_option', label: 'Paid By', type: 'picker', pickerKey: 'paid_by_option', required: true },
-            { key: 'paid_by', label: 'Select Staff Member', type: 'searchable-staff', required: true, dependsOn: { field: 'paid_by_option', value: 'Other Staff Member' } },
-            { key: 'harvest_id', label: 'Harvest ID (Generated)', special: 'generate_harvest_id', readOnly: true },
-        ]
-    }
-];
-
-const farmerTableFields = [
-    { key: 'name', label: 'Name', width: '30%' },
-    { key: 'contact', label: 'Contact', width: '20%' },
-    { key: 'sub_county', label: 'Sub-county', width: '20%' },
-    { key: 'number_of_trees', label: 'Trees', width: '15%' },  // FIXED: Changed from num_trees to number_of_trees
-    { key: 'uid', label: 'UID', width: '15%' }, // Use UID for farmers
-];
-
-const harvestTableFields = [
-    { key: 'farmer_name', label: 'Farmer', width: '30%' },
-    { key: 'date_of_delivery', label: 'Date', width: '20%' },
-    { key: 'weight_on_delivery', label: 'Weight (kg)', width: '20%' },
-    { key: 'amount_paid', label: 'Paid', width: '15%' },
-    { key: 'id', label: 'ID', width: '15%' },
-];
+// REMOVED: const FarmerDetailView = ({ farmer, onBack }) => { ... }
 
 // ===============================================
-// === GPS LOCATION HELPER ===
-// ===============================================
-
-/**
- * Get current device GPS location
- * @returns {Promise<string>} Formatted GPS string "latitude,longitude" or error message
- */
-const getCurrentGPSLocation = async () => {
-    try {
-        // Request location permission
-        const { status } = await Location.requestForegroundPermissionsAsync();
-
-        if (status !== 'granted') {
-            return 'Location permission denied. Please enable location access in settings.';
-        }
-
-        // Get current location
-        const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-        });
-
-        const { latitude, longitude } = location.coords;
-
-        // Format as latitude,longitude with 4 decimal places
-        const formattedGPS = `${latitude.toFixed(4)},${longitude.toFixed(4)}`;
-        console.log('[GPS] Current location:', formattedGPS);
-
-        return formattedGPS;
-    } catch (error) {
-        console.error('[GPS] Error getting location:', error);
-        return `Error: ${error.message || 'Unable to get GPS location'}`;
-    }
-};
-
-// ===============================================
-// === 2. LIGHTWEIGHT LOCAL UI HELPERS (POLISHED)===
-// ===============================================
-
-const CustomInput = ({ label, value, onChangeText, keyboardType = 'default', editable = true, placeholder = '', error = '' }) => (
-    <View style={{ marginBottom: 15 }}>
-        {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-        <TextInput
-            value={value}
-            onChangeText={onChangeText}
-            keyboardType={keyboardType}
-            style={[styles.textInput, !editable && styles.readOnlyInput, error && styles.errorInput]}
-            editable={editable}
-            placeholder={placeholder}
-            placeholderTextColor={BORDER_LIGHT}
-        />
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-    </View>
-);
-
-/**
- * Capitalize first letter of a string
- */
-const capitalizeFirstLetter = (str) => {
-    if (!str) return '';
-    return String(str).charAt(0).toUpperCase() + String(str).slice(1).toLowerCase();
-};
-
-const CustomPicker = ({ label, selectedValue, onValueChange, items = [] }) => {
-    const [modalVisible, setModalVisible] = useState(false);
-
-    const getSelectedLabel = () => {
-        if (!selectedValue) return '-- Select --';
-        const selected = items.find(it => (it.value ?? it) === selectedValue);
-        return capitalizeFirstLetter(selected?.label ?? selectedValue ?? '-- Select --');
-    };
-
-    const handleSelect = (value) => {
-        onValueChange(value);
-        setModalVisible(false);
-    };
-
-    return (
-        <View style={{ marginBottom: 15 }}>
-            {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-            <View style={styles.pickerContainer}>
-                <TouchableOpacity
-                    style={styles.pickerButton}
-                    onPress={() => setModalVisible(true)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                    <Text style={styles.pickerButtonText}>{getSelectedLabel()}</Text>
-                    <Ionicons name="chevron-down" size={20} color={DARK_BROWN} />
-                </TouchableOpacity>
-                <Picker
-                    selectedValue={selectedValue}
-                    onValueChange={onValueChange}
-                    style={styles.picker}
-                >
-                    <Picker.Item label="-- Select --" value="" />
-                    {items.map((it, index) => {
-                        const value = it.value ?? it;
-                        const displayLabel = capitalizeFirstLetter(it.label ?? String(it));
-                        return <Picker.Item key={index} label={displayLabel} value={value} />;
-                    })}
-                </Picker>
-            </View>
-
-            {/* Custom Modal Picker */}
-            <Modal
-                visible={modalVisible}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setModalVisible(false)}
-            >
-                <Pressable style={styles.pickerModalContainer} onPress={() => setModalVisible(false)}>
-                    <View style={styles.modalPickerContent}>
-                        <View style={styles.modalPickerHeader}>
-                            <Text style={styles.modalPickerTitle}>{label}</Text>
-                            <TouchableOpacity onPress={() => setModalVisible(false)}>
-                                <Ionicons name="close" size={24} color={DARK_BROWN} />
-                            </TouchableOpacity>
-                        </View>
-
-                        <FlatList
-                            data={items}
-                            keyExtractor={(_, index) => String(index)}
-                            renderItem={({ item }) => {
-                                const value = item.value ?? item;
-                                const displayLabel = capitalizeFirstLetter(item.label ?? String(item));
-                                const isSelected = value === selectedValue;
-
-                                return (
-                                    <TouchableOpacity
-                                        style={[
-                                            styles.modalPickerItem,
-                                            isSelected && styles.modalPickerItemSelected
-                                        ]}
-                                        onPress={() => handleSelect(value)}
-                                    >
-                                        <Text style={[
-                                            styles.modalPickerItemText,
-                                            isSelected && styles.modalPickerItemTextSelected
-                                        ]}>
-                                            {displayLabel}
-                                        </Text>
-                                        {isSelected && (
-                                            <Ionicons name="checkmark" size={20} color={PRIMARY_BROWN} />
-                                        )}
-                                    </TouchableOpacity>
-                                );
-                            }}
-                            scrollEnabled={true}
-                        />
-                    </View>
-                </Pressable>
-            </Modal>
-        </View>
-    );
-};
-
-// Toggle component is now redundant with 'yes-no' picker logic but kept for safety/simplicity if needed elsewhere
-const CustomToggle = ({ label, value, onValueChange }) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, paddingVertical: 5 }}>
-        <Text style={styles.inputLabel}>{label}</Text>
-        <Switch value={!!value} onValueChange={onValueChange} trackColor={{ true: PRIMARY_BROWN }} thumbColor={value ? VERY_LIGHT_BROWN : '#fff'} />
-    </View>
-);
-
-const CustomMultiSelect = ({ label, selectedValues = [], onValueChange, items = [] }) => {
-    const [modalVisible, setModalVisible] = useState(false);
-
-    const toggleSelection = (item) => {
-        const itemValue = typeof item === 'object' ? item.value : item;
-        const newSelection = selectedValues.includes(itemValue)
-            ? selectedValues.filter(val => val !== itemValue)
-            : [...selectedValues, itemValue];
-        onValueChange(newSelection);
-    };
-
-    const displayValue = selectedValues.length > 0 ? selectedValues.join(', ') : 'Select seedling line';
-
-    return (
-        <View style={{ marginBottom: 15 }}>
-            {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-            <TouchableOpacity
-                style={styles.multiSelectButton}
-                onPress={() => setModalVisible(true)}
-            >
-                <Text style={styles.multiSelectText}>{displayValue}</Text>
-                <Ionicons name="chevron-down" size={20} color={PRIMARY_BROWN} />
-            </TouchableOpacity>
-
-            <Modal
-                visible={modalVisible}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setModalVisible(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.multiSelectModal}>
-                        <Text style={styles.modalTitle}>Select Practices</Text>
-                        <ScrollView style={styles.multiSelectScroll}>
-                            {items.map((item, index) => {
-                                const itemValue = typeof item === 'object' ? item.value : item;
-                                const itemLabel = typeof item === 'object' ? item.label : item;
-                                return (
-                                    <TouchableOpacity
-                                        key={index}
-                                        style={styles.multiSelectItem}
-                                        onPress={() => toggleSelection(item)}
-                                    >
-                                        <Text style={styles.multiSelectItemText}>{itemLabel}</Text>
-                                        <View style={styles.checkbox}>
-                                            {selectedValues.includes(itemValue) && (
-                                                <Ionicons name="checkmark" size={16} color={PRIMARY_BROWN} />
-                                            )}
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </ScrollView>
-                        <TouchableOpacity
-                            style={styles.modalCloseButton}
-                            onPress={() => setModalVisible(false)}
-                        >
-                            <Text style={styles.modalCloseText}>Done</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
-        </View>
-    );
-};
-
-const CustomDatePicker = ({ label, value, onChange }) => {
-    const [showPicker, setShowPicker] = useState(false);
-    // Use value if it's a valid date string, otherwise default to today
-    const [date, setDate] = useState(value ? new Date(value) : new Date());
-
-    const handleDateChange = (event, selectedDate) => {
-        setShowPicker(false);
-        if (selectedDate) {
-            setDate(selectedDate);
-            // Ensure date is formatted as YYYY-MM-DD
-            onChange(selectedDate.toISOString().split('T')[0]);
-        }
-    };
-
-    const displayValue = value || 'Select Date';
-
-    return (
-        <View style={{ marginBottom: 15 }}>
-            {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-            <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowPicker(true)}
-            >
-                <Text style={styles.datePickerText}>{displayValue}</Text>
-                <Ionicons name="calendar" size={20} color={PRIMARY_BROWN} />
-            </TouchableOpacity>
-            {showPicker && (
-                <DateTimePicker
-                    value={date}
-                    mode="date"
-                    display="default"
-                    onChange={handleDateChange}
-                    maximumDate={new Date()}
-                />
-            )}
-        </View>
-    );
-};
-
-/**
- * AutocompleteInput - Provides autocomplete suggestions for farmer UID
- * Shows dropdown with matching farmers as user types
- */
-const AutocompleteInput = ({ label, value, onChangeText, onSelect, suggestions = [], keyboardType = 'default', placeholder = '' }) => {
-    const [showSuggestions, setShowSuggestions] = useState(false);
-    const [filteredSuggestions, setFilteredSuggestions] = useState([]);
-
-    // Filter suggestions based on input value
-    useEffect(() => {
-        if (value && value.length > 0) {
-            const searchText = value.toLowerCase();
-            const filtered = suggestions.filter(item => {
-                const farmerId = (item.farmer_id || item.uid || item.id || '').toLowerCase();
-                const farmerName = `${item.first_name || ''} ${item.last_name || ''}`.toLowerCase();
-                const contact = (item.contact || '').toLowerCase();
-
-                return farmerId.includes(searchText) || farmerName.includes(searchText) || contact.includes(searchText);
-            }).slice(0, 5); // Limit to 5 suggestions
-
-            setFilteredSuggestions(filtered);
-            setShowSuggestions(filtered.length > 0);
-        } else {
-            setFilteredSuggestions([]);
-            setShowSuggestions(false);
-        }
-    }, [value, suggestions]);
-
-    const handleSelect = (item) => {
-        const selectedId = item.farmer_id || item.uid || item.id;
-        onSelect(item, selectedId);
-        setShowSuggestions(false);
-    };
-
-    return (
-        <View style={{ marginBottom: 15, zIndex: 1000 }}>
-            {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
-            <TextInput
-                value={value}
-                onChangeText={onChangeText}
-                keyboardType={keyboardType}
-                style={styles.textInput}
-                placeholder={placeholder}
-                placeholderTextColor={BORDER_LIGHT}
-                onFocus={() => {
-                    if (value && filteredSuggestions.length > 0) {
-                        setShowSuggestions(true);
-                    }
-                }}
-            />
-            {showSuggestions && filteredSuggestions.length > 0 && (
-                <View style={styles.autocompleteDropdown}>
-                    <ScrollView style={styles.autocompleteScroll} nestedScrollEnabled={true}>
-                        {filteredSuggestions.map((item, index) => {
-                            const farmerId = item.farmer_id || item.uid || item.id;
-                            const farmerName = `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'Unnamed';
-                            const contact = item.contact || 'No contact';
-
-                            return (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={styles.autocompleteSuggestion}
-                                    onPress={() => handleSelect(item)}
-                                >
-                                    <View>
-                                        <Text style={styles.autocompleteName}>{farmerName}</Text>
-                                        <Text style={styles.autocompleteDetails}>
-                                            ID: {farmerId} | {contact}
-                                        </Text>
-                                    </View>
-                                    <Ionicons name="chevron-forward" size={20} color={TEXT_GRAY} />
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
-                    <TouchableOpacity
-                        style={styles.autocompleteClose}
-                        onPress={() => setShowSuggestions(false)}
-                    >
-                        <Text style={styles.autocompleteCloseText}>Close</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-        </View>
-    );
-};
-
-const SuccessMessage = ({ message, onExit }) => (
-    <View style={[styles.overlay]}>
-        <View style={styles.modal}>
-            <Text style={styles.modalTitle}>Success 🎉</Text>
-            <Text style={styles.modalMessage}>{message}</Text>
-            <View style={styles.modalActions}>
-                <TouchableOpacity style={[styles.modalButton, { backgroundColor: TEXT_GRAY }]} onPress={onExit}><Text style={styles.modalButtonText}>Close</Text></TouchableOpacity>
-            </View>
-        </View>
-    </View>
-);
-
-const StepIndicator = ({ currentStep, totalSteps, steps }) => {
-    return (
-        <View style={styles.stepIndicatorContainer}>
-            {/* Step Circles and Connectors */}
-            <View style={styles.stepCirclesContainer}>
-                {steps && steps.length > 0 ? steps.map((step, index) => (
-                    <View key={index} style={styles.stepItemWrapper}>
-                        {/* Step Circle */}
-                        <View style={[
-                            styles.stepCircle,
-                            index < currentStep && styles.stepCircleCompleted,
-                            index === currentStep - 1 && styles.stepCircleActive
-                        ]}>
-                            <Text style={[
-                                styles.stepCircleText,
-                                (index < currentStep || index === currentStep - 1) && styles.stepCircleTextActive
-                            ]}>
-                                {index + 1}
-                            </Text>
-                        </View>
-
-                        {/* Connector Line (except for last step) */}
-                        {index < steps.length - 1 && (
-                            <View style={[
-                                steps.length === 2 ? styles.stepConnectorTwoStep : styles.stepConnector,
-                                index < currentStep - 1 && (steps.length === 2 ? styles.stepConnectorTwoStepActive : styles.stepConnectorActive)
-                            ]} />
-                        )}
-                    </View>
-                )) : null}
-            </View>
-
-            {/* Step Labels */}
-            <View style={styles.stepLabelsContainer}>
-                {steps && steps.length > 0 ? steps.map((step, index) => (
-                    <View key={index} style={styles.stepLabelWrapper}>
-                        <Text style={[
-                            styles.stepLabel,
-                            (index < currentStep || index === currentStep - 1) && styles.stepLabelActive
-                        ]}>
-                            {step.title}
-                        </Text>
-                    </View>
-                )) : null}
-            </View>
-        </View>
-    );
-};
-
-// --- NEW/REPLACED Table Component: Searchable Data List ---
-const SearchableDataList = ({ records = [], fields = [], title = '', onExit, onEdit, onDelete, onSyncDraft, onVoucher, isFarmer, farmersList = [], onHarvestAction }) => {
-    const [searchText, setSearchText] = useState('');
-    const [showSuggestions, setShowSuggestions] = useState(false);
-
-    // Generate autocomplete suggestions based on search text
-    const suggestions = useMemo(() => {
-        if (!searchText || searchText.trim() === '') {
-            return [];
-        }
-
-        const safeRecords = Array.isArray(records) ? records : [];
-        const lowerSearch = searchText.toLowerCase().trim();
-        const suggestionSet = new Set();
-        const suggestionList = [];
-
-        safeRecords.forEach(record => {
-            if (isFarmer) {
-                // For farmers: suggest names and contact
-                const firstName = record.first_name ? record.first_name.toLowerCase() : '';
-                const lastName = record.last_name ? record.last_name.toLowerCase() : '';
-                const fullName = `${record.first_name || ''} ${record.last_name || ''}`.trim();
-                const contact = record.contact ? record.contact.toLowerCase() : '';
-
-                // Check for matches
-                if (firstName.includes(lowerSearch) || lastName.includes(lowerSearch) || contact.includes(lowerSearch)) {
-                    if (fullName && !suggestionSet.has(fullName)) {
-                        suggestionSet.add(fullName);
-                        suggestionList.push({
-                            name: fullName,
-                            subtitle: contact || record.farmer_id || record.id,
-                            record
-                        });
-                    }
-                }
-            } else {
-                // For harvests: suggest farmer names
-                const farmerUID = record.name || record.farmer_uid;
-                const farmer = Array.isArray(farmersList) ? farmersList.find(f =>
-                    String(f.farmer_id) === String(farmerUID) ||
-                    String(f.uid) === String(farmerUID) ||
-                    String(f.id) === String(farmerUID)
-                ) : null;
-
-                if (farmer) {
-                    const farmerName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim();
-                    const farmerNameLower = farmerName.toLowerCase();
-                    if (farmerNameLower.includes(lowerSearch) && !suggestionSet.has(farmerName)) {
-                        suggestionSet.add(farmerName);
-                        suggestionList.push({
-                            name: farmerName,
-                            subtitle: `Harvest: ${record.date_of_delivery || 'N/A'}`,
-                            record
-                        });
-                    }
-                }
-            }
-        });
-
-        return suggestionList.slice(0, 5); // Limit to 5 suggestions
-    }, [searchText, records, isFarmer, farmersList]);
-
-    // Filtering logic based on search text across all listed fields
-    // FIXED: Ensure records is always an array to prevent .filter() errors
-    // FEATURE: Sort by newest first and show last 10 records
-    const filteredRecords = useMemo(() => {
-        const safeRecords = Array.isArray(records) ? records : [];
-
-        // Sort by timestamp/id (newest first) - assumes records have timestamp or id field
-        const sortedRecords = [...safeRecords].sort((a, b) => {
-            // Try to sort by timestamp first
-            if (a.timestamp && b.timestamp) {
-                return b.timestamp - a.timestamp;
-            }
-            // Try to sort by date_of_delivery for harvests (newest first)
-            if (a.date_of_delivery && b.date_of_delivery) {
-                return new Date(b.date_of_delivery) - new Date(a.date_of_delivery);
-            }
-            // Try to sort by created_at or updated_at
-            if (a.created_at && b.created_at) {
-                return new Date(b.created_at) - new Date(a.created_at);
-            }
-            if (a.updated_at && b.updated_at) {
-                return new Date(b.updated_at) - new Date(a.updated_at);
-            }
-            // Fallback: sort by ID (assuming higher ID = newer)
-            if (a.id && b.id) {
-                return String(b.id).localeCompare(String(a.id));
-            }
-            return 0;
-        });
-
-        // If no search text, return first 10 records (newest)
-        if (!searchText || searchText.trim() === '') {
-            return sortedRecords.slice(0, 10);
-        }
-
-        // If searching, filter and return up to 10 matching records
-        const lowerSearch = searchText.toLowerCase().trim();
-        const filtered = sortedRecords.filter(record => {
-            // For farmers: search in first_name, last_name, contact, district, farmer_id, uid
-            if (isFarmer) {
-                const searchableText = [
-                    record.first_name,
-                    record.last_name,
-                    `${record.first_name} ${record.last_name}`,
-                    record.contact,
-                    record.district,
-                    record.farmer_id,
-                    record.uid,
-                    record.id
-                ].filter(Boolean).join(' ').toLowerCase();
-
-                return searchableText.includes(lowerSearch);
-            } else {
-                // For harvests: search in farmer UID and lookup farmer name
-                const farmerUID = record.name || record.farmer_uid;
-                const farmer = Array.isArray(farmersList) ? farmersList.find(f =>
-                    String(f.farmer_id) === String(farmerUID) ||
-                    String(f.uid) === String(farmerUID) ||
-                    String(f.id) === String(farmerUID)
-                ) : null;
-
-                const farmerName = farmer ? `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() : '';
-                const searchableText = [
-                    farmerName,
-                    farmerUID,
-                    record.id,
-                    record.date_of_delivery,
-                    record.paid_by
-                ].filter(Boolean).join(' ').toLowerCase();
-
-                return searchableText.includes(lowerSearch);
-            }
-        });
-
-        return filtered.slice(0, 10);
-    }, [records, fields, searchText, isFarmer, farmersList]);
-    
-    // Renders the summary row for the FlatList
-    const renderItem = ({ item }) => {
-        // For farmers: compute name from first_name + last_name if 'name' field doesn't exist
-        // For harvests: lookup farmer name from farmersList using the UID/name field
-        let displayName = 'N/A';
-        let displayId = 'No ID';
-
-        if (isFarmer) {
-            // Farmer record - construct name from first_name and last_name
-            displayName = item.name || `${item.first_name || ''} ${item.last_name || ''}`.trim() || 'N/A';
-            displayId = item.uid || item.farmer_id || item.id || 'No ID';
-        } else {
-            // Harvest record - lookup farmer name and ID from the farmers list
-            // Django returns farmer UID in the 'name' field, so we need to find the actual farmer
-            const farmerUID = item.name || item.farmer_name || item.farmer_uid;
-            if (farmerUID && Array.isArray(farmersList)) {
-                // Try to find the farmer in the farmers list
-                const farmer = farmersList.find(f => {
-                    // Construct full name from farmer record
-                    const farmerFullName = `${f.first_name || ''} ${f.last_name || ''}`.trim();
-
-                    return (
-                        String(f.farmer_id) === String(farmerUID) ||
-                        String(f.uid) === String(farmerUID) ||
-                        String(f.id) === String(farmerUID) ||
-                        farmerFullName === String(farmerUID)  // Match by full name
-                    );
-                });
-
-                if (farmer) {
-                    displayName = `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || farmer.name || farmerUID;
-                } else {
-                    // Farmer not found in list, just show the UID
-                    displayName = farmerUID;
-                }
-            } else {
-                displayName = farmerUID || 'N/A';
-            }
-            // For harvest records, always display the harvest ID (not farmer ID)
-            displayId = item.harvest_id || item.id || 'No ID';
-        }
-
-        const secondKey = fields.length > 1 ? fields[1].key : null;
-        const thirdKey = fields.length > 2 ? fields[2].key : null;
-
-        // Check if this is a harvest record (not a farmer record)
-        const isHarvest = !isFarmer;
-
-        return (
-            <View style={[styles.dataListItem, item._isDraft && styles.draftListItem, !item._isDraft && !item._isSynced && styles.pendingListItem]}>
-                <TouchableOpacity style={{ flex: 1 }} onPress={() => onEdit(item)} activeOpacity={0.7}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                            <Text style={styles.dataListItemTitle}>
-                                {String(displayName)}
-                            </Text>
-                            {isHarvest ? (
-                                <TouchableOpacity
-                                    onPress={() => {
-                                        console.log('[AggregationScreen] Harvest ID tapped:', displayId);
-                                        if (onHarvestAction) {
-                                            onHarvestAction(item);
-                                        }
-                                    }}
-                                    style={styles.harvestIdButton}
-                                    activeOpacity={0.6}
-                                >
-                                    <Text style={styles.dataListItemUID}> ({displayId})</Text>
-                                    <Ionicons name="chevron-down-circle" size={16} color={PRIMARY_BROWN} style={{ marginLeft: 4 }} />
-                                </TouchableOpacity>
-                            ) : (
-                                <Text style={styles.dataListItemUID}> ({displayId})</Text>
-                            )}
-                        </View>
-                        {/* Draft Badge - Shows only for incomplete draft records */}
-                        {item._isDraft && (
-                            <View style={styles.draftBadge}>
-                                <Text style={styles.draftBadgeText}>DRAFT</Text>
-                            </View>
-                        )}
-                    </View>
-                    <Text style={styles.dataListItemSubtitle}>
-                        {secondKey ? `${fields[1].label}: ${item[secondKey] || 'N/A'}` : ''}
-                        {thirdKey ? ` | ${fields[2].label}: ${item[thirdKey] || 'N/A'}` : ''}
-                    </Text>
-                    {/* Show draft step if it's a draft */}
-                    {item._isDraft && (
-                        <Text style={styles.draftStepText}>
-                            Saved at: {item._draftStepTitle || 'Unknown Step'}
-                        </Text>
-                    )}
-                    {/* Pending Status - Shows for submitted but unsynced records */}
-                    {!item._isDraft && !item._isSynced && (
-                        <View style={styles.syncStatusInline}>
-                            <Ionicons name="cloud-upload-outline" size={14} color={LIGHT_BROWN} />
-                            <Text style={[styles.syncStatusText, { color: LIGHT_BROWN }]}>Pending</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
-
-                {/* Edit, Sync Draft (if draft), Voucher (for harvests), and Delete Icon Buttons */}
-                <View style={styles.recordActions}>
-                    {/* Sync Draft Button - Only shows for draft records */}
-                    {item._isDraft && onSyncDraft && (
-                        <TouchableOpacity
-                            style={[styles.iconButton, styles.syncButton]}
-                            onPress={() => {
-                                onSyncDraft(item); // Sync draft to database
-                            }}
-                        >
-                            <Ionicons name="cloud-upload-outline" size={20} color="#4CAF50" />
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Voucher Button - Only shows for harvest records */}
-                    {!isFarmer && onVoucher && (
-                        <TouchableOpacity
-                            style={styles.iconButton}
-                            onPress={() => {
-                                onVoucher(item);
-                            }}
-                        >
-                            <Ionicons name="document-text" size={20} color={PRIMARY_BROWN} />
-                        </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                        style={styles.iconButton}
-                        onPress={() => {
-                            onEdit(item, true); // Pass true to indicate edit mode vs view mode
-                        }}
-                    >
-                        <Ionicons name="pencil" size={20} color={PRIMARY_BROWN} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.iconButton}
-                        onPress={() => {
-                            onDelete(item);
-                        }}
-                    >
-                        <Ionicons name="trash" size={20} color={'#d32f2f' || '#d32f2f'} />
-                    </TouchableOpacity>
-                </View>
-            </View>
-        );
-    };
-
-    return (
-        <View style={styles.recordsContainer}>
-            <View style={styles.tableHeaderSection}>
-                <Text style={styles.tableTitle}>{title}</Text>
-
-                {/* Search field with autocomplete suggestions */}
-                <View style={{ position: 'relative', zIndex: 100 }}>
-                    <View style={styles.searchContainer}>
-                        <View style={{ flex: 1 }}>
-                            <CustomInput
-                                placeholder="Search by name, ID, or contact..."
-                                value={searchText}
-                                onChangeText={(text) => {
-                                    setSearchText(text);
-                                    setShowSuggestions(text.trim().length > 0 && suggestions.length > 0);
-                                }}
-                                onFocus={() => {
-                                    setShowSuggestions(searchText.trim().length > 0 && suggestions.length > 0);
-                                }}
-                                onBlur={() => {
-                                    // Delay hiding to allow selection
-                                    setTimeout(() => setShowSuggestions(false), 200);
-                                }}
-                            />
-                        </View>
-                        <TouchableOpacity
-                            style={styles.searchButton}
-                            onPress={() => {/* Search is automatic via useMemo */}}
-                        >
-                            <Ionicons name="search" size={22} color={'#fff'} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Autocomplete suggestions dropdown */}
-                    {showSuggestions && suggestions.length > 0 && (
-                        <View style={[styles.suggestionsDropdown, { maxHeight: 250 }]}>
-                            <FlatList
-                                data={suggestions}
-                                keyExtractor={(item, index) => `${item.name}-${index}`}
-                                scrollEnabled={suggestions.length > 4}
-                                nestedScrollEnabled={true}
-                                renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        style={styles.suggestionItem}
-                                        onPress={() => {
-                                            setSearchText(item.name);
-                                            setShowSuggestions(false);
-                                        }}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.suggestionName}>{item.name}</Text>
-                                            <Text style={styles.suggestionSubtitle}>{item.subtitle}</Text>
-                                        </View>
-                                        <Ionicons name="arrow-forward" size={16} color={PRIMARY_BROWN} />
-                                    </TouchableOpacity>
-                                )}
-                            />
-                        </View>
-                    )}
-                </View>
-
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
-                    <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: PRIMARY_BROWN, flex: 1, marginRight: 8 }]}
-                        onPress={onExit}
-                    >
-                        <Ionicons name="add-circle" size={20} color={CoffeeColors.CREAM} style={{ marginRight: 8 }} />
-                        <Text style={styles.actionButtonText}>Add {isFarmer ? 'Farmer' : 'Harvest'}</Text>
-                    </TouchableOpacity>
-                    <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                        <Text style={styles.recordCount}>{filteredRecords.length} record{filteredRecords.length !== 1 ? 's' : ''}</Text>
-                    </View>
-                </View>
-            </View>
-            
-            {filteredRecords.length > 0 ? (
-                <FlatList
-                    data={filteredRecords}
-                    renderItem={renderItem}
-                    keyExtractor={(item, index) => item.id || item.uid || index.toString()}
-                    style={styles.listContainer}
-                />
-            ) : (
-                <Text style={styles.noRecords}>No records found matching your search.</Text>
-            )}
-        </View>
-    );
-};
-
-
-// ===============================================
-// === 3. FARMER DETAIL VIEW COMPONENT        ===
-// ===============================================
-
-/**
- * FarmerDetailView - Mobile-friendly detail screen for viewing farmer information
- * Displays all farmer data organized in logical sections with proper labels
- */
-const FarmerDetailView = ({ farmer, onBack }) => {
-    if (!farmer) return null;
-
-    // Helper to format field values properly
-    const formatValue = (value) => {
-        if (value === null || value === undefined || value === '') return 'Not provided';
-        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-        if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'Not provided';
-        return String(value);
-    };
-
-    // Field sections for organized display
-    const sections = [
-        {
-            title: 'Personal Information',
-            fields: [
-                { label: 'Full Name', value: `${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() },
-                { label: 'Farmer ID', value: farmer.farmer_id || farmer.uid || farmer.id },
-                { label: 'Gender', value: farmer.gender },
-                { label: 'Date of Birth', value: farmer.date_of_birth },
-                { label: 'NIN', value: farmer.nin },
-                { label: 'Contact', value: farmer.contact },
-                { label: 'Email', value: farmer.email },
-            ]
-        },
-        {
-            title: 'Location Details',
-            fields: [
-                { label: 'District', value: farmer.district },
-                { label: 'Sub-county', value: farmer.sub_county },
-                { label: 'Parish', value: farmer.parish },
-                { label: 'Village', value: farmer.village },
-                { label: 'GPS Coordinates', value: farmer.gps_coordinates || farmer.gps },
-                { label: 'Nearest Landmark', value: farmer.nearest_landmark },
-            ]
-        },
-        {
-            title: 'Farm Information',
-            fields: [
-                { label: 'Coffee Variety', value: farmer.coffee_variety },
-                { label: 'Number of Trees', value: farmer.number_of_trees },
-                { label: 'Owns All Trees', value: farmer.ownership_of_trees },
-                { label: 'Date Planted', value: farmer.planted_date },
-                { label: 'Spacing Between Trees', value: farmer.spacing_between_trees || farmer.spacing },
-                { label: 'Land Ownership', value: farmer.land_ownership },
-                { label: 'Started Farming Year', value: farmer.started_coffee_farming_year },
-            ]
-        },
-        {
-            title: 'Seedling Information',
-            fields: [
-                { label: 'Source of Seedlings', value: farmer.source_of_seedlings || farmer.seedling_source },
-                { label: 'Type of Seedlings', value: farmer.type_of_seedlings || farmer.seedling_type },
-                { label: 'Age of Seedlings', value: farmer.age_of_seedlings },
-            ]
-        },
-        {
-            title: 'Farming Practices',
-            fields: [
-                { label: 'Standard Practices', value: farmer.standard_practices },
-                { label: 'Irrigation Source', value: farmer.irrigation_source || farmer.irrigation },
-                { label: 'Fertilizers Used', value: farmer.fertilizers },
-                { label: 'Pesticides Used', value: farmer.pesticide || farmer.pesticides },
-                { label: 'Deforestation Status', value: farmer.defforestation_status || farmer.deforested },
-            ]
-        }
-    ];
-
-    return (
-        <View style={styles.detailViewContainer}>
-            {/* Header with back button */}
-            <View style={styles.detailHeader}>
-                <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={DARK_BROWN} />
-                </TouchableOpacity>
-                <Text style={styles.detailHeaderTitle}>Farmer Details</Text>
-                <View style={{ width: 40 }} />
-            </View>
-
-            {/* Scrollable content */}
-            <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
-                {/* Farmer Name Card */}
-                <View style={styles.detailNameCard}>
-                    <Text style={styles.detailFarmerName}>
-                        {`${farmer.first_name || ''} ${farmer.last_name || ''}`.trim() || 'Unnamed Farmer'}
-                    </Text>
-                    <Text style={styles.detailFarmerId}>
-                        ID: {farmer.farmer_id || farmer.uid || farmer.id || 'N/A'}
-                    </Text>
-                </View>
-
-                {/* Information Sections */}
-                {sections.map((section, sectionIndex) => (
-                    <View key={sectionIndex} style={styles.detailSection}>
-                        <Text style={styles.detailSectionTitle}>{section.title}</Text>
-                        {section.fields.map((field, fieldIndex) => (
-                            <View key={fieldIndex} style={styles.detailFieldRow}>
-                                <Text style={styles.detailFieldLabel}>{field.label}:</Text>
-                                <Text style={styles.detailFieldValue}>{formatValue(field.value)}</Text>
-                            </View>
-                        ))}
-                    </View>
-                ))}
-            </ScrollView>
-        </View>
-    );
-};
-
-// ===============================================
-// === 3B. HARVEST DETAIL VIEW COMPONENT      ===
-// ===============================================
-
-/**
- * HarvestDetailView - Mobile-friendly detail screen for viewing harvest information
- * Displays all harvest data organized in logical sections with proper labels
- */
-const HarvestDetailView = ({ harvest, onBack, farmersList }) => {
-    if (!harvest) return null;
-
-    // Helper to format field values properly
-    const formatValue = (value) => {
-        if (value === null || value === undefined || value === '') return 'Not provided';
-        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-        if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'Not provided';
-        return String(value);
-    };
-
-    // Lookup farmer details from farmersList using the harvest.name field (which contains farmer's full name)
-    const harvestFarmerName = harvest.name || harvest.farmer_uid;
-    let farmerDetails = null;
-    let farmerUID = null;
-    if (harvestFarmerName && Array.isArray(farmersList)) {
-        // Try multiple lookup strategies
-        farmerDetails = farmersList.find(f => {
-            // Construct full name from farmer record
-            const farmerFullName = `${f.first_name || ''} ${f.last_name || ''}`.trim();
-
-            return (
-                String(f.farmer_id) === String(harvestFarmerName) ||
-                String(f.uid) === String(harvestFarmerName) ||
-                String(f.id) === String(harvestFarmerName) ||
-                String(f.name) === String(harvestFarmerName) ||
-                farmerFullName === String(harvestFarmerName)  // Match by full name
-            );
-        });
-
-        // Set farmerUID to the actual farmer_id from the matched farmer record
-        if (farmerDetails) {
-            farmerUID = farmerDetails.farmer_id || farmerDetails.uid || farmerDetails.id;
-        }
-
-        // Log for debugging
-        if (!farmerDetails) {
-            console.warn('[HarvestDetailView] Farmer not found for name:', harvestFarmerName);
-            console.log('[HarvestDetailView] Available farmers:', farmersList.map(f => ({
-                farmer_id: f.farmer_id,
-                full_name: `${f.first_name || ''} ${f.last_name || ''}`.trim(),
-                uid: f.uid,
-                id: f.id
-            })));
-        }
-    }
-
-    const farmerDisplayName = farmerDetails
-        ? `${farmerDetails.first_name || ''} ${farmerDetails.last_name || ''}`.trim()
-        : 'Unknown Farmer';
-
-    // Helper function to get staff name from ID using staff service
-    const [staffNameCache, setStaffNameCache] = useState({});
-
-    useEffect(() => {
-        const fetchStaffNames = async () => {
-            if (harvest?.paid_by && !staffNameCache[harvest.paid_by]) {
-                try {
-                    const staff = await getStaffById(harvest.paid_by);
-                    if (staff) {
-                        setStaffNameCache(prev => ({
-                            ...prev,
-                            [harvest.paid_by]: staff.displayName || staff.firstName + ' ' + staff.lastName || 'Unknown Staff'
-                        }));
-                    }
-                } catch (error) {
-                    console.error('[HarvestDetailView] Error fetching staff name:', error);
-                }
-            }
-        };
-        fetchStaffNames();
-    }, [harvest?.paid_by, staffNameCache]);
-
-    const getStaffNameById = (staffId) => {
-        if (!staffId) return 'Not provided';
-        // Check cache first
-        if (staffNameCache[staffId]) {
-            return staffNameCache[staffId];
-        }
-        // Fallback to showing the ID if not in cache yet
-        return 'Loading...';
-    };
-
-    // Field sections for organized display
-    // Only display fields that are actually in the harvest form
-    // Match exact field names from the API response
-    const sections = [
-        {
-            title: 'Farmer Information',
-            fields: [
-                { label: 'Farmer Name', value: farmerDisplayName || harvest.name },
-                { label: 'Farmer ID', value: farmerUID || harvest.farmer_uid },
-                { label: 'Contact', value: farmerDetails?.contact || 'Not available' },
-                { label: 'District', value: farmerDetails?.district || 'Not available' },
-            ]
-        },
-        {
-            title: 'Harvest Details',
-            fields: [
-                { label: 'Harvest ID', value: formatValue(harvest.harvest_id || harvest.id || harvest.code) },
-                { label: 'Date of Delivery', value: formatValue(harvest.date_of_delivery) },
-                { label: 'Weight on Delivery', value: harvest.weight_on_delivery ? `${harvest.weight_on_delivery} kg` : 'Not provided' },
-                { label: 'Location on Delivery', value: formatValue(harvest.location_of_delivery || harvest.location_on_delivery) },
-                { label: 'GPS Coordinates', value: harvest.gps_coordinates_delivery || harvest.gps_coordinates || 'Not captured' },
-            ]
-        },
-        {
-            title: 'Coffee Information',
-            fields: [
-                { label: 'Coffee Type', value: harvest.coffee_type || 'Not provided' },
-            ]
-        },
-        {
-            title: 'Payment Information',
-            fields: [
-                { label: 'Price per kg', value: harvest.price_per_kg ? `UGX ${Number(harvest.price_per_kg).toLocaleString()}` : 'Not provided' },
-                { label: 'Amount Paid', value: harvest.amount_paid ? `UGX ${Number(harvest.amount_paid).toLocaleString()}` : 'Not provided' },
-                { label: 'Paid By', value: getStaffNameById(harvest.paid_by) },
-            ]
-        }
-    ];
-
-    return (
-        <View style={styles.detailViewContainer}>
-            {/* Header with back button */}
-            <View style={styles.detailHeader}>
-                <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color={DARK_BROWN} />
-                </TouchableOpacity>
-                <Text style={styles.detailHeaderTitle}>Harvest Details</Text>
-                <View style={{ width: 40 }} />
-            </View>
-
-            {/* Scrollable content */}
-            <ScrollView style={styles.detailScrollView} contentContainerStyle={styles.detailContent}>
-                {/* Harvest ID Card */}
-                <View style={styles.detailNameCard}>
-                    <Text style={styles.detailFarmerName}>
-                        {farmerDisplayName}
-                    </Text>
-                    <Text style={styles.detailFarmerId}>
-                        Harvest ID: {harvest.id || harvest.harvest_id || 'N/A'}
-                    </Text>
-                </View>
-
-                {/* Information Sections */}
-                {sections.map((section, sectionIndex) => (
-                    <View key={sectionIndex} style={styles.detailSection}>
-                        <Text style={styles.detailSectionTitle}>{section.title}</Text>
-                        {section.fields.map((field, fieldIndex) => (
-                            <View key={fieldIndex} style={styles.detailFieldRow}>
-                                <Text style={styles.detailFieldLabel}>{field.label}:</Text>
-                                <Text style={styles.detailFieldValue}>{formatValue(field.value)}</Text>
-                            </View>
-                        ))}
-                    </View>
-                ))}
-            </ScrollView>
-        </View>
-    );
-};
-
-// ===============================================
-// === 4. MAIN COMPONENT (POLISHED)            ===
+// === MAIN COMPONENT (POLISHED)            ===
 // ===============================================
 
 const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) => {
@@ -1262,7 +88,6 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     const [viewMode, setViewMode] = useState('table'); // CHANGED: Show records first instead of form
     const [activeTab, setActiveTab] = useState('farmers');
     const [loading, setLoading] = useState(false);
-    const [successMessage, setSuccessMessage] = useState('');
     const isSubmittingRef = useRef(false);
     const paramsProcessedRef = useRef(false);
     const [userId, setUserId] = useState('user123');
@@ -1828,7 +653,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         // Validation
         if (!farmerForm.first_name || !farmerForm.contact || !userId) {
             console.error('[handleFarmerSubmit] Validation failed - missing required fields');
-            Alert.alert("Validation", "Please ensure First name, Contact, and User ID are present.");
+            setAlertConfig({
+                visible: true,
+                title: 'Validation',
+                message: 'Please ensure First name, Contact, and User ID are present.',
+                type: 'error',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                        }
+                    }
+                ]
+            });
             return;
         }
 
@@ -1880,8 +718,23 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
             console.log(`[handleFarmerSubmit] ✅ Farmer saved locally!`);
 
-            setSuccessMessage(`Farmer '${name}' saved locally and ready to sync!`);
-            setViewMode('success');
+            // Show success using CustomAlert
+            setAlertConfig({
+                visible: true,
+                title: 'Success',
+                message: `Farmer '${name}' saved locally and ready to sync!`,
+                type: 'success',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                            setViewMode('table');
+                        }
+                    }
+                ]
+            });
+
             resetForms();
             await loadRecords();
             await countUnsyncedRecords();
@@ -1890,7 +743,6 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             console.error("[handleFarmerSubmit] Error details:", {
                 message: e.message,
             });
-            Alert.alert(`Save Failed`, e.message || `Failed to save farmer details locally.`);
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -1911,7 +763,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
         const currentStepData = steps[currentStepNum];
 
         if (!currentStepData) {
-            Alert.alert('Error', 'Unable to save draft. Step information not found.');
+            setAlertConfig({
+                visible: true,
+                title: 'Error',
+                message: 'Unable to save draft. Step information not found.',
+                type: 'error',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                        }
+                    }
+                ]
+            });
             return;
         }
 
@@ -1956,8 +821,6 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
             console.log(`[handleSaveDraft] ✅ Draft saved to AsyncStorage successfully`);
 
-            setSuccessMessage(`${type === 'farmer' ? 'Farmer' : 'Harvest'} draft saved successfully at ${currentStepData.title}!`);
-
             // Show success dialog using CustomAlert
             setAlertConfig({
                 visible: true,
@@ -1982,7 +845,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             await countUnsyncedRecords();
         } catch (e) {
             console.error(`[handleSaveDraft] ❌ Error saving draft:`, e);
-            Alert.alert('Save Failed', e.message || `Failed to save ${type} draft.`);
+            setAlertConfig({
+                visible: true,
+                title: 'Save Failed',
+                message: e.message || `Failed to save ${type} draft.`,
+                type: 'error',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                        }
+                    }
+                ]
+            });
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -1996,7 +872,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
         if (!harvestForm.farmer_uid || !harvestForm.weight_on_delivery || !harvestForm.price_per_kg || !userId) {
             console.error('[handleHarvestSubmit] Validation failed - missing required fields');
-            Alert.alert('Validation', 'Please fill Farmer UID, Weight, Price per Kg and ensure you are logged in.');
+            setAlertConfig({
+                visible: true,
+                title: 'Validation',
+                message: 'Please fill Farmer UID, Weight, Price per Kg and ensure you are logged in.',
+                type: 'error',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                        }
+                    }
+                ]
+            });
             return;
         }
 
@@ -2066,7 +955,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 message: e.message,
             });
 
-            Alert.alert(`Save Failed`, e.message || `Failed to save harvest details locally.`);
+            setAlertConfig({
+                visible: true,
+                title: 'Save Failed',
+                message: e.message || 'Failed to save harvest details locally.',
+                type: 'error',
+                buttons: [
+                    {
+                        text: 'OK',
+                        onPress: () => {
+                            setAlertConfig(prev => ({ ...prev, visible: false }));
+                        }
+                    }
+                ]
+            });
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -2098,17 +1000,68 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             // Check for validation errors
             const hasErrors = isFarmer ? Object.values(farmerErrors).some(error => error) : Object.values(harvestErrors).some(error => error);
             if (hasErrors) {
-                Alert.alert("Input Error", "Please fix the validation errors before proceeding.");
+                setAlertConfig({
+                    visible: true,
+                    title: 'Input Error',
+                    message: 'Please fix the validation errors before proceeding.',
+                    type: 'error',
+                    buttons: [
+                        {
+                            text: 'OK',
+                            onPress: () => {
+                                setAlertConfig(prev => ({ ...prev, visible: false }));
+                            }
+                        }
+                    ]
+                });
                 return;
             }
 
             // Basic required field validation for current step
-            const missingRequired = currentStepFields.fields.some(f =>
-                f.required && (!formData[f.key] || (typeof formData[f.key] === 'string' && formData[f.key].trim() === ''))
-            );
+            const missingRequired = currentStepFields.fields.some(f => {
+                // Check if field is required OR if it has dependsOn condition that is met
+                const isRequired = f.required;
+                const isDependentAndActive = f.dependsOn && formData[f.dependsOn.field] === f.dependsOn.value;
+
+                // Skip validation if field is neither required nor conditionally active
+                if (!isRequired && !isDependentAndActive) return false;
+
+                // If field has dependsOn but the condition is not met, skip validation
+                if (f.dependsOn && formData[f.dependsOn.field] !== f.dependsOn.value) return false;
+
+                const value = formData[f.key];
+
+                // Handle different field types
+                if (f.type === 'yes-no') {
+                    // Boolean fields - false is a valid value
+                    return value !== true && value !== false;
+                } else if (f.type === 'multi-select') {
+                    // Array fields - check if array is empty
+                    return !Array.isArray(value) || value.length === 0;
+                } else if (typeof value === 'string') {
+                    // String fields - check for empty or whitespace
+                    return !value || value.trim() === '';
+                } else {
+                    // Other types - just check for falsy (but not false/0)
+                    return value === null || value === undefined || value === '';
+                }
+            });
 
             if (missingRequired) {
-                Alert.alert("Input Error", "Please fill all required fields in this step.");
+                setAlertConfig({
+                    visible: true,
+                    title: 'Input Error',
+                    message: 'Please fill all required fields in this step.',
+                    type: 'error',
+                    buttons: [
+                        {
+                            text: 'OK',
+                            onPress: () => {
+                                setAlertConfig(prev => ({ ...prev, visible: false }));
+                            }
+                        }
+                    ]
+                });
                 return;
             }
 
@@ -2129,7 +1082,20 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     if (found) {
                         setFormData('farmer_name', getFarmerDisplayName(found));
                     } else {
-                        Alert.alert('Farmer Not Found', 'No farmer with that UID was found in local records.');
+                        setAlertConfig({
+                            visible: true,
+                            title: 'Farmer Not Found',
+                            message: 'No farmer with that UID was found in local records.',
+                            type: 'error',
+                            buttons: [
+                                {
+                                    text: 'OK',
+                                    onPress: () => {
+                                        setAlertConfig(prev => ({ ...prev, visible: false }));
+                                    }
+                                }
+                            ]
+                        });
                     }
                 }
             });
@@ -2154,7 +1120,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     {isEditing ? '✏️ Edit ' : ''}
                     {currentStepFields.title}
                 </Text>
-                <StepIndicator currentStep={currentStep + 1} totalSteps={steps.length} steps={steps} />
+                <StepIndicator currentStep={currentStep + 1} totalSteps={steps.length} steps={steps} styles={styles} />
 
                 {/* Form Fields - ScrollView now takes available space */}
                 <ScrollView
@@ -2184,14 +1150,14 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                         // Determine field type and render
                         if (field.type === 'yes-no') {
                             const selectedValue = formData[field.key] === true ? 'Yes' : (formData[field.key] === false ? 'No' : '');
-                            return <CustomPicker key={field.key} label={field.label} selectedValue={selectedValue} onValueChange={(v) => updateForm(field.key, v === 'Yes' ? true : false)} items={['Yes', 'No']} />;
+                            return <CustomPicker key={field.key} label={field.label} selectedValue={selectedValue} onValueChange={(v) => updateForm(field.key, v === 'Yes' ? true : false)} items={['Yes', 'No']} styles={styles} />;
                         }
                         if (field.type === 'multi-select') {
                             const items = PICKER_MAP[field.pickerKey] || [];
-                            return <CustomMultiSelect key={field.key} label={field.label} selectedValues={formData[field.key] || []} onValueChange={(v) => updateForm(field.key, v)} items={items} />;
+                            return <CustomMultiSelect key={field.key} label={field.label} selectedValues={formData[field.key] || []} onValueChange={(v) => updateForm(field.key, v)} items={items} styles={styles} />;
                         }
                         if (field.type === 'date') {
-                            return <CustomDatePicker key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} value={formData[field.key]} onChange={(v) => updateForm(field.key, v)} />;
+                            return <CustomDatePicker key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} value={formData[field.key]} onChange={(v) => updateForm(field.key, v)} styles={styles} />;
                         }
                         if (field.type === 'picker') {
                             let items = PICKER_MAP[field.pickerKey] || [];
@@ -2226,7 +1192,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                 items = [userName, 'Other Staff Member'];
                             }
 
-                            return <CustomPicker key={field.key} label={field.label} selectedValue={formData[field.key]} onValueChange={(v) => updateForm(field.key, v)} items={items} />;
+                            return <CustomPicker key={field.key} label={field.label} selectedValue={formData[field.key]} onValueChange={(v) => updateForm(field.key, v)} items={items} styles={styles} />;
                         }
 
                         // Special handling for farmer_uid autocomplete in harvest form
@@ -2245,6 +1211,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                         suggestions={farmersList}
                                         keyboardType={field.keyboardType}
                                         placeholder="Start typing farmer name, ID, or contact..."
+                                        styles={styles}
                                     />
                                     {/* Display selected farmer name below the UID field */}
                                     {formData.farmer_name && (
@@ -2300,6 +1267,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                                 editable={!(isPriceReadOnly || field.readOnly)}
                                 placeholder={field.readOnly ? '' : (field.placeholder || `Enter ${field.label}`)}
                                 error={isFarmer ? farmerErrors[field.key] : harvestErrors[field.key]}
+                                styles={styles}
                             />
                         );
 
@@ -2935,14 +1903,14 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             // Edit mode - populate form
                             handleEdit(r, 'farmer');
                         } else {
-                            // View mode - show detail view
-                            setSelectedFarmer(r);
-                            setViewMode('detail');
+                            // View mode - navigate to detail screen
+                            navigation.navigate('FarmerDetailScreen', { farmer: r });
                         }
                     }}
                     onDelete={(r) => handleDelete(r, 'farmer')}
                     onSyncDraft={(r) => handleSyncDraft(r)}
                     onVoucher={null}
+                    styles={styles}
                 />
             );
         } else {
@@ -2964,9 +1932,8 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             // Edit mode - populate form
                             handleEdit(r, 'harvest');
                         } else {
-                            // View mode - show detail view
-                            setSelectedHarvest(r);
-                            setViewMode('detail');
+                            // View mode - navigate to detail screen
+                            navigation.navigate('FarmerHarvestDetailScreen', { harvest: r, farmersList });
                         }
                     }}
                     onDelete={(r) => handleDelete(r, 'harvest')}
@@ -3014,6 +1981,7 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             source: 'Aggregation' // Indicate where voucher was generated from
                         });
                     }}
+                    styles={styles}
                 />
             );
         }
@@ -3086,42 +2054,12 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                     {viewMode === 'form' && renderFormContent()}
 
                     {viewMode === 'table' && renderTableContent()}
-
-                    {viewMode === 'detail' && activeTab === 'farmers' && selectedFarmer && (
-                        <FarmerDetailView
-                            farmer={selectedFarmer}
-                            onBack={() => {
-                                setSelectedFarmer(null);
-                                setViewMode('table');
-                            }}
-                        />
-                    )}
-
-                    {viewMode === 'detail' && activeTab === 'harvests' && selectedHarvest && (
-                        <HarvestDetailView
-                            harvest={selectedHarvest}
-                            farmersList={farmersList}
-                            onBack={() => {
-                                setSelectedHarvest(null);
-                                setViewMode('table');
-                            }}
-                        />
-                    )}
                 </View>
 
                 </ScrollView>
             </KeyboardAvoidingView>
 
             {/* Modals and Overlays */}
-            {viewMode === 'success' && (
-                <SuccessMessage
-                    message={successMessage}
-                    onExit={() => {
-                        setViewMode('table');
-                        setActiveTab(activeTab); // Keep the current tab (farmers or harvests)
-                    }}
-                />
-            )}
 
             </View>
 
@@ -3152,953 +2090,9 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
     );
 };
 
-
 // ===============================================
-// === 4. STYLESHEET (POLISHED)                ===
+// === STYLES - NOW IMPORTED ===
 // ===============================================
-
-const styles = StyleSheet.create({
-    screen: {
-        flex: 1,
-        backgroundColor: LIGHT_GRAY_BG,
-    },
-    container: {
-        flex: 1,
-        paddingHorizontal: 15,
-        paddingTop: 10,
-    },
-    contentWrapper: {
-        flex: 1, // FIXED: Takes remaining space after tabs/header
-    },
-    contentContainer: {
-        flexGrow: 1,
-        paddingBottom: 100, // Make room for BottomNav
-    },
-    // --- Tabs ---
-    tabContainer: {
-        flexDirection: 'row',
-        marginBottom: 20,
-        backgroundColor: VERY_LIGHT_BROWN,
-        borderRadius: 10,
-        padding: 5,
-    },
-    tabButton: {
-        flex: 1,
-        paddingVertical: 10,
-        alignItems: 'center',
-        borderRadius: 8,
-    },
-    activeTab: {
-        backgroundColor: PRIMARY_BROWN,
-    },
-    tabText: {
-        color: DARK_BROWN,
-        fontWeight: '500',
-        fontFamily: Fonts.regular,
-    },
-    activeTabText: {
-        color: '#fff',
-        fontWeight: '700',
-        fontFamily: Fonts.semiBold,
-    },
-    // --- Forms ---
-    formSection: {
-        flex: 1, // FIXED: Allow form to take available height
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        padding: 15,
-        elevation: 3,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1.41,
-        maxHeight: '100%', // Prevent overflow on small screens
-    },
-    formTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: DARK_BROWN,
-        fontFamily: Fonts.bold,
-        marginBottom: 10,
-    },
-    inputLabel: {
-        fontSize: 14,
-        color: DARK_BROWN,
-        marginBottom: 5,
-        fontWeight: '600',
-        fontFamily: Fonts.semiBold,
-    },
-    textInput: {
-        borderWidth: 1,
-        borderColor: BORDER_LIGHT,
-        borderRadius: 6,
-        padding: 10,
-        backgroundColor: '#fff',
-        fontSize: 14,
-        color: DARK_BROWN,
-        fontFamily: Fonts.regular,
-    },
-    readOnlyInput: {
-        backgroundColor: LIGHT_GRAY_BG,
-        color: TEXT_GRAY,
-    },
-    errorInput: {
-        borderColor: '#d32f2f',
-    },
-    errorText: {
-        color: '#d32f2f',
-        fontSize: 12,
-        marginTop: 4,
-        fontFamily: Fonts.regular,
-    },
-    helperText: {
-        fontSize: 12,
-        color: TEXT_GRAY,
-        fontFamily: Fonts.regular,
-        fontStyle: 'italic',
-        marginTop: 4,
-        marginBottom: 10,
-    },
-    pickerContainer: {
-        borderWidth: 1,
-        borderColor: BORDER_LIGHT,
-        borderRadius: 6,
-        backgroundColor: '#fff',
-        overflow: 'hidden',
-    },
-    pickerButton: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-        backgroundColor: '#fff',
-    },
-    pickerButtonText: {
-        fontSize: 14,
-        color: DARK_BROWN,
-        fontFamily: Fonts.regular,
-        flex: 1,
-    },
-    picker: {
-        height: 50,
-        width: '100%',
-        color: DARK_BROWN,
-        fontFamily: Fonts.regular,
-        display: 'none',
-    },
-    pickerItem: {
-        fontSize: 14,
-        color: DARK_BROWN,
-        fontFamily: Fonts.regular,
-    },
-    // Custom Modal Picker Styles
-    pickerModalContainer: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalPickerContent: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        maxHeight: '60%',
-        width: '80%',
-        maxWidth: 400,
-        elevation: 8,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        overflow: 'hidden',
-    },
-    modalPickerHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: BORDER_LIGHT,
-    },
-    modalPickerTitle: {
-        fontSize: 16,
-        fontWeight: Fonts.weights.bold,
-        color: DARK_BROWN,
-        fontFamily: Fonts.bold,
-    },
-    modalPickerItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        borderBottomWidth: 0.5,
-        borderBottomColor: VERY_LIGHT_BROWN,
-    },
-    modalPickerItemSelected: {
-        backgroundColor: '#fef5f0',
-    },
-    modalPickerItemText: {
-        fontSize: 14,
-        color: DARK_BROWN,
-        fontFamily: Fonts.regular,
-        flex: 1,
-    },
-    modalPickerItemTextSelected: {
-        fontWeight: Fonts.weights.semiBold,
-        fontFamily: Fonts.semiBold,
-        color: PRIMARY_BROWN,
-    },
-    stepFormScroll: {
-        // REMOVED fixed maxHeight to allow proper scrolling on all screen sizes
-        // The form will now flex properly within the available space
-        flex: 1, // Take remaining space in the KeyboardAvoidingView
-    },
-    stepFormContent: {
-        // Content container for ScrollView - adds padding for last items
-        paddingRight: 10,
-        paddingBottom: 20, // Extra space at bottom so last field is visible when keyboard appears
-    },
-    // Date Picker Button
-    datePickerButton: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: BORDER_LIGHT,
-        borderRadius: 6,
-        padding: 10,
-        backgroundColor: '#fff',
-    },
-    datePickerText: {
-        fontSize: 16,
-        color: DARK_BROWN,
-        fontFamily: Fonts.regular,
-    },
-    // Multi-Select Button
-    multiSelectButton: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: BORDER_LIGHT,
-        borderRadius: 6,
-        padding: 10,
-        backgroundColor: '#fff',
-    },
-    multiSelectText: {
-        fontSize: 16,
-        color: DARK_BROWN,
-        flex: 1,
-        fontFamily: Fonts.regular,
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    multiSelectModal: {
-        width: '90%',
-        maxHeight: '80%',
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        padding: 20,
-    },
-    multiSelectScroll: {
-        paddingVertical: 10,
-        maxHeight: 300,
-    },
-    multiSelectItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: LIGHT_GRAY_BG,
-    },
-    multiSelectItemText: {
-        fontSize: 16,
-        color: DARK_BROWN,
-        fontFamily: Fonts.regular,
-    },
-    checkbox: {
-        height: 24,
-        width: 24,
-        borderRadius: 4,
-        borderWidth: 2,
-        borderColor: PRIMARY_BROWN,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    modalCloseButton: {
-        marginTop: 20,
-        padding: 15,
-        backgroundColor: PRIMARY_BROWN,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    modalCloseText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontFamily: Fonts.bold,
-    },
-    // --- Step Indicator ---
-    stepIndicatorContainer: {
-        marginBottom: 24,
-        paddingVertical: 12,
-    },
-    stepCirclesContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-        paddingHorizontal: 8,
-    },
-    stepItemWrapper: {
-        flexDirection: 'column',
-        alignItems: 'center',
-        flex: 1,
-    },
-    stepCircle: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: VERY_LIGHT_BROWN,
-        borderWidth: 2,
-        borderColor: LIGHT_BROWN,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    stepCircleActive: {
-        backgroundColor: PRIMARY_BROWN,
-        borderColor: PRIMARY_BROWN,
-    },
-    stepCircleCompleted: {
-        backgroundColor: PRIMARY_BROWN,
-        borderColor: PRIMARY_BROWN,
-    },
-    stepCircleText: {
-        fontSize: 16,
-        fontWeight: Fonts.weights.bold,
-        color: LIGHT_BROWN,
-        fontFamily: Fonts.bold,
-    },
-    stepCircleTextActive: {
-        color: '#fff',
-    },
-    stepConnector: {
-        position: 'absolute',
-        top: 20,
-        left: '25.5%',
-        width: '100%',
-        height: 2,
-        backgroundColor: VERY_LIGHT_BROWN,
-        marginLeft: '50%',
-        zIndex: 0,
-    },
-    stepConnectorActive: {
-        backgroundColor: PRIMARY_BROWN,
-    },
-    // --- Step Connector for 2-step forms (Harvest) ---
-    stepConnectorTwoStep: {
-        position: 'absolute',
-        top: 20,
-        left: '63%',
-        width: '90%',
-        height: 2,
-        backgroundColor: VERY_LIGHT_BROWN,
-        zIndex: 0,
-    },
-    stepConnectorTwoStepActive: {
-        backgroundColor: PRIMARY_BROWN,
-    },
-    stepLabelsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        paddingHorizontal: 8,
-    },
-    stepLabelWrapper: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    stepLabel: {
-        fontSize: 11,
-        fontWeight: Fonts.weights.semiBold,
-        color: LIGHT_BROWN,
-        textAlign: 'center',
-        fontFamily: Fonts.semiBold,
-        flexWrap: 'wrap',
-        maxWidth: 70,
-    },
-    stepLabelActive: {
-        color: PRIMARY_BROWN,
-        fontWeight: Fonts.weights.bold,
-        fontFamily: Fonts.bold,
-    },
-    // --- Step Navigation ---
-    stepNav: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: 20,
-        paddingHorizontal: 5,
-        gap: 12,
-    },
-    stepButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 8,
-        flex: 1,
-        backgroundColor: 'transparent',
-        borderWidth: 0,
-    },
-    stepButtonText: {
-        color: PRIMARY_BROWN,
-        fontWeight: 'bold',
-        fontFamily: Fonts.bold,
-        fontSize: 14,
-    },
-    prevButtonIcon: {
-        marginRight: 8,
-    },
-    nextButtonIcon: {
-        marginLeft: 8,
-    },
-    nextButton: {
-        backgroundColor: 'transparent',
-        borderWidth: 0,
-    },
-    submitButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 12,
-        borderRadius: 8,
-        flex: 1,
-        backgroundColor: PRIMARY_BROWN,
-        marginHorizontal: 5,
-    },
-    submitButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontFamily: Fonts.bold,
-    },
-    // --- Step Navigation Container & Save Draft ---
-    stepNavContainer: {
-        width: '100%',
-        marginTop: 20,
-        paddingHorizontal: 5,
-        gap: 12,
-    },
-    saveDraftButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 8,
-        backgroundColor: VERY_LIGHT_BROWN,
-        borderWidth: 1,
-        borderColor: PRIMARY_BROWN,
-    },
-    saveDraftButtonText: {
-        color: PRIMARY_BROWN,
-        fontWeight: '600',
-        fontFamily: Fonts.semiBold,
-        fontSize: 14,
-        marginLeft: 6,
-    },
-    generateButton: {
-        marginTop: 5,
-        marginBottom: 10,
-        padding: 12,
-        backgroundColor: VERY_LIGHT_BROWN,
-        borderRadius: 5,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    generateButtonText: {
-        color: PRIMARY_BROWN,
-        fontWeight: '600',
-        fontSize: 12,
-        fontFamily: Fonts.semiBold,
-        textAlign: 'center',
-        lineHeight: 18,
-    },
-    generateButtonSubtext: {
-        color: PRIMARY_BROWN,
-        fontWeight: '400',
-        fontSize: 11,
-        fontFamily: Fonts.regular,
-        textAlign: 'center',
-        lineHeight: 16,
-    },
-    viewRecordsButton: {
-        padding: 10,
-        alignItems: 'center',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: DARK_BROWN,
-    },
-    viewRecordsButtonText: {
-        color: DARK_BROWN,
-        fontWeight: '600',
-        fontFamily: Fonts.semiBold,
-    },
-    // --- Modal/Success ---
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
-    },
-    modal: {
-        width: '80%',
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        padding: 20,
-        alignItems: 'center',
-    },
-    modalTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: DARK_BROWN,
-        fontFamily: Fonts.bold,
-        marginBottom: 10,
-    },
-    modalMessage: {
-        fontSize: 16,
-        textAlign: 'center',
-        color: TEXT_GRAY,
-        fontFamily: Fonts.regular,
-        marginBottom: 20,
-    },
-    modalActions: {
-        width: '100%',
-    },
-    modalButton: {
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    modalButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontFamily: Fonts.bold,
-    },
-    // --- Data List (Replaces Table) ---
-    recordsContainer: {
-        flex: 1,
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        elevation: 3,
-    },
-    tableHeaderSection: {
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: LIGHT_GRAY_BG,
-    },
-    tableTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: DARK_BROWN,
-        fontFamily: Fonts.bold,
-        marginBottom: 10,
-    },
-    backToFormText: {
-        color: PRIMARY_BROWN,
-        fontWeight: '600',
-        fontFamily: Fonts.semiBold,
-        marginTop: 5,
-    },
-    listContainer: {
-        paddingHorizontal: 16,
-        paddingBottom: 20,
-    },
-    dataListItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#fff',
-        paddingVertical: 15,
-        paddingHorizontal: 15,
-        borderRadius: 8,
-        marginBottom: 10,
-        borderLeftWidth: 4,
-        borderLeftColor: PRIMARY_BROWN,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    dataListItemTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: DARK_BROWN,
-        fontFamily: Fonts.bold,
-    },
-    dataListItemUID: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: PRIMARY_BROWN,
-        fontFamily: Fonts.semiBold,
-    },
-    harvestIdButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 4,
-        borderRadius: 4,
-    },
-    dataListItemSubtitle: {
-        fontSize: 13,
-        color: TEXT_GRAY,
-        fontFamily: Fonts.regular,
-        marginTop: 4,
-    },
-    // --- Draft Styles ---
-    draftListItem: {
-        backgroundColor: 'rgba(255, 193, 7, 0.05)', // Subtle yellow background for draft items
-        borderLeftWidth: 4,
-        borderLeftColor: '#FFC107', // Amber/yellow color for draft indicator
-    },
-    draftBadge: {
-        backgroundColor: '#FFC107',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 4,
-        marginLeft: 4,
-    },
-    draftBadgeText: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#fff',
-        fontFamily: Fonts.bold,
-    },
-    draftStepText: {
-        fontSize: 12,
-        color: '#FF9800',
-        fontFamily: Fonts.regular,
-        marginTop: 4,
-        fontStyle: 'italic',
-    },
-    // --- Pending (Submitted but Unsynced) Styles ---
-    pendingListItem: {
-        backgroundColor: CoffeeColors.WHITE,
-        borderLeftWidth: 4,
-        borderLeftColor: LIGHT_BROWN, // Light brown for pending records (matching Harvest styling)
-    },
-    syncStatusInline: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 6,
-    },
-    syncStatusText: {
-        fontSize: 12,
-        fontWeight: '600',
-        fontFamily: Fonts.semiBold,
-        marginLeft: 4,
-    },
-    noRecords: {
-        textAlign: 'center',
-        padding: 20,
-        color: TEXT_GRAY,
-        fontFamily: Fonts.regular,
-    },
-    // --- Search Container ---
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    searchButton: {
-        backgroundColor: PRIMARY_BROWN,
-        width: 48,
-        height: 48,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: -15, // Align with input field (accounts for label spacing)
-        elevation: 2,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1.41,
-    },
-    // --- Action Button ---
-    actionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 12,
-        borderRadius: 8,
-        elevation: 2,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 1.41,
-    },
-    actionButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 16,
-        fontFamily: Fonts.bold,
-    },
-    recordCount: {
-        fontSize: 14,
-        color: TEXT_GRAY,
-        fontWeight: '600',
-        fontFamily: Fonts.semiBold,
-    },
-    // --- Farmer Detail View ---
-    detailViewContainer: {
-        flex: 1,
-        backgroundColor: '#fff',
-        borderRadius: 10,
-        overflow: 'hidden',
-        elevation: 3,
-    },
-    detailHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 16,
-        backgroundColor: PRIMARY_BROWN,
-        borderBottomWidth: 1,
-        borderBottomColor: BORDER_LIGHT,
-    },
-    backButton: {
-        width: 40,
-        height: 40,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: VERY_LIGHT_BROWN,
-        borderRadius: 20,
-    },
-    detailHeaderTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#fff',
-        fontFamily: Fonts.bold,
-        flex: 1,
-        textAlign: 'center',
-    },
-    detailScrollView: {
-        flex: 1,
-    },
-    detailContent: {
-        padding: 16,
-    },
-    detailNameCard: {
-        backgroundColor: '#fef5f0',
-        padding: 20,
-        borderRadius: 12,
-        marginBottom: 20,
-        alignItems: 'center',
-        elevation: 2,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-    },
-    detailFarmerName: {
-        fontSize: 24,
-        fontWeight: '700',
-        color: DARK_BROWN,
-        fontFamily: Fonts.bold,
-        marginBottom: 8,
-        textAlign: 'center',
-    },
-    detailFarmerId: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: PRIMARY_BROWN,
-        fontFamily: Fonts.semiBold,
-    },
-    detailSection: {
-        marginBottom: 24,
-        backgroundColor: LIGHT_GRAY_BG,
-        borderRadius: 10,
-        padding: 16,
-    },
-    detailSectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: DARK_BROWN,
-        fontFamily: Fonts.bold,
-        marginBottom: 12,
-        paddingBottom: 8,
-        borderBottomWidth: 2,
-        borderBottomColor: PRIMARY_BROWN,
-    },
-    detailFieldRow: {
-        flexDirection: 'row',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: BORDER_LIGHT,
-    },
-    detailFieldLabel: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: TEXT_GRAY,
-        fontFamily: Fonts.semiBold,
-        flex: 1,
-    },
-    detailFieldValue: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: DARK_BROWN,
-        fontFamily: Fonts.regular,
-        flex: 2,
-        textAlign: 'right',
-    },
-    // --- Autocomplete Dropdown ---
-    autocompleteDropdown: {
-        position: 'absolute',
-        top: '100%',
-        left: 0,
-        right: 0,
-        backgroundColor: '#fff',
-        borderWidth: 1,
-        borderColor: BORDER_LIGHT,
-        borderRadius: 6,
-        marginTop: 2,
-        maxHeight: 250,
-        elevation: 5,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        zIndex: 1000,
-    },
-    autocompleteScroll: {
-        maxHeight: 200,
-    },
-    autocompleteSuggestion: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: LIGHT_GRAY_BG,
-    },
-    autocompleteName: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: DARK_BROWN,
-        fontFamily: Fonts.semiBold,
-        marginBottom: 4,
-    },
-    autocompleteDetails: {
-        fontSize: 13,
-        color: TEXT_GRAY,
-        fontFamily: Fonts.regular,
-    },
-    autocompleteClose: {
-        padding: 10,
-        alignItems: 'center',
-        borderTopWidth: 1,
-        borderTopColor: LIGHT_GRAY_BG,
-        backgroundColor: VERY_LIGHT_BROWN,
-    },
-    autocompleteCloseText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: PRIMARY_BROWN,
-        fontFamily: Fonts.semiBold,
-    },
-    // --- Farmer Name Display (below autocomplete) ---
-    farmerNameDisplay: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: -10,
-        marginBottom: 15,
-        padding: 10,
-        backgroundColor: VERY_LIGHT_BROWN,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: PRIMARY_BROWN,
-    },
-    farmerNameText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: DARK_BROWN,
-        flex: 1,
-    },
-    // --- Record Actions (Edit/Delete Buttons) ---
-    recordActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginLeft: 12,
-    },
-    iconButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: LIGHT_GRAY_BG,
-        elevation: 1,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 1,
-    },
-    // --- Autocomplete Suggestions Dropdown ---
-    suggestionsDropdown: {
-        position: 'absolute',
-        top: '100%',
-        left: 0,
-        right: 0,
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: VERY_LIGHT_BROWN,
-        marginTop: 4,
-        zIndex: 1000,
-        shadowColor: DARK_BROWN,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 3,
-        elevation: 5,
-        maxHeight: 200,
-    },
-    suggestionItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: VERY_LIGHT_BROWN,
-    },
-    suggestionItemLast: {
-        borderBottomWidth: 0,
-    },
-    suggestionName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: DARK_BROWN,
-        fontFamily: Fonts.semiBold,
-        flex: 1,
-    },
-    suggestionSubtitle: {
-        fontSize: 12,
-        color: TEXT_GRAY,
-        fontFamily: Fonts.regular,
-        marginTop: 2,
-    },
-    suggestionArrow: {
-        marginLeft: 8,
-    },
-});
+// Styles moved to ../styles/aggregationStyles.js and imported at the top
 
 export default AggregationScreen;

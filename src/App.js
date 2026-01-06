@@ -63,6 +63,8 @@ import PaymentVoucherScreen from './features/harvest/screens/PaymentVoucherScree
 
 // Aggregation screens
 import AggregationScreen from './features/Aggregation/screens/AggregationScreen';
+import FarmerDetailScreen from './features/Aggregation/screens/FarmerDetailScreen';
+import FarmerHarvestDetailScreen from './features/Aggregation/screens/FarmerHarvestDetailScreen';
 
 // Processing screens
 import ProcessingTypeScreen from './features/ProcessingScreen/screens/ProcessingTypeScreen';
@@ -209,11 +211,21 @@ const App = () => {
                         options={{ headerShown: false }}
                     />
 
-                    {/* Aggregation screen */}
+                    {/* Aggregation screens */}
                     <Stack.Screen
                         name="Aggregation"
                         component={AggregationScreen}
                         options={{ title: 'Aggregation' }}
+                    />
+                    <Stack.Screen
+                        name="FarmerDetailScreen"
+                        component={FarmerDetailScreen}
+                        options={{ title: 'Farmer Details' }}
+                    />
+                    <Stack.Screen
+                        name="FarmerHarvestDetailScreen"
+                        component={FarmerHarvestDetailScreen}
+                        options={{ title: 'Harvest Details' }}
                     />
 
                     {/* Harvest screens */}

@@ -5,7 +5,9 @@
       "Bash(eas --version:*)",
       "Bash(eas build:*)",
       "Bash(eas init:*)",
-      "Bash(npx react-native log-android:*)"
+      "Bash(npx react-native log-android:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm test:*)"
     ],
     "deny": [],
     "ask": []

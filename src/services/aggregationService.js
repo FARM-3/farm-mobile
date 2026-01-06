@@ -176,7 +176,9 @@ export const submitFarmer = async (data) => {
 
         // Seedling info - strings (FIXED: age_of_seedlings is required)
         source_of_seedlings: data.seedling_source || '',
-        type_of_seedlings: data.seedling_type || '',
+        type_of_seedlings: Array.isArray(data.seedling_type)
+            ? data.seedling_type // Keep as array - Django backend should accept JSON array
+            : (data.seedling_type ? [data.seedling_type] : []), // Convert single value to array
         age_of_seedlings: data.age_of_seedlings && data.age_of_seedlings.trim()
             ? data.age_of_seedlings.trim()
             : 'Not specified', // FIXED: Cannot be blank per Django model
@@ -191,9 +193,12 @@ export const submitFarmer = async (data) => {
         fertilizers: Array.isArray(data.fertilizers)
             ? data.fertilizers.join(', ') // Convert array to comma-separated string
             : (data.fertilizers || ''), // Use as-is if string, or empty string
-        pesticide: Array.isArray(data.pesticides)
-            ? data.pesticides.join(', ') // Convert array to comma-separated string
-            : (data.pesticides || ''), // Use as-is if string, or empty string
+        // Pesticide handling: If uses_pesticides is false or pesticides array is empty, send "None"
+        pesticide: data.uses_pesticides === false
+            ? 'None' // User selected "No" for pesticides
+            : (Array.isArray(data.pesticides)
+                ? (data.pesticides.length > 0 ? data.pesticides.join(', ') : 'None')
+                : (data.pesticides || 'None')), // Use as-is if string, or 'None' as default
     };
 
     console.log('[aggregationService] ========== FARMER SUBMISSION ==========');

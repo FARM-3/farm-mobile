@@ -7,13 +7,28 @@ module.exports = {
   ],
   testPathIgnorePatterns: [
     '/node_modules/',
-    '/\.expo/'
+    '/\.expo/',
+    '/android/',
+    '/ios/'
   ],
+  transformIgnorePatterns: [
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?|@expo|expo-.*|@unimodules|unimodules|sentry-expo|native-base|react-native-svg|@react-navigation|react-navigation))'
+  ],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+  },
   collectCoverageFrom: [
-    '**/*.{js,jsx}',
+    'src/**/*.{js,jsx}',
+    '!src/**/*.test.{js,jsx}',
+    '!src/**/__tests__/**',
     '!**/coverage/**',
     '!**/node_modules/**',
     '!**/babel.config.js',
     '!**/jest.setup.js'
-  ]
+  ],
+  globals: {
+    'ts-jest': {
+      babelConfig: true,
+    },
+  },
 };
