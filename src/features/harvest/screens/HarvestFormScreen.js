@@ -264,11 +264,11 @@ const Step2_DeliveryAndFinance = ({ formData, updateField }) => {
                     value={formData.payLabour || false}
                     onValueChange={(value) => {
                         updateField('payLabour', value);
-                        // Clear payment fields when toggled off
+                        // Set default values for unpaid harvests when toggled off
                         if (!value) {
-                            updateField('pricePerKg', '');
-                            updateField('amountPaid', '');
-                            updateField('paidBy', '');
+                            updateField('pricePerKg', '0');
+                            updateField('amountPaid', '0');
+                            updateField('paidBy', 'Unpaid');
                             updateField('selectedStaff', null);
                         }
                     }}

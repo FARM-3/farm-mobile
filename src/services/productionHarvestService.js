@@ -373,8 +373,11 @@ export const syncAllProductionRecords = async () => {
             validationErrors.push(`Harvest ID is missing (neither id nor harvest_id found)`);
         }
 
+        // Set default paidBy if missing (for unpaid harvests)
         if (!record.paidBy && !record.paid_by && !record.who_paid) {
-            validationErrors.push(`paidBy is missing`);
+            console.log(`[syncAllProductionRecords] paidBy is missing for record ${record.id}, setting default to 'Unpaid'`);
+            record.paidBy = 'Unpaid';
+            record.paid_by = 'Unpaid';
         }
 
         if (!record.workerName && !record.worker_name && !record.name) {
