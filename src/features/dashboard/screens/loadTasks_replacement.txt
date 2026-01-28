@@ -1,0 +1,26 @@
+  const loadTasks = async () => {
+    try {
+      setLoading(true);
+
+      // Load locally created tasks from AsyncStorage
+      const tasksJson = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
+      const localTasks = tasksJson ? JSON.parse(tasksJson) : [];
+
+      // Fetch assigned tasks from API (web app)
+      const { success, tasks: assignedTasks } = await fetchAssignedTasks();
+      const apiTasks = success ? assignedTasks : [];
+
+      // Combine local and assigned tasks
+      const allTasks = [...localTasks, ...apiTasks];
+
+      // Filter tasks for selected date
+      const todayTasks = allTasks.filter(task => task.date === selectedDate);
+
+      console.log('[TaskCalendar] Loaded', localTasks.length, 'local tasks and', apiTasks.length, 'assigned tasks');
+      setTasks(todayTasks);
+    } catch (error) {
+      console.error('[TaskCalendar] Error loading tasks:', error);
+    } finally {
+      setLoading(false);
+    }
+  };

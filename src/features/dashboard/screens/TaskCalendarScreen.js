@@ -30,6 +30,8 @@ import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
 import { fetchBlocks } from '../../../services/blockService';
 import { fetchAllStaff } from '../../../services/staffService';
+import { fetchAssignedTasks } from '../../../services/taskService';
+import TaskDetailModal from '../components/TaskDetailModal';
 
 const TASKS_STORAGE_KEY = 'daily_tasks';
 
@@ -47,7 +49,8 @@ const activityOptions = [
 ];
 
 export default function TaskCalendarScreen({ navigation }) {
-  const [tasks, setTasks] = useState([]);
+  const [tasks, setTasks] = useState([]); // Tasks for selected date
+  const [allTasks, setAllTasks] = useState([]); // All tasks (for calendar highlighting)
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -60,6 +63,10 @@ export default function TaskCalendarScreen({ navigation }) {
     type: 'info',
     buttons: [],
   });
+
+  // Task detail modal state
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [showTaskDetail, setShowTaskDetail] = useState(false);
 
   // New task form state
   const [newTask, setNewTask] = useState({
@@ -160,12 +167,42 @@ export default function TaskCalendarScreen({ navigation }) {
   const loadTasks = async () => {
     try {
       setLoading(true);
+
+      // Load locally created tasks from AsyncStorage
       const tasksJson = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
-      const allTasks = tasksJson ? JSON.parse(tasksJson) : [];
+      const localTasks = tasksJson ? JSON.parse(tasksJson) : [];
+
+      // Fetch assigned tasks from API (web app)
+      console.log('[TaskCalendar] Fetching assigned tasks from API...');
+      const { success, tasks: assignedTasks, error } = await fetchAssignedTasks();
+      const apiTasks = success ? assignedTasks : [];
+
+      console.log('[TaskCalendar] API fetch result:', { success, tasksCount: apiTasks.length, error });
+
+      // DEBUG: Log all assigned tasks
+      if (apiTasks.length > 0) {
+        console.log('[TaskCalendar] Assigned tasks:', JSON.stringify(apiTasks, null, 2));
+      }
+
+      // Combine local and assigned tasks
+      const combinedTasks = [...localTasks, ...apiTasks];
+
+      // Store all tasks for calendar highlighting
+      setAllTasks(combinedTasks);
 
       // Filter tasks for selected date
-      const todayTasks = allTasks.filter(task => task.date === selectedDate);
-      setTasks(todayTasks);
+      const filteredTasks = combinedTasks.filter(task => task.date === selectedDate);
+
+      console.log('[TaskCalendar] Selected date:', selectedDate);
+      console.log('[TaskCalendar] Loaded', localTasks.length, 'local tasks and', apiTasks.length, 'assigned tasks');
+      console.log('[TaskCalendar] Filtered to', filteredTasks.length, 'tasks for selected date');
+
+      // Log all task dates to help debug filtering
+      if (combinedTasks.length > 0) {
+        console.log('[TaskCalendar] All task dates:', combinedTasks.map(t => ({ title: t.title, date: t.date })));
+      }
+
+      setTasks(filteredTasks);
     } catch (error) {
       console.error('[TaskCalendar] Error loading tasks:', error);
     } finally {
@@ -331,6 +368,21 @@ export default function TaskCalendarScreen({ navigation }) {
     return activity ? activity.label : activityId;
   };
 
+  const getStatusBadgeStyle = (status) => {
+    switch (status) {
+      case 'accepted':
+        return { backgroundColor: '#4CAF50' };
+      case 'in_progress':
+        return { backgroundColor: '#2196F3' };
+      case 'completed':
+        return { backgroundColor: '#4CAF50' };
+      case 'rejected':
+        return { backgroundColor: '#F44336' };
+      default:
+        return { backgroundColor: CoffeeColors.GRAY_TEXT };
+    }
+  };
+
   const handleBarCodeScanned = ({ type, data }) => {
     setShowQRScanner(false);
     console.log('[TaskCalendar] QR Code scanned:', data);
@@ -375,14 +427,22 @@ export default function TaskCalendarScreen({ navigation }) {
         />
       </TouchableOpacity>
 
-      <View style={styles.taskContent}>
+      <TouchableOpacity
+        style={styles.taskContent}
+        onPress={() => {
+          setSelectedTask(item);
+          setShowTaskDetail(true);
+        }}
+      >
         <View style={styles.taskHeader}>
           <Text style={[styles.taskTitle, item.completed && styles.taskTitleCompleted]}>
             {item.title}
           </Text>
-          <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
-            <Text style={styles.priorityText}>{item.priority.toUpperCase()}</Text>
-          </View>
+          {item.priority && (
+            <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
+              <Text style={styles.priorityText}>{item.priority.toUpperCase()}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.taskMeta}>
@@ -398,12 +458,22 @@ export default function TaskCalendarScreen({ navigation }) {
           )}
         </View>
 
+        {/* Status Badge */}
+        {item.submission_status && (
+          <View style={[styles.statusBadge, getStatusBadgeStyle(item.submission_status)]}>
+            <Text style={styles.statusBadgeText}>
+              {item.submission_status === 'in_progress' ? 'In Progress' :
+               item.submission_status.charAt(0).toUpperCase() + item.submission_status.slice(1)}
+            </Text>
+          </View>
+        )}
+
         {item.description && (
           <Text style={[styles.taskDescription, item.completed && styles.taskDescriptionCompleted]}>
             {item.description}
           </Text>
         )}
-      </View>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.deleteButton}
@@ -563,22 +633,123 @@ export default function TaskCalendarScreen({ navigation }) {
   const completedCount = tasks.filter(t => t.completed).length;
   const pendingCount = tasks.filter(t => !t.completed).length;
 
+  // Generate dates for the calendar (2 weeks back, 4 weeks forward)
+  const generateCalendarDates = () => {
+    const dates = [];
+    const today = new Date();
+    // Start from 14 days ago
+    for (let i = -14; i <= 28; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+    return dates;
+  };
+
+  const calendarDates = generateCalendarDates();
+
+  const navigateWeek = (direction) => {
+    const current = new Date(selectedDate);
+    current.setDate(current.getDate() + (direction * 7));
+    setSelectedDate(current.toISOString().split('T')[0]);
+  };
+
+  const isToday = (dateStr) => {
+    return dateStr === new Date().toISOString().split('T')[0];
+  };
+
+  const renderCalendarDay = (dateStr) => {
+    const date = new Date(dateStr);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+    const dayNum = date.getDate();
+    const isSelected = dateStr === selectedDate;
+    const today = isToday(dateStr);
+    const hasTasks = allTasks.some(task => task.date === dateStr);
+
+    return (
+      <TouchableOpacity
+        key={dateStr}
+        style={[
+          styles.calendarDay,
+          isSelected && styles.calendarDaySelected,
+          today && !isSelected && styles.calendarDayToday,
+        ]}
+        onPress={() => setSelectedDate(dateStr)}
+      >
+        <Text style={[
+          styles.calendarDayName,
+          isSelected && styles.calendarDayNameSelected,
+        ]}>
+          {dayName}
+        </Text>
+        <Text style={[
+          styles.calendarDayNum,
+          isSelected && styles.calendarDayNumSelected,
+          today && !isSelected && styles.calendarDayNumToday,
+        ]}>
+          {dayNum}
+        </Text>
+        {/* Dot indicator for days with tasks */}
+        {hasTasks && (
+          <View style={[
+            styles.taskIndicatorDot,
+            isSelected && styles.taskIndicatorDotSelected
+          ]} />
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <SimpleHeader title="My Tasks" onBackPress={() => navigation.goBack()} />
 
       <View style={styles.content}>
-        {/* Date Header */}
-        <View style={styles.dateHeader}>
-          <View style={styles.dateInfo}>
-            <Ionicons name="calendar" size={24} color={CoffeeColors.DARK_BROWN} />
-            <Text style={styles.dateText}>{new Date(selectedDate).toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}</Text>
+        {/* Month/Year Header with Navigation */}
+        <View style={styles.calendarHeader}>
+          <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
+            <Ionicons name="chevron-back" size={24} color={CoffeeColors.DARK_BROWN} />
+          </TouchableOpacity>
+          <View style={styles.monthYearContainer}>
+            <Text style={styles.monthYearText}>
+              {new Date(selectedDate).toLocaleDateString('en-US', {
+                month: 'long',
+                year: 'numeric',
+              })}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+              style={styles.todayButton}
+            >
+              <Text style={styles.todayButtonText}>Today</Text>
+            </TouchableOpacity>
           </View>
+          <TouchableOpacity onPress={() => navigateWeek(1)} style={styles.navButton}>
+            <Ionicons name="chevron-forward" size={24} color={CoffeeColors.DARK_BROWN} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Calendar Strip */}
+        <View style={styles.calendarStrip}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.calendarScrollContent}
+          >
+            {calendarDates.map(renderCalendarDay)}
+          </ScrollView>
+        </View>
+
+        {/* Selected Date Display */}
+        <View style={styles.selectedDateHeader}>
+          <Ionicons name="calendar" size={20} color={CoffeeColors.MEDIUM_BROWN} />
+          <Text style={styles.selectedDateText}>
+            {new Date(selectedDate).toLocaleDateString('en-US', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'short',
+            })}
+          </Text>
         </View>
 
         {/* Stats Summary */}
@@ -960,6 +1131,18 @@ export default function TaskCalendarScreen({ navigation }) {
         </Modal>
       )}
 
+      <TaskDetailModal
+        visible={showTaskDetail}
+        task={selectedTask}
+        onClose={() => {
+          setShowTaskDetail(false);
+          setSelectedTask(null);
+        }}
+        onUpdate={() => {
+          loadTasks();
+        }}
+      />
+
       <BottomNav activeScreen="Dashboard" />
 
       <CustomAlert
@@ -1029,6 +1212,120 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
+  // Calendar Header Styles
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: CoffeeColors.WHITE,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginTop: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  navButton: {
+    padding: 8,
+  },
+  monthYearContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  monthYearText: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: Fonts.bold,
+    color: CoffeeColors.DARK_BROWN,
+  },
+  todayButton: {
+    backgroundColor: CoffeeColors.VERY_LIGHT_BROWN,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  todayButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
+    color: CoffeeColors.DARK_BROWN,
+  },
+  // Calendar Strip Styles
+  calendarStrip: {
+    backgroundColor: CoffeeColors.WHITE,
+    paddingVertical: 8,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    shadowColor: CoffeeColors.DARK_BROWN,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  calendarScrollContent: {
+    paddingHorizontal: 8,
+  },
+  calendarDay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    minWidth: 50,
+  },
+  calendarDaySelected: {
+    backgroundColor: CoffeeColors.DARK_BROWN,
+  },
+  calendarDayToday: {
+    borderWidth: 2,
+    borderColor: CoffeeColors.MEDIUM_BROWN,
+  },
+  calendarDayName: {
+    fontSize: 12,
+    fontFamily: Fonts.regular,
+    color: CoffeeColors.GRAY_TEXT,
+    marginBottom: 4,
+  },
+  calendarDayNameSelected: {
+    color: CoffeeColors.WHITE,
+  },
+  calendarDayNum: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
+    color: CoffeeColors.DARK_BROWN,
+  },
+  calendarDayNumSelected: {
+    color: CoffeeColors.WHITE,
+  },
+  calendarDayNumToday: {
+    color: CoffeeColors.MEDIUM_BROWN,
+  },
+  taskIndicatorDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: CoffeeColors.MEDIUM_BROWN,
+    marginTop: 2,
+  },
+  taskIndicatorDotSelected: {
+    backgroundColor: CoffeeColors.WHITE,
+  },
+  // Selected Date Header
+  selectedDateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  selectedDateText: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: CoffeeColors.MEDIUM_BROWN,
+  },
+  // Legacy styles kept for compatibility
   dateHeader: {
     backgroundColor: CoffeeColors.WHITE,
     padding: 16,
@@ -1142,6 +1439,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 4,
+    marginBottom: 4,
+    alignSelf: 'flex-start',
+  },
+  statusBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
   },
   activityTag: {
     flexDirection: 'row',

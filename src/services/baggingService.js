@@ -13,9 +13,12 @@ const API_ENDPOINT = '/processing/bagging/';
 export const fetchAllBaggingRecords = async () => {
     try {
         const response = await ApiService.get(API_ENDPOINT);
+        // ApiService returns axios response: { data, status, ... }
+        const data = response.data;
+        const records = Array.isArray(data) ? data : (data.results || []);
         return {
             success: true,
-            remoteData: response.results || response,
+            remoteData: records,
         };
     } catch (error) {
         console.error('[BaggingService] Fetch error:', error.message);
@@ -81,9 +84,10 @@ export const postBaggingRecord = async (record) => {
 export const updateBaggingRecord = async (id, record) => {
     try {
         const response = await ApiService.patch(`${API_ENDPOINT}${id}/`, record);
+        // ApiService returns axios response: { data, status, ... }
         return {
             success: true,
-            record: response,
+            record: response.data,
         };
     } catch (error) {
         console.error('[BaggingService] Update error:', error.message);
@@ -137,9 +141,10 @@ export const syncAllBaggingRecords = async () => {
                     // Create new record on backend
                     const { id: localId, synced, ...recordData } = record;
                     const response = await ApiService.post(API_ENDPOINT, recordData);
+                    // ApiService returns axios response: { data, status, ... }
                     updatedRecords.push({
                         ...record,
-                        id: response.id,
+                        id: response.data.id,
                         synced: true,
                     });
                     syncedCount++;
@@ -182,8 +187,13 @@ export const syncAllBaggingRecords = async () => {
 export const fetchAvailableLotIds = async () => {
     try {
         const response = await ApiService.get('/processing/drying/');
-        const dryingRecords = response.results || response;
-        const uniqueLots = [...new Set(dryingRecords.map(r => r.lot_id))].sort();
+        // ApiService returns axios response: { data, status, ... }
+        const data = response.data;
+        // Handle paginated or non-paginated responses
+        const dryingRecords = Array.isArray(data) ? data : (data.results || []);
+        console.log('[BaggingService] Drying records fetched:', dryingRecords.length);
+        const uniqueLots = [...new Set(dryingRecords.map(r => r.lot_id).filter(Boolean))].sort();
+        console.log('[BaggingService] Unique lot IDs:', uniqueLots);
         return {
             success: true,
             lots: uniqueLots,
@@ -205,7 +215,9 @@ export const fetchDryingRecordForLot = async (lotId) => {
         const response = await ApiService.get('/processing/drying/', {
             params: { lot_id: lotId },
         });
-        const records = response.results || response;
+        // ApiService returns axios response: { data, status, ... }
+        const data = response.data;
+        const records = Array.isArray(data) ? data : (data.results || []);
         if (records.length === 0) return { success: false, record: null };
 
         // Return the first (earliest) drying record for this lot

@@ -23,6 +23,7 @@ import BottomNav from '../../../components/BottomNav';
 import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
 import { getCurrentWeather, isWeatherDataStale } from '../../../services/WeatherService';
 import { fetchActivities } from '../../../services/ActivityService';
+import { fetchAssignedTasks } from '../../../services/taskService';
 
 // Primary brown color and its shades
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
@@ -52,6 +53,7 @@ const DashboardScreen = ({ navigation }) => {
   const [syncStatus, setSyncStatus] = useState({ pending: 0 });
   const [isSyncing, setIsSyncing] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [taskCounts, setTaskCounts] = useState({ total: 0, unaccepted: 0, completed: 0 });
 
   // Weather state
   const [weather, setWeather] = useState({
@@ -74,6 +76,7 @@ const DashboardScreen = ({ navigation }) => {
       loadDashboardData();
       loadSyncStatus();
       loadWeatherData();
+      loadTaskCounts();
     });
     return unsubscribe;
   }, [navigation]);
@@ -199,6 +202,24 @@ const DashboardScreen = ({ navigation }) => {
     } catch (error) {
       console.error('[Dashboard] Error loading weather:', error);
       setWeather(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const loadTaskCounts = async () => {
+    try {
+      console.log('[Dashboard] Loading task counts...');
+      const { success, tasks } = await fetchAssignedTasks();
+
+      if (success && tasks) {
+        const total = tasks.length;
+        const unaccepted = tasks.filter(t => !t.submission_status || t.submission_status === 'assigned').length;
+        const completed = tasks.filter(t => t.submission_status === 'completed').length;
+
+        setTaskCounts({ total, unaccepted, completed });
+        console.log('[Dashboard] Task counts:', { total, unaccepted, completed });
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error loading task counts:', error);
     }
   };
 
@@ -391,6 +412,11 @@ const DashboardScreen = ({ navigation }) => {
                 >
                   <Ionicons name="calendar-outline" size={22} color="#fff" />
                   <Text style={styles.taskButtonLabel}>Tasks</Text>
+                  {taskCounts.unaccepted > 0 && (
+                    <View style={styles.taskBadge}>
+                      <Text style={styles.taskBadgeText}>{taskCounts.unaccepted}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -496,11 +522,11 @@ const DashboardScreen = ({ navigation }) => {
             <View style={styles.statContent}>
               <View style={styles.statTextContainer}>
                 <Text style={styles.statLabel}>Tasks</Text>
-                <Text style={styles.statValue}>{stats.blocks}</Text>
-                <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>8.5 hectares</Text>
+                <Text style={styles.statValue}>{taskCounts.completed}</Text>
+                <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>{taskCounts.total} total</Text>
               </View>
               <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_BROWN }]}>
-                <Ionicons name="grid" size={22} color={DARK_BROWN} />
+                <Ionicons name="checkmark-done" size={22} color={DARK_BROWN} />
               </View>
             </View>
           </View>
@@ -711,6 +737,24 @@ const styles = StyleSheet.create({
     fontSize: Fonts.sizes.small,
     fontWeight: Fonts.weights.semiBold,
     fontFamily: Fonts.semiBold,
+  },
+  taskBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  taskBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: Fonts.bold,
   },
   headerSubtitle: {
     fontSize: Fonts.sizes.small,

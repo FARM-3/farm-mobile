@@ -154,7 +154,7 @@ export const fetchActivities = async (limit = 20) => {
 
         // 2. Try to fetch from backend
         try {
-            const response = await ApiService.get('activities/', { limit });
+            const response = await ApiService.get('activities/', { limit, platform: 'mobile' });
             if (response.data) {
                 // Handle different response formats
                 let remoteActivities = [];
