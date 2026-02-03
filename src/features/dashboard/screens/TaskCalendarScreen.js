@@ -15,13 +15,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
-// Conditionally import BarCodeScanner - it may not be available in Expo Go
-let BarCodeScanner;
+// Import CameraView from expo-camera for barcode scanning
+let CameraView, useCameraPermissions;
 try {
-  BarCodeScanner = require('expo-barcode-scanner').BarCodeScanner;
+  const camera = require('expo-camera');
+  CameraView = camera.CameraView;
+  useCameraPermissions = camera.useCameraPermissions;
 } catch (e) {
-  console.log('[TaskCalendar] BarCodeScanner not available - using manual input only');
-  BarCodeScanner = null;
+  console.log('[TaskCalendar] expo-camera not available - using manual input only');
+  CameraView = null;
+  useCameraPermissions = null;
 }
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
@@ -151,12 +154,13 @@ export default function TaskCalendarScreen({ navigation }) {
   };
 
   const requestCameraPermission = async () => {
-    if (!BarCodeScanner) {
+    if (!CameraView) {
       setHasPermission(false);
       return;
     }
     try {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      const { Camera } = require('expo-camera');
+      const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === 'granted');
     } catch (error) {
       console.error('[TaskCalendar] Error requesting camera permission:', error);
@@ -907,7 +911,7 @@ export default function TaskCalendarScreen({ navigation }) {
                       </View>
                     )}
                   </View>
-                  {BarCodeScanner && (
+                  {CameraView && (
                     <TouchableOpacity
                       style={styles.qrButton}
                       onPress={() => {
@@ -1164,7 +1168,7 @@ export default function TaskCalendarScreen({ navigation }) {
       )}
 
       {/* QR Scanner Modal - Only show if BarCodeScanner is available */}
-      {BarCodeScanner && (
+      {CameraView && (
         <Modal
           visible={showQRScanner}
           animationType="slide"
@@ -1178,8 +1182,11 @@ export default function TaskCalendarScreen({ navigation }) {
               </TouchableOpacity>
             </View>
             {hasPermission ? (
-              <BarCodeScanner
-                onBarCodeScanned={handleBarCodeScanned}
+              <CameraView
+                onBarcodeScanned={handleBarCodeScanned}
+                barcodeScannerSettings={{
+                  barcodeTypes: ['qr'],
+                }}
                 style={StyleSheet.absoluteFillObject}
               />
             ) : (
