@@ -374,16 +374,18 @@ export default function TaskCalendarScreen({ navigation }) {
 
   const getStatusBadgeStyle = (status) => {
     switch (status) {
+      case 'assigned':
+        return { backgroundColor: CoffeeColors.LIGHT_BROWN };
       case 'accepted':
-        return { backgroundColor: '#4CAF50' };
+        return { backgroundColor: CoffeeColors.MEDIUM_BROWN };
       case 'in_progress':
-        return { backgroundColor: '#2196F3' };
+        return { backgroundColor: CoffeeColors.DARK_BROWN };
       case 'completed':
-        return { backgroundColor: '#4CAF50' };
+        return { backgroundColor: CoffeeColors.VERY_DARK_BROWN };
       case 'rejected':
-        return { backgroundColor: '#F44336' };
+        return { backgroundColor: CoffeeColors.VERY_DARK_BROWN, opacity: 0.7 };
       default:
-        return { backgroundColor: CoffeeColors.GRAY_TEXT };
+        return { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN };
     }
   };
 

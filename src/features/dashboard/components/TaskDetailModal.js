@@ -465,19 +465,20 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
     },
     status_assigned: {
-        backgroundColor: '#FFB74D',
+        backgroundColor: CoffeeColors.LIGHT_BROWN,
     },
     status_accepted: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
     },
     status_in_progress: {
-        backgroundColor: '#2196F3',
+        backgroundColor: CoffeeColors.DARK_BROWN,
     },
     status_completed: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: CoffeeColors.VERY_DARK_BROWN,
     },
     status_rejected: {
-        backgroundColor: '#F44336',
+        backgroundColor: CoffeeColors.VERY_DARK_BROWN,
+        opacity: 0.7,
     },
     statusText: {
         color: '#fff',
@@ -510,16 +511,16 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     acceptButton: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
     },
     rejectButton: {
-        backgroundColor: '#F44336',
+        backgroundColor: CoffeeColors.VERY_DARK_BROWN,
     },
     startButton: {
-        backgroundColor: '#2196F3',
+        backgroundColor: CoffeeColors.DARK_BROWN,
     },
     completeButton: {
-        backgroundColor: '#4CAF50',
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
         marginTop: 16,
     },
     buttonDisabled: {
@@ -587,7 +588,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
         fontFamily: Fonts.semiBold,
-        color: '#4CAF50',
+        color: CoffeeColors.DARK_BROWN,
         textAlign: 'center',
         paddingVertical: 20,
     },
@@ -595,7 +596,7 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
         fontFamily: Fonts.semiBold,
-        color: '#F44336',
+        color: CoffeeColors.VERY_DARK_BROWN,
         textAlign: 'center',
         paddingVertical: 20,
     },
