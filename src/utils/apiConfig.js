@@ -20,7 +20,7 @@
 
 // Get API URL from environment variable
 // Fallback to production URL if not set
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://142.93.94.236:8000/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
 
 // Enable/disable debug logging
 export const DEBUG_MODE = process.env.EXPO_PUBLIC_ENABLE_DEBUG_LOGS === 'true';
@@ -53,7 +53,7 @@ if (ENVIRONMENT === 'PRODUCTION') {
   console.warn('[API Config] ⚠️  Running against production server');
   console.warn('[API Config] If you get network errors, check:');
   console.warn('[API Config]   1. Device has internet access');
-  console.warn('[API Config]   2. IP 142.93.94.236 is accessible from your network');
+  console.warn('[API Config]   2. Backend server is running and reachable');
   console.warn('[API Config]   3. Firewall is not blocking the connection');
   console.warn('[API Config] To debug: Enable EXPO_PUBLIC_ENABLE_DEBUG_LOGS=true in .env');
 }
