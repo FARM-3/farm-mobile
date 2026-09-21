@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
+import BrandLogo from '../../../components/BrandLogo';
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,17 +46,13 @@ export default function WelcomeScreen({ navigation }) {
       <View style={styles.contentContainer}>
         {/* Logo Container */}
         <View style={styles.logoContainer}>
-          <Image
-            source={require('../../../assets/rugyeyo_logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <BrandLogo size="lg" showSubtitle />
         </View>
 
         {/* App Title */}
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>Rugyeyo Farm</Text>
-          <Text style={styles.title}>Management App</Text>
+          <Text style={styles.title}>Farm Management</Text>
+          <Text style={styles.title}>Information System</Text>
           <Text style={styles.subtitle}>
             Manage your coffee farm efficiently
           </Text>

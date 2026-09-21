@@ -361,7 +361,7 @@ export default function HarvestDetailsScreen({ route = {}, navigation }) {
                     onPress={() => navigation.navigate('Harvests')}
                 >
                     <Ionicons name="arrow-back" size={20} color={CoffeeColors.WHITE} />
-                    <Text style={styles.backButtonText}>Back to Rugyeyo Harvests</Text>
+                    <Text style={styles.backButtonText}>Back to Estate Harvests</Text>
                 </TouchableOpacity>
                 {/* Sync Status Banner */}
                 <View style={styles.syncBanner}>

@@ -20,7 +20,7 @@
 
 // Get API URL from environment variable
 // Fallback to production URL if not set
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://farm-api-uvor.onrender.com/api';
 
 // Enable/disable debug logging
 export const DEBUG_MODE = process.env.EXPO_PUBLIC_ENABLE_DEBUG_LOGS === 'true';

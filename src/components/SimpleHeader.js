@@ -39,11 +39,9 @@ const SimpleHeader = ({ title = 'Screen', onBackPress, unsyncedCount = 0, onSync
       </TouchableOpacity>
 
       <View style={styles.logoTitleContainer}>
-        <Image
-          source={require('../assets/rugyeyo_logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <View style={styles.logoBadge}>
+          <Text style={styles.logoBadgeText}>FM</Text>
+        </View>
         <Text style={styles.headerTitle}>{title}</Text>
       </View>
 
@@ -94,10 +92,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginHorizontal: 8,
   },
-  logo: {
-    width: 72,
-    height: 72,
-    marginRight: 12,
+  logoBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoBadgeText: {
+    color: CoffeeColors.WHITE,
+    fontWeight: '700',
+    fontSize: 12,
   },
   headerTitle: {
     fontSize: 16,

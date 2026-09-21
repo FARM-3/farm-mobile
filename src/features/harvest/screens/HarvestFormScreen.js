@@ -99,7 +99,7 @@ const getNextHarvestSequentialSuffix = async () => {
  * Format: XX + DDMM + P + LN
  * - XX: First 2 letters of worker name (uppercase)
  * - DDMM: Day and month of delivery date
- * - P: Production indicator (hardcoded - represents Rugyeyo production)
+ * - P: Production indicator (hardcoded - represents estate production)
  * - LN: Sequential code A0-Z9
  *
  * @param {string} workerName - Name of the worker
@@ -160,7 +160,7 @@ const Step1_WorkerAndBlock = ({ formData, updateField, onDateChange }) => {
 
     return (
         <View style={stepStyles.stepContainer}>
-            <Text style={styles.heading}>1. Rugyeyo Staff & Block Details</Text>
+            <Text style={styles.heading}>1. Staff & Block Details</Text>
 
             <SearchableWorkerPicker
                 label="Worker Name *"
@@ -821,7 +821,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
     // A small placeholder view to navigate back to the summary screen
     const BackButton = () => (
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => navigation.navigate('Harvests')}>
-            <Text style={styles.secondaryBtnText}>Back to Rugyeyo Harvests</Text>
+            <Text style={styles.secondaryBtnText}>Back to Estate Harvests</Text>
         </TouchableOpacity>
     );
 
@@ -835,7 +835,7 @@ export default function HarvestFormScreen({ navigation, route = {} }) {
             >
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
                     {/* Title */}
-                    <Text style={styles.mainTitle}>{isEditMode ? "Edit Harvest Details" : "Rugyeyo Harvest Details"}</Text>
+                    <Text style={styles.mainTitle}>{isEditMode ? "Edit Harvest Details" : "Estate Harvest Details"}</Text>
 
                     {/* Stepper Indicator */}
                     <View style={stepStyles.indicatorContainer}>

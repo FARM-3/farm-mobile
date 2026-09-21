@@ -82,7 +82,7 @@ export const SEEDLING_TYPES = [...ROBUSTA_TYPES, ...ARABICA_TYPES];
 export const GRADES = ['A', 'B', 'C', 'D'];
 export const CHERRY_COLORS = ['Red', 'Yellow', 'Green'];
 export const STAGES = ['dried', 'fresh_cherry'];
-export const LOCATION_ON_DELIVERY_OPTIONS = ['Rugyeyo Farm', 'Other'];
+export const LOCATION_ON_DELIVERY_OPTIONS = ['Main Farm', 'Other'];
 export const PAID_BY_OPTIONS = ['Me', 'Other Staff Member'];
 
 export const PICKER_MAP = {

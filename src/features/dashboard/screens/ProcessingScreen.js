@@ -115,13 +115,15 @@ export default function ProcessingScreen({ navigation }) {
     console.log('[ProcessingScreen] Card pressed:', process.name, 'Screen:', process.screen);
 
     // Navigate to available screens, show "Coming Soon" for others
-    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType' || process.screen === 'Drying' || process.screen === 'Bagging' || process.screen === 'CreateBatch' || process.screen === 'ViewBatches') {
+    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType' || process.screen === 'Drying' || process.screen === 'Bagging' || process.screen === 'Hulling' || process.screen === 'CreateBatch' || process.screen === 'ViewBatches') {
       try {
         let routeName;
         if (process.screen === 'Drying') {
           routeName = 'DryingSummary';
         } else if (process.screen === 'Bagging') {
           routeName = 'BaggingSummary';
+        } else if (process.screen === 'Hulling') {
+          routeName = 'HullingSummary';
         } else {
           routeName = process.screen;
         }

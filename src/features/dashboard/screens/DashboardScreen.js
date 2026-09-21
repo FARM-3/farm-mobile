@@ -18,7 +18,8 @@ import { fetchFarmers, fetchHarvests } from '../../../services/aggregationServic
 import { fetchAllHarvestRecords } from '../../../services/harvestRecord';
 import AuthService from '../../../services/AuthService';
 import SyncService from '../../../services/SyncService';
-import { syncAllRecords, getUnsyncedRecords } from '../../../services/harvestRecord';
+import { getUnsyncedRecords } from '../../../services/harvestRecord';
+import { runAutoSync } from '../../../services/autoSyncService';
 import BottomNav from '../../../components/BottomNav';
 import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
 import { getCurrentWeather, isWeatherDataStale } from '../../../services/WeatherService';
@@ -226,20 +227,13 @@ const DashboardScreen = ({ navigation }) => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const result = await syncAllRecords();
-
-      if (result.totalCount === 0) {
-        Alert.alert('Nothing to Sync', 'All harvest records are already synced.');
-      } else if (result.syncedCount > 0 && result.syncedCount < result.totalCount) {
-        Alert.alert(
-          'Partial Sync',
-          `Synced ${result.syncedCount} of ${result.totalCount} records. Some records failed to sync.`
-        );
-      } else if (result.syncedCount === 0 && result.totalCount > 0) {
-        Alert.alert(
-          'Sync Failed',
-          'Could not sync records. Please check your internet connection and try again.'
-        );
+      const result = await runAutoSync({ silent: false });
+      if (result.skipped && result.reason === 'offline') {
+        Alert.alert('Offline', 'Connect to the internet to sync records.');
+      } else if (result.success) {
+        Alert.alert('Sync complete', 'All pending records were uploaded where possible.');
+      } else {
+        Alert.alert('Sync Failed', result.error || 'Could not sync records.');
       }
       await loadSyncStatus();
     } catch (error) {
@@ -317,7 +311,7 @@ const DashboardScreen = ({ navigation }) => {
   const quickActions = [
     {
       label: 'Record Harvest',
-      sublabel: 'Rugyeyo Harvest',
+      sublabel: 'Estate Harvest',
       color: PRIMARY_BROWN,
       screen: 'HarvestForm',
     },
@@ -340,6 +334,12 @@ const DashboardScreen = ({ navigation }) => {
       sublabel: 'Field data',
       color: PRIMARY_BROWN,
       screen: 'BlockSummary'
+    },
+    {
+      label: 'Field Ops',
+      sublabel: 'Activities & surveillance',
+      color: PRIMARY_BROWN,
+      screen: 'FieldOps'
     }
   ];
 
@@ -349,13 +349,11 @@ const DashboardScreen = ({ navigation }) => {
         <LinearGradient colors={[DARK_BROWN, '#7a3f1a', '#8B4513']} style={styles.header}>
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
-              <Image
-                source={require('../../../assets/rugyeyo_logo.png')}
-                style={styles.loadingLogo}
-                resizeMode="contain"
-              />
+              <View style={styles.logoBadge}>
+                <Text style={styles.logoBadgeText}>FM</Text>
+              </View>
               <View>
-                <Text style={styles.headerTitle}>Rugyeyo Farm</Text>
+                <Text style={styles.headerTitle}>FMIS</Text>
                 <Text style={styles.headerSubtitle}>Hello, {userName}</Text>
               </View>
             </View>
@@ -389,14 +387,11 @@ const DashboardScreen = ({ navigation }) => {
           {/* Top Content */}
           <View style={styles.headerTopContent}>
             <View style={styles.headerGreeting}>
-              {/* Rugyeyo Farm with Logo */}
               <View style={styles.rugyeyoContainer}>
-                <Image
-                  source={require('../../../assets/rugyeyo_logo.png')}
-                  style={styles.headerLogo}
-                  resizeMode="contain"
-                />
-                <Text style={styles.rugyeyoText}>Rugyeyo Farm</Text>
+                <View style={styles.logoBadge}>
+                  <Text style={styles.logoBadgeText}>FM</Text>
+                </View>
+                <Text style={styles.rugyeyoText}>FMIS</Text>
               </View>
 
               {/* Welcome back User with Task Button */}
@@ -644,6 +639,22 @@ const styles = StyleSheet.create({
     color: PRIMARY_BROWN,
     fontWeight: Fonts.weights.semiBold,
     fontFamily: Fonts.semiBold,
+  },
+  logoBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  logoBadgeText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
   loadingLogo: {
     width: 40,

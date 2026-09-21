@@ -645,7 +645,7 @@ export default function ProductionHarvestsScreen({ navigation }) {
     return (
         <View style={{ flex: 1, backgroundColor: CoffeeColors.LIGHT_GRAY }}>
             <SimpleHeader
-                title="Rugyeyo Harvests"
+                title="Estate Harvests"
                 unsyncedCount={unsyncedCount}
                 onSync={handleSyncPress}
                 isSyncing={isSyncing}

@@ -24,6 +24,7 @@ import SearchableStaffPicker from '../../../components/SearchableStaffPicker';
 import CustomAlert from '../../../components/CustomAlert';
 import HarvestActionMenu from '../../../components/HarvestActionMenu';
 import { PICKER_MAP, PARISHES_BY_SUB_COUNTY } from '../../../utils/constants';
+import { loadPickerMap } from '../../../services/configService';
 import { initializeAuth, generateFarmerId, generateHarvestId, fetchFarmers, submitFarmer, fetchHarvests, submitHarvest, deleteFarmer, deleteHarvest } from '../../../utils/firebaseSetup';
 import { formatNumberWithCommas, parseFormattedNumber } from '../../../utils/numberFormatter';
 import { fetchCurrentFarmerPrice } from '../../../services/priceService';
@@ -122,6 +123,13 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
 
     // State for current logged-in user
     const [currentUser, setCurrentUser] = useState(null);
+
+    // Configurable dropdown values (from Settings / API)
+    const [pickerMap, setPickerMap] = useState(PICKER_MAP);
+
+    useEffect(() => {
+        loadPickerMap().then(setPickerMap).catch(() => {});
+    }, []);
 
     // Handle navigation params from Dashboard quick actions and PaymentVoucher back navigation
     useEffect(() => {
@@ -927,9 +935,40 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                 console.log(`[handleHarvestSubmit] Created new harvest draft with ID: ${recordId}`);
             }
 
-            // Save updated drafts array to AsyncStorage
-            await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
-            console.log(`[handleHarvestSubmit] ✅ Harvest saved locally!`);
+            // Sync to API immediately so web dashboard shows the record
+            let syncedToApi = false;
+            try {
+                const apiPayload = {
+                    id: recordId,
+                    harvest_id: recordId,
+                    farmer_uid: harvestForm.farmer_uid || harvestRecord.farmer_uid || '',
+                    farmer_name: harvestForm.farmer_name || '',
+                    weight_on_delivery: harvestRecord.weight_on_delivery,
+                    location_of_delivery: harvestRecord.location_of_delivery || harvestRecord.location_on_delivery || '',
+                    gps_coordinates_delivery: harvestRecord.gps_coordinates_delivery || harvestRecord.gps_coordinates || '',
+                    date_of_delivery: harvestForm.date_of_delivery || harvestRecord.date_of_delivery || '',
+                    coffee_type: harvestRecord.coffee_type || harvestRecord.grade || '',
+                    price_per_kg: harvestRecord.price_per_kg,
+                    amount_paid: harvestRecord.amount_paid,
+                    paid_by: harvestForm.paid_by || harvestRecord.paid_by || '',
+                };
+                await submitHarvest(apiPayload);
+                syncedToApi = true;
+                console.log('[handleHarvestSubmit] ✅ Harvest synced to API');
+
+                // Remove from local draft queue once on server
+                const remainingDrafts = draftsArray.filter(d => d.id !== recordId);
+                if (remainingDrafts.length > 0) {
+                    await AsyncStorage.setItem(storageKey, JSON.stringify(remainingDrafts));
+                } else {
+                    await AsyncStorage.removeItem(storageKey);
+                }
+            } catch (syncError) {
+                console.warn('[handleHarvestSubmit] API sync failed — kept in local queue:', syncError.message);
+                harvestRecord._isSynced = false;
+                harvestRecord._syncStatus = 'pending';
+                await AsyncStorage.setItem(storageKey, JSON.stringify(draftsArray));
+            }
 
             resetForms();
             await loadRecords();
@@ -938,16 +977,23 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
             // Auto-generate voucher
             const voucherData = {
                 ...harvestRecord,
+                harvest_id: recordId,
+                farmer_name: harvestForm.farmer_name || harvestForm.farmer_uid,
                 workerName: harvestForm.farmer_name || harvestForm.farmer_uid,
-                blockId: 'N/A', // Aggregation might not have blocks
-                pricePerKg: harvestRecord.price_per_kg, // Use raw numeric value
-                amountPaid: harvestRecord.amount_paid, // Use raw numeric value
+                blockId: 'N/A',
+                pricePerKg: harvestRecord.price_per_kg,
+                amountPaid: harvestRecord.amount_paid,
+                price_per_kg: harvestRecord.price_per_kg,
+                amount_paid: harvestRecord.amount_paid,
                 paidBy: harvestForm.paid_by,
+                paid_by: harvestForm.paid_by,
                 date: harvestForm.date_of_delivery,
+                date_of_delivery: harvestForm.date_of_delivery,
             };
             onNavigate('PaymentVoucher', {
                 harvestData: voucherData,
-                source: 'Aggregation' // Indicate where voucher was generated from
+                source: 'Aggregation',
+                syncWarning: syncedToApi ? null : 'Saved locally only — sync when online to appear on web.',
             });
         } catch (e) {
             console.error(`[handleHarvestSubmit] ❌ Save error:`, e);
@@ -1153,14 +1199,14 @@ const AggregationScreen = ({ navigation, route, onNavigate: onNavigateProp }) =>
                             return <CustomPicker key={field.key} label={field.label} selectedValue={selectedValue} onValueChange={(v) => updateForm(field.key, v === 'Yes' ? true : false)} items={['Yes', 'No']} styles={styles} />;
                         }
                         if (field.type === 'multi-select') {
-                            const items = PICKER_MAP[field.pickerKey] || [];
+                            const items = pickerMap[field.pickerKey] || [];
                             return <CustomMultiSelect key={field.key} label={field.label} selectedValues={formData[field.key] || []} onValueChange={(v) => updateForm(field.key, v)} items={items} styles={styles} />;
                         }
                         if (field.type === 'date') {
                             return <CustomDatePicker key={field.key} label={`${field.label}${field.required ? ' *' : ''}`} value={formData[field.key]} onChange={(v) => updateForm(field.key, v)} styles={styles} />;
                         }
                         if (field.type === 'picker') {
-                            let items = PICKER_MAP[field.pickerKey] || [];
+                            let items = pickerMap[field.pickerKey] || [];
 
                             // Dynamic filtering for Parish
                             if (field.dynamic && field.pickerKey === 'parish' && formData.sub_county) {

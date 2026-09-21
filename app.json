@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Rugyeyo-fmis",
-    "slug": "rugyeyo-farm-fmis-mobile",
+    "name": "FARM FMIS",
+    "slug": "farm-fmis-mobile",
     "jsEngine": "hermes",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,7 +12,7 @@
     "splash": {
       "image": "./src/assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#4A3423"
     },
     "updates": {
       "enabled": false,
@@ -33,7 +33,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#4A3423"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.fmismobile",

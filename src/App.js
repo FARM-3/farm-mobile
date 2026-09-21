@@ -20,6 +20,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // 2. Import your screens and theme
 import CoffeeColors from './theme/colors';
+import BrandLogo from './components/BrandLogo';
 
 // 3. Import services
 import AuthService from './services/AuthService';
@@ -49,6 +50,11 @@ import ProcessingScreen from './features/dashboard/screens/ProcessingScreen';
 import QualityControlScreen from './features/ProcessingScreen/screens/QualityControlScreen';
 import RipenessScreen from './features/ProcessingScreen/screens/RipenessScreen';
 import FloatingScreen from './features/ProcessingScreen/screens/FloatingScreen';
+
+// Field operations
+import FieldOpsScreen from './features/fieldops/screens/FieldOpsScreen';
+import BlockActivityFormScreen from './features/fieldops/screens/BlockActivityFormScreen';
+import SurveillanceFormScreen from './features/fieldops/screens/SurveillanceFormScreen';
 
 // Block screens
 import BlockDetailsForm from './features/blocks/BlockDetailsForm';
@@ -80,6 +86,9 @@ import DryingSummaryScreen from './features/ProcessingScreen/screens/DryingSumma
 import DryingFormScreen from './features/ProcessingScreen/screens/DryingFormScreen';
 import BaggingSummaryScreen from './features/ProcessingScreen/screens/BaggingSummaryScreen';
 import BaggingFormScreen from './features/ProcessingScreen/screens/BaggingFormScreen';
+import HullingSummaryScreen from './features/ProcessingScreen/screens/HullingSummaryScreen';
+import HullingFormScreen from './features/ProcessingScreen/screens/HullingFormScreen';
+import { startAutoSyncListener } from './services/autoSyncService';
 
 // Initialize the stack navigator
 const Stack = createNativeStackNavigator();
@@ -148,13 +157,19 @@ const App = () => {
         initializeApp();
     }, []);
 
+    useEffect(() => {
+        const stop = startAutoSyncListener();
+        return () => { if (typeof stop === 'function') stop(); };
+    }, []);
+
     // Show loading screen while checking auth or loading fonts
     if (isCheckingAuth || !fontsLoaded) {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <StatusBar style="light" backgroundColor={CoffeeColors.DARK_BROWN} />
                 <View style={[styles.loadingContainer]}>
-                    <ActivityIndicator size="large" color={CoffeeColors.GOLD} />
+                    <BrandLogo size="lg" showSubtitle />
+                    <ActivityIndicator size="large" color={CoffeeColors.GOLD} style={{ marginTop: 24 }} />
                 </View>
             </SafeAreaView>
         );
@@ -201,7 +216,7 @@ const App = () => {
                     <Stack.Screen
                         name="Dashboard"
                         component={DashboardScreen}
-                        options={{ title: 'Rugyeyo Farm Dashboard' }}
+                        options={{ title: 'FARM FMIS Dashboard' }}
                     />
 
                     {/* Task Calendar screen */}
@@ -363,6 +378,23 @@ const App = () => {
                         component={BaggingFormScreen}
                         options={{ title: 'Bagging Form' }}
                     />
+
+                    <Stack.Screen
+                        name="HullingSummary"
+                        component={HullingSummaryScreen}
+                        options={{ title: 'Hulling Records' }}
+                    />
+
+                    <Stack.Screen
+                        name="HullingForm"
+                        component={HullingFormScreen}
+                        options={{ title: 'Hulling Form' }}
+                    />
+
+                    {/* Field operations */}
+                    <Stack.Screen name="FieldOps" component={FieldOpsScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="BlockActivityForm" component={BlockActivityFormScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="SurveillanceForm" component={SurveillanceFormScreen} options={{ headerShown: false }} />
 
                     {/* Block screens */}
                     <Stack.Screen

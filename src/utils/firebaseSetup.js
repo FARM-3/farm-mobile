@@ -315,14 +315,37 @@ export const submitFarmer = async (data) => {
  * Fetches all harvest records from the Django API.
  * Uses JWT authentication automatically via ApiService
  */
+const fetchAllPages = async (endpoint) => {
+    let allResults = [];
+    let nextPath = endpoint;
+
+    while (nextPath) {
+        const response = await ApiService.get(nextPath);
+        const data = response.data;
+        if (Array.isArray(data)) {
+            allResults = allResults.concat(data);
+            break;
+        }
+        allResults = allResults.concat(data.results || []);
+        if (data.next) {
+            try {
+                const nextUrl = new URL(data.next);
+                nextPath = nextUrl.pathname.replace(/^\/api\//, '') + nextUrl.search;
+            } catch {
+                nextPath = data.next.replace(/^.*\/api\//, '');
+            }
+        } else {
+            nextPath = null;
+        }
+    }
+    return allResults;
+};
+
 export const fetchHarvests = async () => {
     try {
         console.log('[firebaseSetup] Fetching harvests...');
-    const response = await ApiService.get('aggregation/farmer-harvest/');
-        console.log('[firebaseSetup] Harvests fetched successfully');
-        let payload = response.data;
-        // If paginated, use results
-        if (payload && Array.isArray(payload.results)) payload = payload.results;
+        const payload = await fetchAllPages('aggregation/farmer-harvest/');
+        console.log('[firebaseSetup] Harvests fetched successfully, count:', payload.length);
 
         // Normalize records to client-side shape expected by AggregationScreen
         const normalized = (Array.isArray(payload) ? payload : []).map(item => {
@@ -417,26 +440,20 @@ export const submitHarvest = async (data) => {
             // OPTIONAL: date_of_delivery (when harvest was delivered)
             date_of_delivery: data.date_of_delivery || null,
 
-            // OPTIONAL: location_of_delivery
-            location_on_delivery: data.location_on_delivery || null,
+            // OPTIONAL: location_of_delivery (correct API field name)
+            location_of_delivery: data.location_of_delivery || data.location_on_delivery || null,
 
             // OPTIONAL: gps_coordinates
-            gps_coordinates_delivery: data.gps_coordinates || null,
+            gps_coordinates_delivery: data.gps_coordinates_delivery || data.gps_coordinates || null,
 
             // OPTIONAL: price_per_kg
             price_per_kg: data.price_per_kg ? Number(data.price_per_kg) : null,
 
-            // OPTIONAL: moisture_content (percentage, collected from form)
-            moisture_content: data.moisture_content ? Number(data.moisture_content) : null,
-
             // OPTIONAL: amount_paid (payment to farmer, expected as string by API)
-            amount_paid: data.amount_paid ? String(data.amount_paid) : null,
+            amount_paid: data.amount_paid != null ? String(data.amount_paid) : null,
 
             // OPTIONAL: paid_by (staff member who processed payment)
             paid_by: data.paid_by || null,
-
-            // OPTIONAL: no_of_bags (number of bags delivered, collected as number_of_bags in form)
-            no_of_bags: data.number_of_bags ? Number(data.number_of_bags) : null,
         };
 
         console.log('[firebaseSetup] Transformed API payload:', JSON.stringify(apiPayload, null, 2));

@@ -47,8 +47,16 @@ const numberToWords = (num) => {
     return num.toString();
 };
 
+const COMPANY = {
+    name: 'FARM FMIS',
+    tagline: 'Coffee Production & Processing',
+    address: 'Demo Estate, Uganda',
+    phone: '+256 700 000 001',
+    email: 'info@farm-demo.com',
+};
+
 const PaymentVoucherScreen = ({ route, navigation }) => {
-    const { harvestData, source } = route.params || {};
+    const { harvestData, source, syncWarning } = route.params || {};
     const [isGenerating, setIsGenerating] = useState(false);
     const [paidByName, setPaidByName] = useState('Staff Member');
     const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info', buttons: [] });
@@ -96,7 +104,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
         weight: `${harvestData?.weight_on_delivery || harvestData?.weight || 0} kg`,
         blockNo: harvestData?.blockId || 'N/A',
         pricePerKg: `UGX ${Number(harvestData?.price_per_kg || harvestData?.pricePerKg || 0).toLocaleString()}`,
-        amount: parseFormattedNumber(harvestData?.amount_paid || harvestData?.amountPaid || 0),
+        amount: Math.max(0, parseFormattedNumber(harvestData?.amount_paid || harvestData?.amountPaid || 0) || 0),
         paidBy: paidByName,
         paymentMethod: 'Mobile Money', // Can be made dynamic
         coffeeType: harvestData?.coffee_type || 'Coffee',
@@ -250,6 +258,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
             color: #8B4513;
             margin-bottom: 12px;
             font-size: 15px;
+            font-weight: bold;
         }
         .harvest-grid {
             display: grid;
@@ -298,13 +307,12 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
     <div class="voucher-container">
         <div class="voucher-header">
             <div class="logo-section">
-                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" class="logo" alt="Rugyeyo Logo" />
+                <div class="logo" style="width:60px;height:60px;border-radius:50%;background:#702A0B;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;">FM</div>
                 <div class="company-info">
-                    <h1>RUGGEYO FARM</h1>
-                    <p>Coffee Production & Processing</p>
-                    <p>Namayumba, Wakiso District, Uganda</p>
-                    <p>Namayumba, Wakiso District, Uganda</p>
-                    <p>Tel: +256772701051 | Email: rkabushenga@gmail.com</p>
+                    <h1>${COMPANY.name}</h1>
+                    <p>${COMPANY.tagline}</p>
+                    <p>${COMPANY.address}</p>
+                    <p>Tel: ${COMPANY.phone} | Email: ${COMPANY.email}</p>
                 </div>
             </div>
             <div class="header-top">
@@ -338,7 +346,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
         </div>
 
         <div class="harvest-details">
-            <h3>📦 Harvest Details</h3>
+            <h3>Harvest Details</h3>
             <div class="harvest-grid">
                 <div class="harvest-item">
                     <span>Harvest ID:</span>
@@ -394,7 +402,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
 
         <div class="footer">
             <p>This is a computer-generated voucher and is valid without signature if verified digitally.</p>
-            <p>© ${new Date().getFullYear()} Ruggeyo Farm. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} ${COMPANY.name}. All rights reserved.</p>
         </div>
     </div>
 </body>
@@ -410,21 +418,20 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
             const html = generateHTML();
             console.log('[PaymentVoucher] HTML generated, creating PDF...');
 
-            const { uri } = await Print.printToFileAsync({ html });
+            const { uri } = await Print.printToFileAsync({
+                html,
+                base64: false,
+            });
             console.log('[PaymentVoucher] PDF created at:', uri);
 
-            // Generate filename with harvest ID and timestamp
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-            const harvestId = harvestData?.harvest_id || harvestData?.id || 'voucher';
-            const filename = `Voucher_${harvestId}_${timestamp}.pdf`;
+            const harvestId = (harvestData?.harvest_id || harvestData?.id || 'voucher').replace(/[^\w-]/g, '_');
 
-            // Just share the PDF directly - works on all platforms
             console.log('[PaymentVoucher] Sharing PDF...');
             if (await Sharing.isAvailableAsync()) {
                 await Sharing.shareAsync(uri, {
                     mimeType: 'application/pdf',
-                    dialogTitle: 'Save or Share Voucher',
-                    UTI: 'com.adobe.pdf'
+                    dialogTitle: `Save Voucher ${harvestId}`,
+                    UTI: 'com.adobe.pdf',
                 });
 
                 setAlertConfig({
@@ -481,17 +488,24 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
         <View style={styles.container}>
             <SimpleHeader title="Payment Voucher" />
             <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+                {syncWarning ? (
+                    <View style={styles.syncWarning}>
+                        <Text style={styles.syncWarningText}>{syncWarning}</Text>
+                    </View>
+                ) : null}
                 {/* Voucher Preview */}
                 <View style={styles.voucherCard}>
                     {/* Header */}
                     <View style={styles.header}>
                         <View style={styles.headerLeft}>
-                            <Image source={require('../../../assets/rugyeyo_logo.png')} style={styles.logo} />
+                            <View style={styles.logoBadge}>
+                                <Text style={styles.logoBadgeText}>FM</Text>
+                            </View>
                             <View style={styles.companyInfo}>
-                                <Text style={styles.companyName}>RUGYEYO FARM</Text>
+                                <Text style={styles.companyName}>FARM FMIS</Text>
                                 <Text style={styles.companySubtitle}>Coffee Production & Processing</Text>
-                                <Text style={styles.companyAddress}>Namayumba, Wakiso District, Uganda</Text>
-                                <Text style={styles.companyContact}>Tel: +256772701051 | Email: rkabushenga@gmail.com</Text>
+                                <Text style={styles.companyAddress}>Demo Estate, Uganda</Text>
+                                <Text style={styles.companyContact}>Tel: +256700000001 | Email: info@farm-demo.com</Text>
                             </View>
                         </View>
                         <View style={styles.headerRight}>
@@ -515,7 +529,7 @@ const PaymentVoucherScreen = ({ route, navigation }) => {
 
                     {/* Harvest Details */}
                     <View style={styles.harvestSection}>
-                        <Text style={styles.sectionTitle}>📦 Harvest Details</Text>
+                        <Text style={styles.sectionTitle}>Harvest Details</Text>
                         <View style={styles.harvestGrid}>
                             <HarvestItem label="Harvest ID" value={voucherData.harvestId} />
                             <HarvestItem label="Delivery Date" value={voucherData.deliveryDate} />
@@ -660,6 +674,18 @@ const styles = StyleSheet.create({
         padding: 16,
         paddingBottom: 100,
     },
+    syncWarning: {
+        backgroundColor: '#FFF3CD',
+        borderColor: '#FFC107',
+        borderWidth: 1,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 12,
+    },
+    syncWarningText: {
+        color: '#856404',
+        fontSize: 13,
+    },
     voucherCard: {
         backgroundColor: 'white',
         borderRadius: 12,
@@ -684,11 +710,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    logo: {
+    logoBadge: {
         width: 50,
         height: 50,
+        borderRadius: 25,
         marginRight: 12,
-        resizeMode: 'contain',
+        backgroundColor: '#F0EAD6',
+        borderWidth: 2,
+        borderColor: '#BCAAA4',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    logoBadgeText: {
+        color: CoffeeColors.PRIMARY_BROWN,
+        fontWeight: '700',
+        fontSize: 16,
     },
     companyInfo: {
         flex: 1,

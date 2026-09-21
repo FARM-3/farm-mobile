@@ -13,7 +13,7 @@ import CustomAlert from './CustomAlert';
  * Unified Header Component
  * Used across all screens for consistent design
  */
-const Header = ({ title = 'Rugyeyo Farm', navigation: propNavigation, onNavigate, showSync = true, showLogout = true }) => {
+const Header = ({ title = 'FARM FMIS', navigation: propNavigation, onNavigate, showSync = true, showLogout = true }) => {
   // Use either passed navigation prop or hook
   const hookNavigation = useNavigation();
   const route = useRoute();
@@ -176,11 +176,9 @@ const Header = ({ title = 'Rugyeyo Farm', navigation: propNavigation, onNavigate
   return (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
-        <Image
-          source={require('../assets/rugyeyo_logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <View style={styles.logoBadge}>
+          <Text style={styles.logoBadgeText}>FM</Text>
+        </View>
         <Text style={styles.headerTitle}>{title}</Text>
       </View>
 
@@ -250,10 +248,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  logo: {
-    width: 48,
-    height: 48,
+  logoBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     marginRight: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoBadgeText: {
+    color: CoffeeColors.CREAM,
+    fontWeight: '700',
+    fontSize: 14,
   },
   headerTitle: {
     fontSize: 20,
