@@ -32,7 +32,7 @@ const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
 const DARK_BROWN = CoffeeColors.DARK_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
 
-const HEADER_HEIGHT = 158; // Brown header only — weather sits in scroll content
+const HEADER_HEIGHT = 210; // Brown header — must match actual header height so scroll content clears it
 const SCROLL_THRESHOLD = 10;
 
 const DashboardScreen = ({ navigation }) => {
@@ -397,8 +397,9 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.rugyeyoText}>FMIS</Text>
               </View>
 
-              <Text style={styles.headerMainText} numberOfLines={2}>
-                Hello, {userName}
+              <Text style={styles.helloLabel}>Hello,</Text>
+              <Text style={styles.userNameText} numberOfLines={2}>
+                {userName}
               </Text>
             </View>
             <View style={styles.headerActions}>
@@ -443,7 +444,7 @@ const DashboardScreen = ({ navigation }) => {
       </Animated.View>
 
       <Animated.ScrollView
-        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 8, paddingBottom: 20 }]}
+        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 28, paddingBottom: 20 }]}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -707,14 +708,21 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
-  headerMainText: {
-    fontSize: Fonts.sizes.large,
-    lineHeight: 24,
+  helloLabel: {
+    fontSize: Fonts.sizes.regular,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontFamily: Fonts.regular,
+    fontWeight: Fonts.weights.regular,
+    marginTop: 2,
+  },
+  userNameText: {
+    fontSize: Fonts.sizes.xlarge,
+    lineHeight: 28,
     color: '#fff',
     fontFamily: Fonts.semiBold,
     fontWeight: Fonts.weights.semiBold,
-    marginTop: 4,
-    paddingRight: 8,
+    marginTop: 2,
+    paddingRight: 4,
   },
   taskButton: {
     flexDirection: 'row',
@@ -801,7 +809,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   weatherCardContainerScroll: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   scrollViewContent: {
     padding: 20,
@@ -861,6 +869,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginTop: 36,
     marginBottom: 20,
   },
   statCard: {
