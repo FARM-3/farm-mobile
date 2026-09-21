@@ -9,6 +9,7 @@ import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
 import CustomPicker from '../../../components/CustomPicker';
 import { postHullingRecord, fetchAvailableLotIds, syncAllHullingRecords } from '../../../services/hullingService';
+import { fetchAllStaff } from '../../../services/staffService';
 
 function formatDateForApi(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -19,14 +20,19 @@ export default function HullingFormScreen({ navigation }) {
     lot_id: '', weight_before: '', weight_after: '', outturn: '', screen_size: '', staff_id: '', date: new Date(),
   });
   const [lots, setLots] = useState([]);
+  const [staffOptions, setStaffOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState({ visible: false, title: '', message: '', type: 'info' });
 
   useEffect(() => {
     (async () => {
-      const res = await fetchAvailableLotIds();
-      setLots(res.lots || []);
+      const [lotRes, staffRes] = await Promise.all([
+        fetchAvailableLotIds(),
+        fetchAllStaff(),
+      ]);
+      setLots(lotRes.lots || []);
+      setStaffOptions(staffRes.success ? staffRes.staff : []);
       setLoading(false);
     })();
   }, []);
@@ -91,7 +97,6 @@ export default function HullingFormScreen({ navigation }) {
             ['weight_after', 'Weight after (kg)'],
             ['outturn', 'Outturn (%)'],
             ['screen_size', 'Screen size'],
-            ['staff_id', 'Staff ID'],
           ].map(([key, label]) => (
             <View key={key}>
               <Text style={styles.label}>{label}</Text>
@@ -103,6 +108,18 @@ export default function HullingFormScreen({ navigation }) {
               />
             </View>
           ))}
+          <Text style={styles.label}>Staff member</Text>
+          <CustomPicker
+            selectedValue={form.staff_id}
+            onValueChange={v => setForm(f => ({ ...f, staff_id: v }))}
+            items={[
+              { label: 'Select staff member…', value: '' },
+              ...staffOptions.map(s => ({
+                label: `${s.id} — ${s.displayName}`,
+                value: String(s.id),
+              })),
+            ]}
+          />
           <TouchableOpacity style={styles.btn} onPress={save} disabled={saving}>
             <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save hulling record'}</Text>
           </TouchableOpacity>

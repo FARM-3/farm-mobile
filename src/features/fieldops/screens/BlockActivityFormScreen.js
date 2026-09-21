@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as ImagePicker from 'expo-image-picker';
 import SimpleHeader from '../../../components/SimpleHeader';
 import BottomNav from '../../../components/BottomNav';
 import CustomPicker from '../../../components/CustomPicker';
@@ -13,12 +12,14 @@ import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import { loadPickerMap } from '../../../services/configService';
 import { fetchBlocks, submitBlockActivity } from '../../../services/fieldOpsService';
+import { pickPhotoWithOptions } from '../../../utils/photoPicker';
 
 const LOG_TYPES = [
   { label: 'Farm practice', value: 'practice' },
   { label: 'Input application', value: 'input' },
   { label: 'Scouting', value: 'scouting' },
   { label: 'Maintenance', value: 'maintenance' },
+  { label: 'Other', value: 'other' },
 ];
 
 const INPUT_TYPES = [
@@ -28,6 +29,7 @@ const INPUT_TYPES = [
   { label: 'Other', value: 'other' },
 ];
 
+const OTHER_PRACTICE = '__other__';
 const WEATHER = ['sunny', 'cloudy', 'rainy', 'windy'];
 
 export default function BlockActivityFormScreen({ navigation }) {
@@ -38,9 +40,9 @@ export default function BlockActivityFormScreen({ navigation }) {
   const [photoUri, setPhotoUri] = useState(null);
   const [alert, setAlert] = useState({ visible: false, title: '', message: '' });
   const [form, setForm] = useState({
-    block_id: '', log_type: 'practice', title: '', description: '',
-    practices: [], input_type: 'fertilizer', input_name: '', quantity: '', unit: 'kg',
-    activity_date: new Date(), weather_conditions: [], notes: '', harvest_id: '',
+    block_id: '', log_type: 'practice', log_type_other: '', title: '', description: '',
+    practices: [], practice_other: '', input_type: 'fertilizer', input_name: '', input_type_other: '',
+    quantity: '', unit: 'kg', activity_date: new Date(), weather_conditions: [], notes: '', harvest_id: '',
   });
 
   useEffect(() => {
@@ -55,18 +57,17 @@ export default function BlockActivityFormScreen({ navigation }) {
     })();
   }, []);
 
-  const pickPhoto = async () => {
-    const res = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (!res.canceled) setPhotoUri(res.assets[0].uri);
-  };
+  const practiceItems = useMemo(
+    () => [...pickers.practices, { label: 'Other (specify)', value: OTHER_PRACTICE }],
+    [pickers.practices],
+  );
 
-  const toggleWeather = (w) => {
-    setForm(f => ({
-      ...f,
-      weather_conditions: f.weather_conditions.includes(w)
-        ? f.weather_conditions.filter(x => x !== w)
-        : [...f.weather_conditions, w],
-    }));
+  const buildPractices = () => {
+    const list = form.practices.filter(p => p !== OTHER_PRACTICE);
+    if (form.practices.includes(OTHER_PRACTICE) && form.practice_other.trim()) {
+      list.push(form.practice_other.trim());
+    }
+    return list;
   };
 
   const save = async () => {
@@ -74,16 +75,30 @@ export default function BlockActivityFormScreen({ navigation }) {
       setAlert({ visible: true, title: 'Required', message: 'Block and title are required.' });
       return;
     }
+    if (form.log_type === 'other' && !form.log_type_other.trim()) {
+      setAlert({ visible: true, title: 'Required', message: 'Please describe the activity type.' });
+      return;
+    }
+    if (form.log_type === 'input' && form.input_type === 'other' && !form.input_type_other.trim() && !form.input_name.trim()) {
+      setAlert({ visible: true, title: 'Required', message: 'Please specify the input type/name.' });
+      return;
+    }
     setLoading(true);
+    const inputName = form.input_type === 'other'
+      ? (form.input_type_other.trim() || form.input_name.trim())
+      : form.input_name;
     const payload = {
       log_id: `BAL-${Date.now().toString().slice(-8)}`,
       block_id: form.block_id,
       log_type: form.log_type,
       title: form.title.trim(),
-      description: form.description,
-      practices: form.practices,
+      description: [
+        form.log_type === 'other' ? `Activity type: ${form.log_type_other.trim()}` : '',
+        form.description,
+      ].filter(Boolean).join('\n'),
+      practices: buildPractices(),
       input_type: form.log_type === 'input' ? form.input_type : '',
-      input_name: form.log_type === 'input' ? form.input_name : '',
+      input_name: form.log_type === 'input' ? inputName : '',
       quantity: form.quantity || '',
       unit: form.unit,
       activity_date: form.activity_date.toISOString().slice(0, 10),
@@ -101,7 +116,10 @@ export default function BlockActivityFormScreen({ navigation }) {
         : 'Saved locally — will sync when online.',
     });
     if (result.success) {
-      setForm(f => ({ ...f, title: '', description: '', practices: [], notes: '', harvest_id: '' }));
+      setForm(f => ({
+        ...f, title: '', description: '', practices: [], practice_other: '',
+        log_type_other: '', input_type_other: '', notes: '', harvest_id: '',
+      }));
       setPhotoUri(null);
     }
   };
@@ -112,23 +130,46 @@ export default function BlockActivityFormScreen({ navigation }) {
       <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         <CustomPicker label="Block *" selectedValue={form.block_id} items={[{ label: 'Select block', value: '' }, ...blocks]} onValueChange={v => setForm(f => ({ ...f, block_id: v }))} />
         <CustomPicker label="Activity type" selectedValue={form.log_type} items={LOG_TYPES} onValueChange={v => setForm(f => ({ ...f, log_type: v }))} />
+        {form.log_type === 'other' && (
+          <>
+            <Text style={styles.label}>Specify activity type *</Text>
+            <TextInput style={styles.input} value={form.log_type_other} onChangeText={t => setForm(f => ({ ...f, log_type_other: t }))} placeholder="e.g. Soil sampling, mulching..." />
+          </>
+        )}
         <Text style={styles.label}>Title *</Text>
         <TextInput style={styles.input} value={form.title} onChangeText={t => setForm(f => ({ ...f, title: t }))} placeholder="e.g. NPK application" />
 
         {form.log_type === 'practice' && (
-          <MultiSelectPicker label="Practices applied" items={pickers.practices} selectedValues={form.practices} onValueChange={v => setForm(f => ({ ...f, practices: v }))} />
+          <>
+            <MultiSelectPicker label="Practices applied" items={practiceItems} selectedValues={form.practices} onValueChange={v => setForm(f => ({ ...f, practices: v }))} />
+            {form.practices.includes(OTHER_PRACTICE) && (
+              <>
+                <Text style={styles.label}>Other practice *</Text>
+                <TextInput style={styles.input} value={form.practice_other} onChangeText={t => setForm(f => ({ ...f, practice_other: t }))} placeholder="Describe the practice" />
+              </>
+            )}
+          </>
         )}
 
         {form.log_type === 'input' && (
           <>
             <CustomPicker label="Input type" selectedValue={form.input_type} items={INPUT_TYPES} onValueChange={v => setForm(f => ({ ...f, input_type: v }))} />
-            <CustomPicker
-              label="Input name"
-              selectedValue={form.input_name}
-              items={[{ label: 'Select or type below', value: '' }, ...(form.input_type === 'pesticide' ? pickers.pesticides : pickers.fertilizers)]}
-              onValueChange={v => setForm(f => ({ ...f, input_name: v }))}
-            />
-            <TextInput style={styles.input} value={form.input_name} onChangeText={t => setForm(f => ({ ...f, input_name: t }))} placeholder="Input product name" />
+            {form.input_type === 'other' ? (
+              <>
+                <Text style={styles.label}>Specify input *</Text>
+                <TextInput style={styles.input} value={form.input_type_other} onChangeText={t => setForm(f => ({ ...f, input_type_other: t }))} placeholder="Input product or type" />
+              </>
+            ) : (
+              <>
+                <CustomPicker
+                  label="Input name"
+                  selectedValue={form.input_name}
+                  items={[{ label: 'Select or type below', value: '' }, ...(form.input_type === 'pesticide' ? pickers.pesticides : pickers.fertilizers)]}
+                  onValueChange={v => setForm(f => ({ ...f, input_name: v }))}
+                />
+                <TextInput style={styles.input} value={form.input_name} onChangeText={t => setForm(f => ({ ...f, input_name: t }))} placeholder="Input product name" />
+              </>
+            )}
             <View style={styles.row}>
               <TextInput style={[styles.input, { flex: 1 }]} value={form.quantity} onChangeText={t => setForm(f => ({ ...f, quantity: t }))} placeholder="Qty" keyboardType="decimal-pad" />
               <TextInput style={[styles.input, { flex: 1, marginLeft: 8 }]} value={form.unit} onChangeText={t => setForm(f => ({ ...f, unit: t }))} placeholder="Unit (kg, L)" />
@@ -147,7 +188,12 @@ export default function BlockActivityFormScreen({ navigation }) {
         <Text style={styles.label}>Weather</Text>
         <View style={styles.chips}>
           {WEATHER.map(w => (
-            <TouchableOpacity key={w} style={[styles.chip, form.weather_conditions.includes(w) && styles.chipActive]} onPress={() => toggleWeather(w)}>
+            <TouchableOpacity key={w} style={[styles.chip, form.weather_conditions.includes(w) && styles.chipActive]} onPress={() => setForm(f => ({
+              ...f,
+              weather_conditions: f.weather_conditions.includes(w)
+                ? f.weather_conditions.filter(x => x !== w)
+                : [...f.weather_conditions, w],
+            }))}>
               <Text style={[styles.chipText, form.weather_conditions.includes(w) && styles.chipTextActive]}>{w}</Text>
             </TouchableOpacity>
           ))}
@@ -157,8 +203,8 @@ export default function BlockActivityFormScreen({ navigation }) {
         <TextInput style={styles.input} value={form.harvest_id} onChangeText={t => setForm(f => ({ ...f, harvest_id: t }))} placeholder="FH-DEMO001" />
         <TextInput style={[styles.input, { minHeight: 70 }]} multiline value={form.notes} onChangeText={t => setForm(f => ({ ...f, notes: t }))} placeholder="Notes" />
 
-        <TouchableOpacity style={styles.photoBtn} onPress={pickPhoto}>
-          <Text style={styles.photoBtnText}>{photoUri ? 'Photo attached ✓' : 'Add photo evidence'}</Text>
+        <TouchableOpacity style={styles.photoBtn} onPress={() => pickPhotoWithOptions(setPhotoUri)}>
+          <Text style={styles.photoBtnText}>{photoUri ? 'Photo attached ✓ — tap to change' : 'Add photo evidence (camera or gallery)'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.saveBtn} onPress={save} disabled={loading}>
@@ -166,12 +212,7 @@ export default function BlockActivityFormScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
       <BottomNav activeScreen="Dashboard" />
-      <CustomAlert
-        visible={alert.visible}
-        title={alert.title}
-        message={alert.message}
-        buttons={[{ text: 'OK', onPress: () => setAlert(a => ({ ...a, visible: false })) }]}
-      />
+      <CustomAlert visible={alert.visible} title={alert.title} message={alert.message} buttons={[{ text: 'OK', onPress: () => setAlert(a => ({ ...a, visible: false })) }]} />
     </View>
   );
 }
@@ -188,7 +229,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, textTransform: 'capitalize' },
   chipTextActive: { color: '#fff' },
   photoBtn: { marginTop: 16, padding: 14, borderRadius: 8, borderWidth: 1, borderColor: CoffeeColors.PRIMARY_BROWN, alignItems: 'center' },
-  photoBtnText: { color: CoffeeColors.PRIMARY_BROWN, fontFamily: Fonts.semiBold },
+  photoBtnText: { color: CoffeeColors.PRIMARY_BROWN, fontFamily: Fonts.semiBold, textAlign: 'center' },
   saveBtn: { marginTop: 20, backgroundColor: CoffeeColors.PRIMARY_BROWN, padding: 16, borderRadius: 10, alignItems: 'center' },
   saveText: { color: '#fff', fontFamily: Fonts.semiBold, fontSize: 16 },
 });

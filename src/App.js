@@ -25,6 +25,7 @@ import BrandLogo from './components/BrandLogo';
 // 3. Import services
 import AuthService from './services/AuthService';
 import DatabaseService from './services/DatabaseService';
+import { isSessionActive } from './services/sessionService';
 
 // TEMPORARY: Helper function to reset the app and see Welcome screen
 // Call this from console: global.resetApp()
@@ -136,8 +137,8 @@ const App = () => {
                 // Check if user is already logged in
                 const isAuthenticated = await AuthService.isAuthenticated();
 
-                if (isAuthenticated) {
-                    console.log('[App] User is authenticated, setting Dashboard as initial route');
+                if (isAuthenticated && isSessionActive()) {
+                    console.log('[App] Active session, setting Dashboard as initial route');
                     setInitialRoute('Dashboard');
                 } else if (hasSeenWelcome === 'true') {
                     console.log('[App] User has seen welcome, setting Login as initial route');

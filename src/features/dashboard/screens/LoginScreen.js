@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from "@expo/vector-icons";
 import AuthService from "../../../services/AuthService";
 import ApiService from "../../../services/ApiService";
+import { setSessionActive } from "../../../services/sessionService";
 import Fonts from "../../../theme/fonts";
 import CoffeeColors from "../../../theme/colors";
 
@@ -136,6 +137,7 @@ export default function LoginScreen({ navigation }) {
         } else {
           // Already set up: go straight to dashboard
           console.log('[LoginScreen] Security questions already set - going to dashboard');
+          setSessionActive(true);
           navigation.replace('Dashboard');
         }
       }, 500);

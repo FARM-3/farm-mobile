@@ -23,6 +23,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from "@expo/vector-icons";
 import AuthService from "../../../services/AuthService";
+import { setSessionActive } from "../../../services/sessionService";
 import Fonts from "../../../theme/fonts";
 import CoffeeColors from "../../../theme/colors";
 
@@ -181,6 +182,7 @@ export default function SecurityQuestionsScreen({ navigation, route }) {
         // Navigate to Dashboard after a short delay
         setTimeout(() => {
           setSubmitting(false);
+          setSessionActive(true);
           navigation.replace('Dashboard');
         }, 1000);
       } else {

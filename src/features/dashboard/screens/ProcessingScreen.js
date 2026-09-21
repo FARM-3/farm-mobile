@@ -93,21 +93,21 @@ export default function ProcessingScreen({ navigation }) {
     },
     {
       id: 6,
+      name: 'Hulling',
+      icon: 'grain',
+      lastRecorded: `Last Recorded by ${userName}`,
+      time: currentTime,
+      screen: 'Hulling',
+      color: '#795548', // Brown — optional, before bagging
+    },
+    {
+      id: 7,
       name: 'Bagging',
       icon: 'package-variant-closed',
       lastRecorded: `Last Recorded by ${userName}`,
       time: currentTime,
       screen: 'Bagging',
       color: '#9C27B0', // Purple
-    },
-    {
-      id: 7,
-      name: 'Hulling',
-      icon: 'grain',
-      lastRecorded: `Last Recorded by ${userName}`,
-      time: currentTime,
-      screen: 'Hulling',
-      color: '#795548', // Brown
     },
   ];
 

@@ -25,14 +25,15 @@ import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
 import { getCurrentWeather, isWeatherDataStale } from '../../../services/WeatherService';
 import { fetchActivities } from '../../../services/ActivityService';
 import { fetchAssignedTasks } from '../../../services/taskService';
+import { setSessionActive } from '../../../services/sessionService';
 
 // Primary brown color and its shades
 const PRIMARY_BROWN = CoffeeColors.PRIMARY_BROWN;
 const DARK_BROWN = CoffeeColors.DARK_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
 
-const HEADER_HEIGHT = 330; // Header + Weather card height
-const SCROLL_THRESHOLD = 10; // Minimum scroll distance to trigger hide/show
+const HEADER_HEIGHT = 158; // Brown header only — weather sits in scroll content
+const SCROLL_THRESHOLD = 10;
 
 const DashboardScreen = ({ navigation }) => {
   const [userName, setUserName] = useState('User');
@@ -252,6 +253,8 @@ const DashboardScreen = ({ navigation }) => {
     try {
       console.log('[Dashboard] Starting logout process...');
 
+      setSessionActive(false);
+
       // Clear all authentication tokens and data
       await AuthService.logout();
       console.log('[Dashboard] Tokens cleared');
@@ -394,28 +397,24 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.rugyeyoText}>FMIS</Text>
               </View>
 
-              {/* Welcome back User with Task Button */}
-              <View style={styles.greetingRow}>
-                <Text style={styles.headerMainText}>
-                  <Text style={styles.headerBold}>Hello, </Text>
-                  <Text style={styles.headerLight}>{userName}</Text>
-                </Text>
-                <TouchableOpacity
-                  style={styles.taskButton}
-                  onPress={() => navigation.navigate('TaskCalendar')}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="calendar-outline" size={22} color="#fff" />
-                  <Text style={styles.taskButtonLabel}>Tasks</Text>
-                  {taskCounts.unaccepted > 0 && (
-                    <View style={styles.taskBadge}>
-                      <Text style={styles.taskBadgeText}>{taskCounts.unaccepted}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.headerMainText} numberOfLines={2}>
+                Hello, {userName}
+              </Text>
             </View>
             <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.taskButton}
+                onPress={() => navigation.navigate('TaskCalendar')}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="calendar-outline" size={18} color="#fff" />
+                <Text style={styles.taskButtonLabel}>Tasks</Text>
+                {taskCounts.unaccepted > 0 && (
+                  <View style={styles.taskBadge}>
+                    <Text style={styles.taskBadgeText}>{taskCounts.unaccepted}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.headerButton}
                 onPress={handleSync}
@@ -441,9 +440,16 @@ const DashboardScreen = ({ navigation }) => {
           {/* Subtitle */}
           <Text style={styles.headerSubtitle}>Track your farm operations and performance</Text>
         </LinearGradient>
+      </Animated.View>
 
-        {/* Weather Widget */}
-        <View style={styles.weatherCardContainer}>
+      <Animated.ScrollView
+        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 8, paddingBottom: 20 }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
+        {/* Weather Widget — in scroll so stat cards are not covered */}
+        <View style={styles.weatherCardContainerScroll}>
           <TouchableOpacity
             style={styles.weatherCard}
             onPress={loadWeatherData}
@@ -477,14 +483,7 @@ const DashboardScreen = ({ navigation }) => {
             </View>
           </TouchableOpacity>
         </View>
-      </Animated.View>
 
-      <Animated.ScrollView
-        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 100, paddingBottom: 20 }]}
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
         {/* Stats Overview */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
@@ -641,9 +640,9 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
   },
   logoBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.3)',
@@ -669,11 +668,11 @@ const styles = StyleSheet.create({
     zIndex: 1000,
   },
   header: {
-    paddingTop: 50,
-    paddingBottom: 80,
-    paddingHorizontal: 20,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
+    paddingTop: 44,
+    paddingBottom: 20,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     shadowColor: PRIMARY_BROWN,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
@@ -685,12 +684,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   rugyeyoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
     gap: 8,
   },
   headerLogo: {
@@ -698,7 +697,7 @@ const styles = StyleSheet.create({
     height: 80,
   },
   rugyeyoText: {
-    fontSize: Fonts.sizes.extraLarge,
+    fontSize: Fonts.sizes.large,
     fontWeight: Fonts.weights.bold,
     fontFamily: Fonts.bold,
     color: '#fff',
@@ -708,40 +707,28 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
-  greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   headerMainText: {
-    fontSize: Fonts.sizes.huge,
-    lineHeight: 36,
+    fontSize: Fonts.sizes.large,
+    lineHeight: 24,
     color: '#fff',
-    fontFamily: Fonts.regular,
-    flex: 1,
-  },
-  headerBold: {
-    fontWeight: Fonts.weights.bold,
-    fontSize: Fonts.sizes.huge,
-    fontFamily: Fonts.bold,
-  },
-  headerLight: {
-    fontWeight: Fonts.weights.regular,
-    fontSize: Fonts.sizes.huge,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontFamily: Fonts.regular,
+    fontFamily: Fonts.semiBold,
+    fontWeight: Fonts.weights.semiBold,
+    marginTop: 4,
+    paddingRight: 8,
   },
   taskButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 14,
+    height: 40,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-    gap: 6,
-    marginLeft: 8,
+    gap: 4,
+    flexShrink: 0,
+    marginLeft: 4,
   },
   taskButtonLabel: {
     color: '#fff',
@@ -776,7 +763,9 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
   },
   headerButton: {
     width: 40,
@@ -811,9 +800,8 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  weatherCardContainer: {
-    paddingHorizontal: 20,
-    marginTop: -60,
+  weatherCardContainerScroll: {
+    marginBottom: 16,
   },
   scrollViewContent: {
     padding: 20,
@@ -821,8 +809,8 @@ const styles = StyleSheet.create({
   },
   weatherCard: {
     backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 18,
+    padding: 14,
     shadowColor: PRIMARY_BROWN,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
@@ -844,7 +832,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
   },
   weatherTemp: {
-    fontSize: Fonts.sizes.massive,
+    fontSize: Fonts.sizes.xxlarge,
     fontWeight: Fonts.weights.bold,
     color: CoffeeColors.DARK_BROWN,
     marginBottom: 4,
