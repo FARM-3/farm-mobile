@@ -38,6 +38,12 @@ import TaskDetailModal from '../components/TaskDetailModal';
 
 const TASKS_STORAGE_KEY = 'daily_tasks';
 
+const normalizeDate = (d) => {
+  if (!d) return '';
+  if (typeof d === 'string') return d.slice(0, 10);
+  return d;
+};
+
 const activityOptions = [
   { id: 'harvest', label: 'Harvest Recording', icon: 'leaf' },
   { id: 'aggregation', label: 'Farmer Aggregation', icon: 'people' },
@@ -52,7 +58,8 @@ const activityOptions = [
 ];
 
 export default function TaskCalendarScreen({ navigation }) {
-  const [tasks, setTasks] = useState([]); // Tasks for selected date
+  const [tasks, setTasks] = useState([]); // Local tasks for selected date
+  const [assignedTasks, setAssignedTasks] = useState([]); // All tasks assigned from web/MIS
   const [allTasks, setAllTasks] = useState([]); // All tasks (for calendar highlighting)
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -104,6 +111,13 @@ export default function TaskCalendarScreen({ navigation }) {
   useEffect(() => {
     loadTasks();
   }, [selectedDate]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadTasks();
+    });
+    return unsubscribe;
+  }, [navigation, selectedDate]);
 
   useEffect(() => {
     loadBlocksFromAPI();
@@ -178,35 +192,27 @@ export default function TaskCalendarScreen({ navigation }) {
 
       // Fetch assigned tasks from API (web app)
       console.log('[TaskCalendar] Fetching assigned tasks from API...');
-      const { success, tasks: assignedTasks, error } = await fetchAssignedTasks();
-      const apiTasks = success ? assignedTasks : [];
+      const { success, tasks: assignedFromApi, error } = await fetchAssignedTasks();
+      const apiTasks = (success ? assignedFromApi : []).map(t => ({
+        ...t,
+        isAssigned: true,
+        date: normalizeDate(t.date),
+      }));
 
       console.log('[TaskCalendar] API fetch result:', { success, tasksCount: apiTasks.length, error });
 
-      // DEBUG: Log all assigned tasks
-      if (apiTasks.length > 0) {
-        console.log('[TaskCalendar] Assigned tasks:', JSON.stringify(apiTasks, null, 2));
-      }
+      setAssignedTasks(apiTasks);
 
-      // Combine local and assigned tasks
-      const combinedTasks = [...localTasks, ...apiTasks];
+      const localForDate = localTasks
+        .map(t => ({ ...t, date: normalizeDate(t.date) }))
+        .filter(task => task.date === selectedDate);
 
-      // Store all tasks for calendar highlighting
+      const combinedTasks = [...localTasks.map(t => ({ ...t, date: normalizeDate(t.date) })), ...apiTasks];
       setAllTasks(combinedTasks);
-
-      // Filter tasks for selected date
-      const filteredTasks = combinedTasks.filter(task => task.date === selectedDate);
+      setTasks(localForDate);
 
       console.log('[TaskCalendar] Selected date:', selectedDate);
-      console.log('[TaskCalendar] Loaded', localTasks.length, 'local tasks and', apiTasks.length, 'assigned tasks');
-      console.log('[TaskCalendar] Filtered to', filteredTasks.length, 'tasks for selected date');
-
-      // Log all task dates to help debug filtering
-      if (combinedTasks.length > 0) {
-        console.log('[TaskCalendar] All task dates:', combinedTasks.map(t => ({ title: t.title, date: t.date })));
-      }
-
-      setTasks(filteredTasks);
+      console.log('[TaskCalendar] Assigned:', apiTasks.length, 'Local for date:', localForDate.length);
     } catch (error) {
       console.error('[TaskCalendar] Error loading tasks:', error);
     } finally {
@@ -444,6 +450,11 @@ export default function TaskCalendarScreen({ navigation }) {
           <Text style={[styles.taskTitle, item.completed && styles.taskTitleCompleted]}>
             {item.title}
           </Text>
+          {item.isAssigned && (
+            <View style={[styles.priorityBadge, { backgroundColor: '#8B5A3C' }]}>
+              <Text style={styles.priorityText}>ASSIGNED</Text>
+            </View>
+          )}
           {item.priority && (
             <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
               <Text style={styles.priorityText}>{item.priority.toUpperCase()}</Text>
@@ -460,6 +471,12 @@ export default function TaskCalendarScreen({ navigation }) {
             <View style={styles.timeTag}>
               <Ionicons name="time-outline" size={14} color={CoffeeColors.MEDIUM_BROWN} />
               <Text style={styles.timeText}>{item.time}</Text>
+            </View>
+          )}
+          {item.isAssigned && item.date && (
+            <View style={styles.timeTag}>
+              <Ionicons name="calendar-outline" size={14} color={CoffeeColors.MEDIUM_BROWN} />
+              <Text style={styles.timeText}>{item.date}</Text>
             </View>
           )}
         </View>
@@ -636,8 +653,9 @@ export default function TaskCalendarScreen({ navigation }) {
     </Modal>
   );
 
-  const completedCount = tasks.filter(t => t.completed).length;
-  const pendingCount = tasks.filter(t => !t.completed).length;
+  const allVisibleTasks = [...assignedTasks, ...tasks];
+  const completedCount = allVisibleTasks.filter(t => t.completed).length;
+  const pendingCount = allVisibleTasks.filter(t => !t.completed).length;
 
   // Generate dates for the calendar (2 weeks back, 4 weeks forward)
   const generateCalendarDates = () => {
@@ -784,20 +802,33 @@ export default function TaskCalendarScreen({ navigation }) {
             <ActivityIndicator size="large" color={CoffeeColors.DARK_BROWN} />
             <Text style={styles.loadingText}>Loading tasks...</Text>
           </View>
-        ) : tasks.length === 0 ? (
+        ) : assignedTasks.length === 0 && tasks.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="calendar-outline" size={64} color={CoffeeColors.MEDIUM_BROWN} />
-            <Text style={styles.emptyText}>No tasks for today</Text>
-            <Text style={styles.emptySubtext}>Tap the + button to add a new task</Text>
+            <Text style={styles.emptyText}>No tasks yet</Text>
+            <Text style={styles.emptySubtext}>
+              Assigned tasks from the web app appear here. Ask your manager to assign tasks using your staff name.
+            </Text>
           </View>
         ) : (
-          <FlatList
-            data={tasks}
-            renderItem={renderTaskItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.taskList}
-            showsVerticalScrollIndicator={false}
-          />
+          <ScrollView contentContainerStyle={styles.taskList} showsVerticalScrollIndicator={false}>
+            {assignedTasks.length > 0 && (
+              <View style={styles.taskSection}>
+                <Text style={styles.sectionTitle}>Assigned to you</Text>
+                {assignedTasks.map(item => (
+                  <View key={`assigned-${item.id}`}>{renderTaskItem({ item })}</View>
+                ))}
+              </View>
+            )}
+            {tasks.length > 0 && (
+              <View style={styles.taskSection}>
+                <Text style={styles.sectionTitle}>Your tasks for this date</Text>
+                {tasks.map(item => (
+                  <View key={item.id}>{renderTaskItem({ item })}</View>
+                ))}
+              </View>
+            )}
+          </ScrollView>
         )}
 
         {/* Add Task Button */}
@@ -1531,6 +1562,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: CoffeeColors.MEDIUM_BROWN,
     fontFamily: Fonts.regular,
+  },
+  taskSection: {
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: Fonts.sizes.regular,
+    fontWeight: Fonts.weights.semiBold,
+    fontFamily: Fonts.semiBold,
+    color: CoffeeColors.DARK_BROWN,
+    marginBottom: 10,
   },
   emptyContainer: {
     flex: 1,
