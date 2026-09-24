@@ -109,13 +109,22 @@ export default function ProcessingScreen({ navigation }) {
       screen: 'Bagging',
       color: '#9C27B0', // Purple
     },
+    {
+      id: 8,
+      name: 'Scan Lot',
+      icon: 'qrcode-scan',
+      lastRecorded: 'QR → full trace history',
+      time: 'Export',
+      screen: 'ScanLotTrace',
+      color: '#607D8B',
+    },
   ];
 
   const handleCardPress = (process) => {
     console.log('[ProcessingScreen] Card pressed:', process.name, 'Screen:', process.screen);
 
     // Navigate to available screens, show "Coming Soon" for others
-    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType' || process.screen === 'Drying' || process.screen === 'Bagging' || process.screen === 'Hulling' || process.screen === 'CreateBatch' || process.screen === 'ViewBatches') {
+    if (process.screen === 'QualityControl' || process.screen === 'ProcessingType' || process.screen === 'Drying' || process.screen === 'Bagging' || process.screen === 'Hulling' || process.screen === 'CreateBatch' || process.screen === 'ViewBatches' || process.screen === 'ScanLotTrace') {
       try {
         let routeName;
         if (process.screen === 'Drying') {

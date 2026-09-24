@@ -9,6 +9,7 @@ import CustomAlert from '../../../components/CustomAlert';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import { fetchBlocks, submitSurveillanceReport } from '../../../services/fieldOpsService';
+import { buildSyncAlert } from '../../../utils/syncFeedback';
 import { pickPhotoWithOptions } from '../../../utils/photoPicker';
 
 const SEVERITY = [
@@ -71,13 +72,14 @@ export default function SurveillanceFormScreen({ navigation }) {
     };
     const result = await submitSurveillanceReport(payload, photoUri);
     setLoading(false);
-    setAlert({
-      visible: true,
-      title: result.success ? 'Report submitted' : 'Queued offline',
-      message: result.success
-        ? 'Surveillance report sent. Check Task Management → Surveillance on web.'
-        : 'Saved locally — will sync when online.',
+    const alertMsg = buildSyncAlert({
+      synced: result.success,
+      offline: result.offline,
+      error: result.error,
+      successOnline: 'Surveillance report synced. Check Task Management → Surveillance on web.',
+      successOffline: 'Saved locally — will sync automatically when online.',
     });
+    setAlert({ visible: true, title: alertMsg.title, message: alertMsg.message });
     if (result.success) navigation.goBack();
   };
 

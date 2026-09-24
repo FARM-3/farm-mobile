@@ -6,6 +6,35 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TASK_SUBMISSIONS_STORAGE_KEY = 'task_submissions';
 
+/** Normalize legacy 'accepted' → 'pending' for display and counts */
+export const normalizeTaskStatus = (status) => {
+    if (!status || status === 'assigned') return 'assigned';
+    if (status === 'accepted') return 'pending';
+    return status;
+};
+
+export const formatTaskStatusLabel = (status) => {
+    const s = normalizeTaskStatus(status);
+    const labels = {
+        assigned: 'Assigned',
+        pending: 'Pending',
+        in_progress: 'In Progress',
+        completed: 'Completed',
+        rejected: 'Rejected',
+    };
+    return labels[s] || s;
+};
+
+export const isTaskNotStarted = (task) => {
+    const s = normalizeTaskStatus(task?.submission_status || 'assigned');
+    return s === 'assigned' || s === 'pending';
+};
+
+export const isTaskIncomplete = (task) => {
+    const s = normalizeTaskStatus(task?.submission_status || 'assigned');
+    return s !== 'completed' && s !== 'rejected';
+};
+
 /**
  * Fetch tasks assigned to the current user from the backend
  * These are tasks created in the web app
@@ -79,21 +108,37 @@ export const saveSubmissionLocally = async (submission) => {
         const stored = await AsyncStorage.getItem(TASK_SUBMISSIONS_STORAGE_KEY);
         const submissions = stored ? JSON.parse(stored) : [];
 
-        // Add submission with local ID and sync status
         const newSubmission = {
             ...submission,
             localId: Date.now().toString(),
             isSynced: false,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
         };
 
-        submissions.push(newSubmission);
+        // One submission row per assigned task — update in place on accept/start/complete
+        const existingIdx = submission.assigned_task_id
+            ? submissions.findIndex(s => s.assigned_task_id === submission.assigned_task_id)
+            : -1;
+
+        let savedSubmission;
+        if (existingIdx >= 0) {
+            savedSubmission = {
+                ...submissions[existingIdx],
+                ...submission,
+                isSynced: false,
+            };
+            submissions[existingIdx] = savedSubmission;
+        } else {
+            savedSubmission = newSubmission;
+            submissions.push(savedSubmission);
+        }
+
         await AsyncStorage.setItem(TASK_SUBMISSIONS_STORAGE_KEY, JSON.stringify(submissions));
 
-        console.log('[TaskService] Saved submission locally:', newSubmission.localId);
+        console.log('[TaskService] Saved submission locally:', savedSubmission.localId);
         return {
             success: true,
-            submission: newSubmission
+            submission: savedSubmission,
         };
     } catch (error) {
         console.error('[TaskService] Error saving submission locally:', error);
@@ -169,13 +214,11 @@ export const syncTaskSubmissions = async () => {
                     }
                 }
 
-                // Upload to backend
                 console.log('[TaskService] Syncing submission:', submission.localId);
-                const response = await ApiService.post('/tasks/submissions/', formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    }
-                });
+                const uploadHeaders = { 'Content-Type': 'multipart/form-data' };
+                const response = submission.serverId
+                    ? await ApiService.patch(`/tasks/submissions/${submission.serverId}/`, formData, { headers: uploadHeaders })
+                    : await ApiService.post('/tasks/submissions/', formData, { headers: uploadHeaders });
 
                 // ApiService returns axios response: { data, status, ... }
                 if (response.data) {

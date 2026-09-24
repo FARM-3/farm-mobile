@@ -12,6 +12,7 @@ import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
 import { loadPickerMap } from '../../../services/configService';
 import { fetchBlocks, submitBlockActivity } from '../../../services/fieldOpsService';
+import { buildSyncAlert } from '../../../utils/syncFeedback';
 import { pickPhotoWithOptions } from '../../../utils/photoPicker';
 
 const LOG_TYPES = [
@@ -34,14 +35,25 @@ const WEATHER = ['sunny', 'cloudy', 'rainy', 'windy'];
 
 export default function BlockActivityFormScreen({ navigation }) {
   const [blocks, setBlocks] = useState([]);
-  const [pickers, setPickers] = useState({ practices: [], fertilizers: [], pesticides: [] });
+  const [pickers, setPickers] = useState({
+    practices: [], fertilizers: [], pesticides: [], fertilizerTypes: [],
+    organicProducts: [], inorganicProducts: [], mixedProducts: [],
+  });
   const [loading, setLoading] = useState(false);
   const [showDate, setShowDate] = useState(false);
   const [photoUri, setPhotoUri] = useState(null);
   const [alert, setAlert] = useState({ visible: false, title: '', message: '' });
+  const SCOPE_OPTIONS = [
+    { label: 'Specific block', value: 'block' },
+    { label: 'Whole farm / general', value: 'farm' },
+    { label: 'Nursery', value: 'nursery' },
+    { label: 'Processing area', value: 'processing' },
+    { label: 'Other location', value: 'other' },
+  ];
+
   const [form, setForm] = useState({
-    block_id: '', log_type: 'practice', log_type_other: '', title: '', description: '',
-    practices: [], practice_other: '', input_type: 'fertilizer', input_name: '', input_type_other: '',
+    activity_scope: 'block', location_label: '', block_id: '', log_type: 'practice', log_type_other: '', title: '', description: '',
+    practices: [], practice_other: '', input_type: 'fertilizer', fertilizer_category: '', input_name: '', input_type_other: '',
     quantity: '', unit: 'kg', activity_date: new Date(), weather_conditions: [], notes: '', harvest_id: '',
   });
 
@@ -49,10 +61,24 @@ export default function BlockActivityFormScreen({ navigation }) {
     (async () => {
       const [b, p] = await Promise.all([fetchBlocks(), loadPickerMap()]);
       setBlocks((b.blocks || []).map(x => ({ label: x.block_id, value: x.block_id })));
+      const types = p.fertilizer_types || [];
+      const organic = p.fertilizer_organic || [];
+      const inorganic = p.fertilizer_inorganic || [];
+      const mixed = p.fertilizer_mixed || [];
+      const allFerts = [...organic, ...inorganic, ...mixed, ...(p.fertilizers || [])];
+      const toItems = (list) => (list || []).map(v => ({ label: v, value: v }));
       setPickers({
-        practices: (p.practices || []).map(v => ({ label: v, value: v })),
-        fertilizers: (p.fertilizers || []).map(v => ({ label: v, value: v })),
-        pesticides: (p.pesticides || []).map(v => ({ label: v, value: v })),
+        practices: toItems(p.practices),
+        fertilizers: [...new Set(allFerts)].map(v => ({ label: v, value: v })),
+        pesticides: toItems(p.pesticides),
+        organicProducts: toItems(organic),
+        inorganicProducts: toItems(inorganic),
+        mixedProducts: toItems(mixed),
+        fertilizerTypes: types.map(t => ({
+          label: t.name,
+          value: t.name.toLowerCase(),
+          products: (t.sub_types || []).filter(s => s.is_active !== false).map(s => ({ label: s.name, value: s.name })),
+        })),
       });
     })();
   }, []);
@@ -61,6 +87,34 @@ export default function BlockActivityFormScreen({ navigation }) {
     () => [...pickers.practices, { label: 'Other (specify)', value: OTHER_PRACTICE }],
     [pickers.practices],
   );
+
+  const fertilizerCategoryItems = useMemo(() => {
+    if (pickers.fertilizerTypes.length) {
+      return [{ label: 'Select category', value: '' }, ...pickers.fertilizerTypes.map(t => ({ label: t.label, value: t.value }))];
+    }
+    return [
+      { label: 'Select category', value: '' },
+      { label: 'Organic', value: 'organic' },
+      { label: 'Inorganic', value: 'inorganic' },
+      { label: 'Mixed', value: 'mixed' },
+    ];
+  }, [pickers.fertilizerTypes]);
+
+  const fertilizerProductItems = useMemo(() => {
+    const cat = form.fertilizer_category;
+    if (!cat) return [{ label: 'Select category first', value: '' }];
+    const fromApi = pickers.fertilizerTypes.find(t => t.value === cat);
+    if (fromApi?.products?.length) {
+      return [{ label: 'Select product', value: '' }, ...fromApi.products, { label: 'Other (type below)', value: '__other__' }];
+    }
+    const flatMap = {
+      organic: pickers.organicProducts,
+      inorganic: pickers.inorganicProducts,
+      mixed: pickers.mixedProducts,
+    };
+    const fallback = flatMap[cat]?.length ? flatMap[cat] : pickers.fertilizers;
+    return [{ label: 'Select product', value: '' }, ...fallback, { label: 'Other (type below)', value: '__other__' }];
+  }, [form.fertilizer_category, pickers]);
 
   const buildPractices = () => {
     const list = form.practices.filter(p => p !== OTHER_PRACTICE);
@@ -71,8 +125,16 @@ export default function BlockActivityFormScreen({ navigation }) {
   };
 
   const save = async () => {
-    if (!form.block_id || !form.title.trim()) {
-      setAlert({ visible: true, title: 'Required', message: 'Block and title are required.' });
+    if (!form.title.trim()) {
+      setAlert({ visible: true, title: 'Required', message: 'Title is required.' });
+      return;
+    }
+    if (form.activity_scope === 'block' && !form.block_id) {
+      setAlert({ visible: true, title: 'Required', message: 'Select a block for block-specific activities.' });
+      return;
+    }
+    if (form.activity_scope !== 'block' && !form.location_label.trim() && !form.block_id) {
+      setAlert({ visible: true, title: 'Required', message: 'Enter a location label (e.g. Main nursery, fuel store).' });
       return;
     }
     if (form.log_type === 'other' && !form.log_type_other.trim()) {
@@ -87,9 +149,14 @@ export default function BlockActivityFormScreen({ navigation }) {
     const inputName = form.input_type === 'other'
       ? (form.input_type_other.trim() || form.input_name.trim())
       : form.input_name;
+    const fertilizerNote = form.input_type === 'fertilizer' && form.fertilizer_category
+      ? `Category: ${form.fertilizer_category}`
+      : '';
     const payload = {
       log_id: `BAL-${Date.now().toString().slice(-8)}`,
-      block_id: form.block_id,
+      activity_scope: form.activity_scope,
+      location_label: form.location_label.trim(),
+      block_id: form.activity_scope === 'block' ? form.block_id : (form.block_id || ''),
       log_type: form.log_type,
       title: form.title.trim(),
       description: [
@@ -103,32 +170,38 @@ export default function BlockActivityFormScreen({ navigation }) {
       unit: form.unit,
       activity_date: form.activity_date.toISOString().slice(0, 10),
       weather_conditions: form.weather_conditions,
-      notes: form.notes,
+      notes: [fertilizerNote, form.notes].filter(Boolean).join('\n'),
       harvest_id: form.harvest_id,
     };
     const result = await submitBlockActivity(payload, photoUri);
     setLoading(false);
-    setAlert({
-      visible: true,
-      title: result.success ? 'Saved' : 'Queued offline',
-      message: result.success
-        ? 'Block activity logged. Visible on web Block Activities & Trace Report.'
-        : 'Saved locally — will sync when online.',
+    const alertMsg = buildSyncAlert({
+      synced: result.success,
+      offline: result.offline,
+      error: result.error,
+      successOnline: 'Field activity synced. Visible on web Field Activities & Trace Report.',
+      successOffline: 'Saved locally — will sync automatically when online.',
     });
+    setAlert({ visible: true, title: alertMsg.title, message: alertMsg.message });
     if (result.success) {
-      setForm(f => ({
-        ...f, title: '', description: '', practices: [], practice_other: '',
-        log_type_other: '', input_type_other: '', notes: '', harvest_id: '',
-      }));
-      setPhotoUri(null);
+      navigation.goBack();
     }
   };
 
   return (
     <View style={styles.container}>
-      <SimpleHeader title="Log Block Activity" onBackPress={() => navigation.goBack()} />
+      <SimpleHeader title="Log Field Activity" onBackPress={() => navigation.goBack()} />
       <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-        <CustomPicker label="Block *" selectedValue={form.block_id} items={[{ label: 'Select block', value: '' }, ...blocks]} onValueChange={v => setForm(f => ({ ...f, block_id: v }))} />
+        <CustomPicker label="Where did this happen?" selectedValue={form.activity_scope} items={SCOPE_OPTIONS} onValueChange={v => setForm(f => ({ ...f, activity_scope: v, block_id: v === 'block' ? f.block_id : '' }))} />
+        {form.activity_scope === 'block' ? (
+          <CustomPicker label="Block *" selectedValue={form.block_id} items={[{ label: 'Select block', value: '' }, ...blocks]} onValueChange={v => setForm(f => ({ ...f, block_id: v }))} />
+        ) : (
+          <>
+            <Text style={styles.label}>Location *</Text>
+            <TextInput style={styles.input} value={form.location_label} onChangeText={t => setForm(f => ({ ...f, location_label: t }))} placeholder="e.g. Main nursery, workshop, estate road..." />
+            <CustomPicker label="Link to block (optional)" selectedValue={form.block_id} items={[{ label: 'None', value: '' }, ...blocks]} onValueChange={v => setForm(f => ({ ...f, block_id: v }))} />
+          </>
+        )}
         <CustomPicker label="Activity type" selectedValue={form.log_type} items={LOG_TYPES} onValueChange={v => setForm(f => ({ ...f, log_type: v }))} />
         {form.log_type === 'other' && (
           <>
@@ -153,11 +226,27 @@ export default function BlockActivityFormScreen({ navigation }) {
 
         {form.log_type === 'input' && (
           <>
-            <CustomPicker label="Input type" selectedValue={form.input_type} items={INPUT_TYPES} onValueChange={v => setForm(f => ({ ...f, input_type: v }))} />
+            <CustomPicker label="Input type" selectedValue={form.input_type} items={INPUT_TYPES} onValueChange={v => setForm(f => ({ ...f, input_type: v, fertilizer_category: '', input_name: '' }))} />
             {form.input_type === 'other' ? (
               <>
                 <Text style={styles.label}>Specify input *</Text>
                 <TextInput style={styles.input} value={form.input_type_other} onChangeText={t => setForm(f => ({ ...f, input_type_other: t }))} placeholder="Input product or type" />
+              </>
+            ) : form.input_type === 'fertilizer' ? (
+              <>
+                <CustomPicker
+                  label="Fertilizer category"
+                  selectedValue={form.fertilizer_category}
+                  items={fertilizerCategoryItems}
+                  onValueChange={v => setForm(f => ({ ...f, fertilizer_category: v, input_name: '' }))}
+                />
+                <CustomPicker
+                  label="Fertilizer product"
+                  selectedValue={fertilizerProductItems.some(i => i.value === form.input_name) ? form.input_name : ''}
+                  items={fertilizerProductItems}
+                  onValueChange={v => setForm(f => ({ ...f, input_name: v === '__other__' ? '' : v }))}
+                />
+                <TextInput style={styles.input} value={form.input_name} onChangeText={t => setForm(f => ({ ...f, input_name: t }))} placeholder="Product name (or type if not listed)" />
               </>
             ) : (
               <>

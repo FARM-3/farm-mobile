@@ -17,7 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import CoffeeColors from '../../../theme/colors';
 import Fonts from '../../../theme/fonts';
-import { saveSubmissionLocally, syncTaskSubmissions } from '../../../services/taskService';
+import {
+    saveSubmissionLocally,
+    syncTaskSubmissions,
+    normalizeTaskStatus,
+    formatTaskStatusLabel,
+} from '../../../services/taskService';
 
 export default function TaskDetailModal({ visible, task, onClose, onUpdate }) {
     const [photos, setPhotos] = useState([]);
@@ -30,7 +35,7 @@ export default function TaskDetailModal({ visible, task, onClose, onUpdate }) {
     React.useEffect(() => {
         if (task) {
             const isAssignedTask = task.assigned_to && task.assigned_to.length > 0;
-            setCurrentStatus(task.submission_status || (isAssignedTask ? 'assigned' : 'pending'));
+            setCurrentStatus(normalizeTaskStatus(task.submission_status || (isAssignedTask ? 'assigned' : 'pending')));
         }
     }, [task]);
 
@@ -49,7 +54,7 @@ export default function TaskDetailModal({ visible, task, onClose, onUpdate }) {
                 activity: Array.isArray(task.activity) ? task.activity.join(', ') : task.activity,
                 priority: task.priority,
                 block_id: task.block?.toString() || '',
-                status: 'accepted',
+                status: 'pending',
                 accepted_at: new Date().toISOString(),
             };
 
@@ -60,8 +65,7 @@ export default function TaskDetailModal({ visible, task, onClose, onUpdate }) {
             const syncResult = await syncTaskSubmissions();
             console.log('[TaskDetail] Sync result:', syncResult);
 
-            // Update status to show "Start Task" button
-            setCurrentStatus('accepted');
+            setCurrentStatus('pending');
 
             // Update task list but keep modal open
             onUpdate();
@@ -273,7 +277,7 @@ export default function TaskDetailModal({ visible, task, onClose, onUpdate }) {
                             {/* Status Badge */}
                             {currentStatus && (
                                 <View style={[styles.statusBadge, styles[`status_${currentStatus}`]]}>
-                                    <Text style={styles.statusText}>{currentStatus.toUpperCase()}</Text>
+                                    <Text style={styles.statusText}>{formatTaskStatusLabel(currentStatus)}</Text>
                                 </View>
                             )}
                         </View>
@@ -303,7 +307,7 @@ export default function TaskDetailModal({ visible, task, onClose, onUpdate }) {
                             </View>
                         )}
 
-                        {currentStatus === 'accepted' && (
+                        {(currentStatus === 'pending' || currentStatus === 'accepted') && (
                             <View style={styles.actionSection}>
                                 <TouchableOpacity
                                     style={[styles.button, styles.startButton]}
@@ -468,6 +472,9 @@ const styles = StyleSheet.create({
         backgroundColor: CoffeeColors.LIGHT_BROWN,
     },
     status_accepted: {
+        backgroundColor: CoffeeColors.MEDIUM_BROWN,
+    },
+    status_pending: {
         backgroundColor: CoffeeColors.MEDIUM_BROWN,
     },
     status_in_progress: {

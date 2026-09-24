@@ -11,18 +11,18 @@ export default function FieldOpsScreen({ navigation }) {
     <View style={styles.container}>
       <SimpleHeader title="Field Operations" onBackPress={() => navigation.goBack()} />
       <View style={styles.content}>
-        <Text style={styles.subtitle}>Log block-level activities and field surveillance — data flows to web reports & trace.</Text>
+        <Text style={styles.subtitle}>Log any farm operation — on a block, nursery, processing area, or whole farm.</Text>
 
-        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('BlockActivityForm')}>
+        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('BlockActivityList')}>
           <Ionicons name="leaf" size={28} color={CoffeeColors.PRIMARY_BROWN} />
           <View style={styles.cardText}>
-            <Text style={styles.cardTitle}>Block Activity</Text>
-            <Text style={styles.cardDesc}>Practices, fertilizer & pesticide applications per block</Text>
+            <Text style={styles.cardTitle}>Field Activity</Text>
+            <Text style={styles.cardDesc}>Practices, inputs, scouting — block or farm-wide</Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color="#999" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('SurveillanceForm')}>
+        <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('SurveillanceList')}>
           <Ionicons name="eye" size={28} color={CoffeeColors.PRIMARY_BROWN} />
           <View style={styles.cardText}>
             <Text style={styles.cardTitle}>Surveillance Report</Text>

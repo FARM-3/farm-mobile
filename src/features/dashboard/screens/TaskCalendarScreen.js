@@ -33,7 +33,12 @@ import BottomNav from '../../../components/BottomNav';
 import CustomAlert from '../../../components/CustomAlert';
 import { fetchBlocks } from '../../../services/blockService';
 import { fetchAllStaff } from '../../../services/staffService';
-import { fetchAssignedTasks } from '../../../services/taskService';
+import {
+  fetchAssignedTasks,
+  getAllLocalSubmissions,
+  normalizeTaskStatus,
+  formatTaskStatusLabel,
+} from '../../../services/taskService';
 import TaskDetailModal from '../components/TaskDetailModal';
 
 const TASKS_STORAGE_KEY = 'daily_tasks';
@@ -193,11 +198,16 @@ export default function TaskCalendarScreen({ navigation }) {
       // Fetch assigned tasks from API (web app)
       console.log('[TaskCalendar] Fetching assigned tasks from API...');
       const { success, tasks: assignedFromApi, error } = await fetchAssignedTasks();
-      const apiTasks = (success ? assignedFromApi : []).map(t => ({
-        ...t,
-        isAssigned: true,
-        date: normalizeDate(t.date),
-      }));
+      const { submissions: localSubmissions } = await getAllLocalSubmissions();
+      const apiTasks = (success ? assignedFromApi : []).map(t => {
+        const local = localSubmissions.find(s => s.assigned_task_id === t.id);
+        return {
+          ...t,
+          isAssigned: true,
+          date: normalizeDate(t.date),
+          submission_status: local?.status || t.submission_status,
+        };
+      });
 
       console.log('[TaskCalendar] API fetch result:', { success, tasksCount: apiTasks.length, error });
 
@@ -378,11 +388,26 @@ export default function TaskCalendarScreen({ navigation }) {
     return activity ? activity.label : activityId;
   };
 
+  const resolveActivityLabel = (activity) => {
+    if (!activity) return 'General';
+    if (Array.isArray(activity)) {
+      return activity.map(a => getActivityLabel(a) || a).join(', ');
+    }
+    if (typeof activity === 'string') {
+      if (activity.includes(',')) {
+        return activity.split(',').map(a => getActivityLabel(a.trim()) || a.trim()).join(', ');
+      }
+      return getActivityLabel(activity) || activity;
+    }
+    return String(activity);
+  };
+
   const getStatusBadgeStyle = (status) => {
-    switch (status) {
+    const s = normalizeTaskStatus(status);
+    switch (s) {
       case 'assigned':
         return { backgroundColor: CoffeeColors.LIGHT_BROWN };
-      case 'accepted':
+      case 'pending':
         return { backgroundColor: CoffeeColors.MEDIUM_BROWN };
       case 'in_progress':
         return { backgroundColor: CoffeeColors.DARK_BROWN };
@@ -393,6 +418,13 @@ export default function TaskCalendarScreen({ navigation }) {
       default:
         return { backgroundColor: CoffeeColors.VERY_LIGHT_BROWN };
     }
+  };
+
+  const isTaskDone = (item) => {
+    if (item.isAssigned) {
+      return normalizeTaskStatus(item.submission_status) === 'completed';
+    }
+    return !!item.completed;
   };
 
   const handleBarCodeScanned = ({ type, data }) => {
@@ -426,86 +458,98 @@ export default function TaskCalendarScreen({ navigation }) {
     }
   };
 
-  const renderTaskItem = ({ item }) => (
-    <View style={[styles.taskCard, item.completed && styles.taskCardCompleted]}>
-      <TouchableOpacity
-        style={styles.taskCheckbox}
-        onPress={() => handleToggleComplete(item.id)}
-      >
-        <Ionicons
-          name={item.completed ? 'checkmark-circle' : 'ellipse-outline'}
-          size={28}
-          color={item.completed ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
-        />
-      </TouchableOpacity>
+  const renderTaskItem = ({ item }) => {
+    const done = isTaskDone(item);
+    const statusKey = item.isAssigned
+      ? normalizeTaskStatus(item.submission_status || 'assigned')
+      : (done ? 'completed' : 'assigned');
 
-      <TouchableOpacity
-        style={styles.taskContent}
-        onPress={() => {
-          setSelectedTask(item);
-          setShowTaskDetail(true);
-        }}
-      >
-        <View style={styles.taskHeader}>
-          <Text style={[styles.taskTitle, item.completed && styles.taskTitleCompleted]}>
+    return (
+      <View style={[styles.taskCard, done && styles.taskCardCompleted]}>
+        {!item.isAssigned ? (
+          <TouchableOpacity
+            style={styles.taskCheckbox}
+            onPress={() => handleToggleComplete(item.id)}
+          >
+            <Ionicons
+              name={item.completed ? 'checkmark-circle' : 'ellipse-outline'}
+              size={28}
+              color={item.completed ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
+            />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.taskCheckbox}>
+            <Ionicons
+              name={done ? 'checkmark-circle' : 'clipboard-outline'}
+              size={26}
+              color={done ? CoffeeColors.MEDIUM_BROWN : CoffeeColors.LIGHT_BROWN}
+            />
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.taskContent}
+          onPress={() => {
+            setSelectedTask(item);
+            setShowTaskDetail(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.taskTitleFull, done && styles.taskTitleCompleted]} numberOfLines={2}>
             {item.title}
           </Text>
-          {item.isAssigned && (
-            <View style={[styles.priorityBadge, { backgroundColor: '#8B5A3C' }]}>
-              <Text style={styles.priorityText}>ASSIGNED</Text>
-            </View>
-          )}
-          {item.priority && (
-            <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
-              <Text style={styles.priorityText}>{item.priority.toUpperCase()}</Text>
-            </View>
-          )}
-        </View>
 
-        <View style={styles.taskMeta}>
-          <View style={styles.activityTag}>
-            <Ionicons name={getActivityIcon(item.activity)} size={14} color={CoffeeColors.DARK_BROWN} />
-            <Text style={styles.activityText}>{getActivityLabel(item.activity)}</Text>
-          </View>
-          {item.time && (
-            <View style={styles.timeTag}>
-              <Ionicons name="time-outline" size={14} color={CoffeeColors.MEDIUM_BROWN} />
-              <Text style={styles.timeText}>{item.time}</Text>
-            </View>
-          )}
-          {item.isAssigned && item.date && (
-            <View style={styles.timeTag}>
-              <Ionicons name="calendar-outline" size={14} color={CoffeeColors.MEDIUM_BROWN} />
-              <Text style={styles.timeText}>{item.date}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Status Badge */}
-        {item.submission_status && (
-          <View style={[styles.statusBadge, getStatusBadgeStyle(item.submission_status)]}>
-            <Text style={styles.statusBadgeText}>
-              {item.submission_status === 'in_progress' ? 'In Progress' :
-               item.submission_status.charAt(0).toUpperCase() + item.submission_status.slice(1)}
+          <View style={styles.activityRow}>
+            <Ionicons name={getActivityIcon(Array.isArray(item.activity) ? item.activity[0] : item.activity)} size={15} color={CoffeeColors.DARK_BROWN} />
+            <Text style={styles.activityLineText} numberOfLines={1}>
+              {resolveActivityLabel(item.activity)}
             </Text>
           </View>
-        )}
 
-        {item.description && (
-          <Text style={[styles.taskDescription, item.completed && styles.taskDescriptionCompleted]}>
-            {item.description}
-          </Text>
-        )}
-      </TouchableOpacity>
+          <View style={styles.taskMeta}>
+            {item.time && (
+              <View style={styles.timeTag}>
+                <Ionicons name="time-outline" size={14} color={CoffeeColors.MEDIUM_BROWN} />
+                <Text style={styles.timeText}>{item.time}</Text>
+              </View>
+            )}
+            {item.date && (
+              <View style={styles.timeTag}>
+                <Ionicons name="calendar-outline" size={14} color={CoffeeColors.MEDIUM_BROWN} />
+                <Text style={styles.timeText}>{item.date}</Text>
+              </View>
+            )}
+          </View>
 
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => handleDeleteTask(item.id)}
-      >
-        <Ionicons name="trash-outline" size={20} color={CoffeeColors.DARK_BROWN} />
-      </TouchableOpacity>
-    </View>
-  );
+          <View style={styles.badgeRow}>
+            <View style={[styles.statusBadge, getStatusBadgeStyle(statusKey)]}>
+              <Text style={styles.statusBadgeText}>{formatTaskStatusLabel(statusKey)}</Text>
+            </View>
+            {item.priority && (
+              <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(item.priority) }]}>
+                <Text style={styles.priorityText}>{item.priority.toUpperCase()}</Text>
+              </View>
+            )}
+          </View>
+
+          {item.description ? (
+            <Text style={[styles.taskDescription, done && styles.taskDescriptionCompleted]} numberOfLines={2}>
+              {item.description}
+            </Text>
+          ) : null}
+        </TouchableOpacity>
+
+        {!item.isAssigned && (
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => handleDeleteTask(item.id)}
+          >
+            <Ionicons name="trash-outline" size={20} color={CoffeeColors.DARK_BROWN} />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   const renderAddTaskModal = () => (
     <Modal
@@ -654,8 +698,8 @@ export default function TaskCalendarScreen({ navigation }) {
   );
 
   const allVisibleTasks = [...assignedTasks, ...tasks];
-  const completedCount = allVisibleTasks.filter(t => t.completed).length;
-  const pendingCount = allVisibleTasks.filter(t => !t.completed).length;
+  const completedCount = allVisibleTasks.filter(isTaskDone).length;
+  const pendingCount = allVisibleTasks.filter(t => !isTaskDone(t)).length;
 
   // Generate dates for the calendar (2 weeks back, 4 weeks forward)
   const generateCalendarDates = () => {
@@ -779,7 +823,7 @@ export default function TaskCalendarScreen({ navigation }) {
         {/* Stats Summary */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{tasks.length}</Text>
+            <Text style={styles.statNumber}>{allVisibleTasks.length}</Text>
             <Text style={styles.statLabel}>Total Tasks</Text>
           </View>
           <View style={styles.statCard}>
@@ -1414,10 +1458,11 @@ const styles = StyleSheet.create({
     color: CoffeeColors.DARK_BROWN,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: CoffeeColors.GRAY_TEXT,
     fontFamily: Fonts.regular,
     marginTop: 4,
+    textAlign: 'center',
   },
   taskList: {
     paddingBottom: 80,
@@ -1458,6 +1503,33 @@ const styles = StyleSheet.create({
     color: CoffeeColors.DARK_BROWN,
     flex: 1,
     marginRight: 8,
+  },
+  taskTitleFull: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: Fonts.semiBold,
+    color: CoffeeColors.DARK_BROWN,
+    marginBottom: 6,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  activityLineText: {
+    flex: 1,
+    fontSize: 13,
+    color: CoffeeColors.DARK_BROWN,
+    fontFamily: Fonts.semiBold,
+    fontWeight: '600',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
   },
   taskTitleCompleted: {
     textDecorationLine: 'line-through',

@@ -29,6 +29,7 @@ class AuthService {
       const response = await ApiService.post('/users/login/', {
         phone: phone,
         pin: pin,
+        platform: 'mobile',
       });
 
       console.log('[AuthService] Response received:', {

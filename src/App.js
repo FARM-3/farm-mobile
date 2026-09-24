@@ -55,7 +55,9 @@ import FloatingScreen from './features/ProcessingScreen/screens/FloatingScreen';
 // Field operations
 import FieldOpsScreen from './features/fieldops/screens/FieldOpsScreen';
 import BlockActivityFormScreen from './features/fieldops/screens/BlockActivityFormScreen';
+import BlockActivityListScreen from './features/fieldops/screens/BlockActivityListScreen';
 import SurveillanceFormScreen from './features/fieldops/screens/SurveillanceFormScreen';
+import SurveillanceListScreen from './features/fieldops/screens/SurveillanceListScreen';
 
 // Block screens
 import BlockDetailsForm from './features/blocks/BlockDetailsForm';
@@ -89,6 +91,7 @@ import BaggingSummaryScreen from './features/ProcessingScreen/screens/BaggingSum
 import BaggingFormScreen from './features/ProcessingScreen/screens/BaggingFormScreen';
 import HullingSummaryScreen from './features/ProcessingScreen/screens/HullingSummaryScreen';
 import HullingFormScreen from './features/ProcessingScreen/screens/HullingFormScreen';
+import ScanLotTraceScreen from './features/export/screens/ScanLotTraceScreen';
 import { startAutoSyncListener } from './services/autoSyncService';
 
 // Initialize the stack navigator
@@ -276,6 +279,12 @@ const App = () => {
                         options={{ title: 'Processing' }}
                     />
 
+                    <Stack.Screen
+                        name="ScanLotTrace"
+                        component={ScanLotTraceScreen}
+                        options={{ title: 'Scan Lot Trace' }}
+                    />
+
                     {/* Quality Control screens */}
                     <Stack.Screen
                         name="QualityControl"
@@ -394,7 +403,9 @@ const App = () => {
 
                     {/* Field operations */}
                     <Stack.Screen name="FieldOps" component={FieldOpsScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="BlockActivityList" component={BlockActivityListScreen} options={{ headerShown: false }} />
                     <Stack.Screen name="BlockActivityForm" component={BlockActivityFormScreen} options={{ headerShown: false }} />
+                    <Stack.Screen name="SurveillanceList" component={SurveillanceListScreen} options={{ headerShown: false }} />
                     <Stack.Screen name="SurveillanceForm" component={SurveillanceFormScreen} options={{ headerShown: false }} />
 
                     {/* Block screens */}

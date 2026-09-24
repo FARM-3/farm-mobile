@@ -68,10 +68,16 @@ export const LAND_OWNERSHIP = ['leased', 'communal', 'owned'];
 export const SEEDLING_SOURCES = ['nursery', 'own_cooperative', 'bought'];
 export const IRRIGATION_OPTIONS = ['none', 'river', 'sprinkler', 'drip'];
 export const FERTILIZERS = ['Organic', 'Inorganic', 'Mixed'];
+export const FERTILIZER_ORGANIC = ['Bird Droppings', 'Rabbit Urine', 'Compost', 'Manure'];
+export const FERTILIZER_INORGANIC = ['NPK', 'Urea', 'DAP', 'CAN'];
+export const PESTICIDES = ['None', 'Striker', 'Fungicide', 'Copper-based', 'Neem oil', 'Biological control'];
 export const COFFEE_TYPES = ['Arabica', 'Robusta', 'Liberica'];
 export const YES_NO_OPTIONS = ['Yes', 'No'];
 export const SPACING_OPTIONS = ['3 metres by 3 metres', '2.4 metres by 2.4 metres', '2 metres by 1 metres'];
-export const STANDARD_PRACTICES = ['Inter-cropping', 'Pruning', 'Mulching', 'Stumping', 'Agro-forestry', 'Fertilizing', 'Pest control'];
+export const STANDARD_PRACTICES = [
+  'Inter-cropping', 'Pruning', 'Mulching', 'Stumping', 'Agro-forestry', 'Fertilizing', 'Pest control',
+  'Stamping', 'Spot Weeding', 'Desuckering', 'Slashing', 'Shade management',
+];
 
 // Seedling types (Robusta and Arabica varieties)
 const ROBUSTA_TYPES = Array.from({ length: 10 }, (_, i) => `KR-${String(i + 1).padStart(2, '0')}`);
@@ -95,6 +101,9 @@ export const PICKER_MAP = {
     seedling_type: SEEDLING_TYPES,
     irrigation: IRRIGATION_OPTIONS,
     fertilizers: FERTILIZERS,
+    fertilizer_organic: FERTILIZER_ORGANIC,
+    fertilizer_inorganic: FERTILIZER_INORGANIC,
+    pesticides: PESTICIDES,
     coffee_type: COFFEE_TYPES,
     all_your_trees: YES_NO_OPTIONS,
     spacing: SPACING_OPTIONS,

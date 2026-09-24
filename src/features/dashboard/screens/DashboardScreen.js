@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, LogBox, Animated } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image, LogBox } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,12 +19,20 @@ import { fetchAllHarvestRecords } from '../../../services/harvestRecord';
 import AuthService from '../../../services/AuthService';
 import SyncService from '../../../services/SyncService';
 import { getUnsyncedRecords } from '../../../services/harvestRecord';
+import { getPendingFieldOpsCount } from '../../../services/fieldOpsService';
+import { getPendingBlocksCount } from '../../../services/blocksSyncService';
 import { runAutoSync } from '../../../services/autoSyncService';
 import BottomNav from '../../../components/BottomNav';
 import LogoutConfirmModal from '../../../components/LogoutConfirmModal';
 import { getCurrentWeather, isWeatherDataStale } from '../../../services/WeatherService';
 import { fetchActivities } from '../../../services/ActivityService';
-import { fetchAssignedTasks } from '../../../services/taskService';
+import {
+  fetchAssignedTasks,
+  getAllLocalSubmissions,
+  normalizeTaskStatus,
+  isTaskNotStarted,
+  isTaskIncomplete,
+} from '../../../services/taskService';
 import { setSessionActive } from '../../../services/sessionService';
 
 // Primary brown color and its shades
@@ -33,7 +41,6 @@ const DARK_BROWN = CoffeeColors.DARK_BROWN;
 const VERY_LIGHT_BROWN = CoffeeColors.VERY_LIGHT_BROWN;
 
 const HEADER_HEIGHT = 210; // Brown header — must match actual header height so scroll content clears it
-const SCROLL_THRESHOLD = 10;
 
 const DashboardScreen = ({ navigation }) => {
   const [userName, setUserName] = useState('User');
@@ -55,7 +62,7 @@ const DashboardScreen = ({ navigation }) => {
   const [syncStatus, setSyncStatus] = useState({ pending: 0 });
   const [isSyncing, setIsSyncing] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-  const [taskCounts, setTaskCounts] = useState({ total: 0, unaccepted: 0, completed: 0 });
+  const [taskCounts, setTaskCounts] = useState({ total: 0, notStarted: 0, incomplete: 0, completed: 0 });
 
   // Weather state
   const [weather, setWeather] = useState({
@@ -67,10 +74,6 @@ const DashboardScreen = ({ navigation }) => {
     loading: true,
   });
 
-  // Animation values for header collapse
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const lastScrollY = useRef(0);
-  const headerTranslateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -173,7 +176,9 @@ const DashboardScreen = ({ navigation }) => {
   const loadSyncStatus = async () => {
     try {
       const { records } = await getUnsyncedRecords();
-      setSyncStatus({ pending: records.length });
+      const fieldOpsPending = await getPendingFieldOpsCount();
+      const blocksPending = await getPendingBlocksCount();
+      setSyncStatus({ pending: records.length + fieldOpsPending + blocksPending });
     } catch (error) {
       console.error('[Dashboard] Error loading sync status:', error);
     }
@@ -211,14 +216,20 @@ const DashboardScreen = ({ navigation }) => {
     try {
       console.log('[Dashboard] Loading task counts...');
       const { success, tasks } = await fetchAssignedTasks();
+      const { submissions: localSubmissions } = await getAllLocalSubmissions();
 
       if (success && tasks) {
-        const total = tasks.length;
-        const unaccepted = tasks.filter(t => !t.submission_status || t.submission_status === 'assigned').length;
-        const completed = tasks.filter(t => t.submission_status === 'completed').length;
+        const merged = tasks.map(t => {
+          const local = localSubmissions.find(s => s.assigned_task_id === t.id);
+          return local ? { ...t, submission_status: local.status } : t;
+        });
+        const total = merged.length;
+        const notStarted = merged.filter(isTaskNotStarted).length;
+        const incomplete = merged.filter(isTaskIncomplete).length;
+        const completed = merged.filter(t => normalizeTaskStatus(t.submission_status) === 'completed').length;
 
-        setTaskCounts({ total, unaccepted, completed });
-        console.log('[Dashboard] Task counts:', { total, unaccepted, completed });
+        setTaskCounts({ total, notStarted, incomplete, completed });
+        console.log('[Dashboard] Task counts:', { total, notStarted, incomplete, completed });
       }
     } catch (error) {
       console.error('[Dashboard] Error loading task counts:', error);
@@ -231,8 +242,11 @@ const DashboardScreen = ({ navigation }) => {
       const result = await runAutoSync({ silent: false });
       if (result.skipped && result.reason === 'offline') {
         Alert.alert('Offline', 'Connect to the internet to sync records.');
-      } else if (result.success) {
-        Alert.alert('Sync complete', 'All pending records were uploaded where possible.');
+      } else       if (result.success) {
+        const fo = result.results?.fieldOps?.synced || 0;
+        Alert.alert('Sync complete', fo
+          ? `All pending records uploaded (${fo} field ops synced).`
+          : 'All pending records were uploaded where possible.');
       } else {
         Alert.alert('Sync Failed', result.error || 'Could not sync records.');
       }
@@ -280,37 +294,6 @@ const DashboardScreen = ({ navigation }) => {
     setLogoutModalVisible(false);
   };
 
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: true,
-      listener: (event) => {
-        const currentScrollY = event.nativeEvent.contentOffset.y;
-        const diff = currentScrollY - lastScrollY.current;
-
-        // Only trigger animation if scroll distance exceeds threshold
-        if (Math.abs(diff) > SCROLL_THRESHOLD) {
-          if (diff > 0 && currentScrollY > HEADER_HEIGHT) {
-            // Scrolling down - hide header
-            Animated.timing(headerTranslateY, {
-              toValue: -HEADER_HEIGHT,
-              duration: 250,
-              useNativeDriver: true,
-            }).start();
-          } else if (diff < 0) {
-            // Scrolling up - show header
-            Animated.timing(headerTranslateY, {
-              toValue: 0,
-              duration: 500,
-              useNativeDriver: true,
-            }).start();
-          }
-          lastScrollY.current = currentScrollY;
-        }
-      },
-    }
-  );
-
   const quickActions = [
     {
       label: 'Record Harvest',
@@ -343,7 +326,13 @@ const DashboardScreen = ({ navigation }) => {
       sublabel: 'Activities & surveillance',
       color: PRIMARY_BROWN,
       screen: 'FieldOps'
-    }
+    },
+    {
+      label: 'Scan Lot',
+      sublabel: 'QR trace history',
+      color: PRIMARY_BROWN,
+      screen: 'ScanLotTrace',
+    },
   ];
 
   if (lastRecords.loading) {
@@ -373,15 +362,8 @@ const DashboardScreen = ({ navigation }) => {
   return (
     <View style={{ flex: 1, backgroundColor: '#faf8f3' }}>
       <View style={styles.container}>
-      {/* Animated Header Container */}
-      <Animated.View
-        style={[
-          styles.headerContainer,
-          {
-            transform: [{ translateY: headerTranslateY }],
-          },
-        ]}
-      >
+      {/* Fixed Header */}
+      <View style={styles.headerContainer}>
         {/* Header with Bottom Curve */}
         <LinearGradient
           colors={[DARK_BROWN, '#7a3f1a', '#8B4513']}
@@ -397,9 +379,8 @@ const DashboardScreen = ({ navigation }) => {
                 <Text style={styles.rugyeyoText}>FMIS</Text>
               </View>
 
-              <Text style={styles.helloLabel}>Hello,</Text>
-              <Text style={styles.userNameText} numberOfLines={2}>
-                {userName}
+              <Text style={styles.helloLine} numberOfLines={1}>
+                Hello, {userName}
               </Text>
             </View>
             <View style={styles.headerActions}>
@@ -410,9 +391,9 @@ const DashboardScreen = ({ navigation }) => {
               >
                 <Ionicons name="calendar-outline" size={18} color="#fff" />
                 <Text style={styles.taskButtonLabel}>Tasks</Text>
-                {taskCounts.unaccepted > 0 && (
+                {taskCounts.notStarted > 0 && (
                   <View style={styles.taskBadge}>
-                    <Text style={styles.taskBadgeText}>{taskCounts.unaccepted}</Text>
+                    <Text style={styles.taskBadgeText}>{taskCounts.notStarted}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -441,50 +422,41 @@ const DashboardScreen = ({ navigation }) => {
           {/* Subtitle */}
           <Text style={styles.headerSubtitle}>Track your farm operations and performance</Text>
         </LinearGradient>
-      </Animated.View>
+      </View>
 
-      <Animated.ScrollView
-        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 28, paddingBottom: 20 }]}
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        {/* Weather Widget — in scroll so stat cards are not covered */}
-        <View style={styles.weatherCardContainerScroll}>
-          <TouchableOpacity
-            style={styles.weatherCard}
-            onPress={loadWeatherData}
-            activeOpacity={0.7}
-          >
-            <View style={styles.weatherContent}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.weatherLocation}>
-                  {weather.loading ? 'Loading...' : `${weather.location}${weather.country ? ', ' + weather.country : ''}`}
-                </Text>
-                <Text style={styles.weatherTemp}>
-                  {weather.loading ? '--°C' : `${weather.temperature}°C`}
-                </Text>
-                <Text style={styles.weatherCondition}>
-                  {weather.loading
-                    ? 'Fetching weather...'
-                    : `${weather.condition} • Humidity ${weather.humidity}%`
-                  }
-                </Text>
-                {weather.isFallback && !weather.loading && (
-                  <Text style={styles.weatherFallbackNote}>Tap to refresh</Text>
-                )}
-              </View>
-              <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
-                {weather.loading ? (
-                  <ActivityIndicator size="small" color={PRIMARY_BROWN} />
-                ) : (
-                  <Ionicons name={weather.icon} size={28} color={PRIMARY_BROWN} />
-                )}
-              </LinearGradient>
+      {/* Weather card sits on top of brown header */}
+      <View style={styles.weatherOverlay}>
+        <TouchableOpacity style={styles.weatherCard} onPress={loadWeatherData} activeOpacity={0.7}>
+          <View style={styles.weatherContent}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.weatherLocation}>
+                {weather.loading ? 'Loading...' : `${weather.location}${weather.country ? ', ' + weather.country : ''}`}
+              </Text>
+              <Text style={styles.weatherTemp}>
+                {weather.loading ? '--°C' : `${weather.temperature}°C`}
+              </Text>
+              <Text style={styles.weatherCondition}>
+                {weather.loading ? 'Fetching weather...' : `${weather.condition} • Humidity ${weather.humidity}%`}
+              </Text>
+              {weather.isFallback && !weather.loading && (
+                <Text style={styles.weatherFallbackNote}>Tap to refresh</Text>
+              )}
             </View>
-          </TouchableOpacity>
-        </View>
+            <LinearGradient colors={['#f5e6d3', '#e8d5c4']} style={styles.weatherIcon}>
+              {weather.loading ? (
+                <ActivityIndicator size="small" color={PRIMARY_BROWN} />
+              ) : (
+                <Ionicons name={weather.icon} size={28} color={PRIMARY_BROWN} />
+              )}
+            </LinearGradient>
+          </View>
+        </TouchableOpacity>
+      </View>
 
+      <ScrollView
+        contentContainerStyle={[styles.scrollViewContent, { paddingTop: HEADER_HEIGHT + 52, paddingBottom: 20 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Stats Overview */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
@@ -517,8 +489,10 @@ const DashboardScreen = ({ navigation }) => {
             <View style={styles.statContent}>
               <View style={styles.statTextContainer}>
                 <Text style={styles.statLabel}>Tasks</Text>
-                <Text style={styles.statValue}>{taskCounts.completed}</Text>
-                <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>{taskCounts.total} total</Text>
+                <Text style={styles.statValue}>{taskCounts.incomplete}</Text>
+                <Text style={[styles.statChange, { color: PRIMARY_BROWN }]}>
+                  {taskCounts.completed} done · {taskCounts.total} total
+                </Text>
               </View>
               <View style={[styles.statIcon, { backgroundColor: VERY_LIGHT_BROWN }]}>
                 <Ionicons name="checkmark-done" size={22} color={DARK_BROWN} />
@@ -605,7 +579,7 @@ const DashboardScreen = ({ navigation }) => {
             </View>
           )}
         </View>
-      </Animated.ScrollView>
+      </ScrollView>
       </View>
 
       {/* BottomNav now part of layout, not floating */}
@@ -708,16 +682,9 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
-  helloLabel: {
-    fontSize: Fonts.sizes.regular,
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontFamily: Fonts.regular,
-    fontWeight: Fonts.weights.regular,
-    marginTop: 2,
-  },
-  userNameText: {
-    fontSize: Fonts.sizes.xlarge,
-    lineHeight: 28,
+  helloLine: {
+    fontSize: Fonts.sizes.large,
+    lineHeight: 26,
     color: '#fff',
     fontFamily: Fonts.semiBold,
     fontWeight: Fonts.weights.semiBold,
@@ -808,8 +775,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  weatherCardContainerScroll: {
-    marginBottom: 24,
+  weatherOverlay: {
+    position: 'absolute',
+    top: HEADER_HEIGHT - 48,
+    left: 20,
+    right: 20,
+    zIndex: 1001,
   },
   scrollViewContent: {
     padding: 20,

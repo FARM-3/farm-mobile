@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { syncAllRecords } from './harvestRecord';
 import { syncAllAggregation } from './aggregationService';
 import { syncFieldOpsQueue } from './fieldOpsService';
+import { syncBlocksQueue } from './blocksSyncService';
 import { syncAllBaggingRecords } from './baggingService';
 import { syncAllHullingRecords } from './hullingService';
 
@@ -37,6 +38,7 @@ export async function runAutoSync({ silent = true } = {}) {
     results.harvests = await syncAllRecords();
     results.aggregation = await syncAggregationDrafts();
     results.fieldOps = await syncFieldOpsQueue();
+    results.blocks = await syncBlocksQueue();
     results.bagging = await syncAllBaggingRecords();
     results.hulling = await syncAllHullingRecords();
     if (!silent) {

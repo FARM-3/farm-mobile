@@ -30,7 +30,7 @@ import CustomAlert from '../../../components/CustomAlert';
 /**
  * BaggingDetailView - Mobile-friendly detail screen for viewing bagging information
  */
-const BaggingDetailView = ({ bagging, onBack }) => {
+const BaggingDetailView = ({ bagging, onBack, navigation }) => {
     if (!bagging) return null;
 
     const formatValue = (value) => {
@@ -66,7 +66,7 @@ const BaggingDetailView = ({ bagging, onBack }) => {
         {
             title: 'Additional Information',
             fields: [
-                { label: 'QR Code', value: bagging.qr_code || 'Not provided' },
+                { label: 'Lot trace code', value: bagging.qr_code || (bagging.lot_id ? `LOT:${bagging.lot_id}` : 'Auto-generated on sync') },
                 { label: 'Sync Status', value: bagging.isSynced ? 'Synced' : 'Pending' },
             ]
         }
@@ -104,6 +104,21 @@ const BaggingDetailView = ({ bagging, onBack }) => {
                         ))}
                     </View>
                 ))}
+
+                <TouchableOpacity
+                    style={styles.traceBtn}
+                    onPress={() => {
+                        const code = bagging.qr_code || (bagging.lot_id ? `LOT:${bagging.lot_id}` : '');
+                        if (!code) return;
+                        navigation.navigate('ScanLotTrace', { prefillCode: code });
+                    }}
+                >
+                    <Ionicons name="git-network-outline" size={20} color="#fff" />
+                    <Text style={styles.traceBtnText}>View full lot history in FMIS</Text>
+                </TouchableOpacity>
+                <Text style={styles.traceHint}>
+                  External camera apps only show the code text. Use this button (or Processing → Scan Lot) for the full trace.
+                </Text>
             </ScrollView>
         </View>
     );
@@ -418,6 +433,7 @@ export default function BaggingSummaryScreen({ route = {}, navigation }) {
                     {viewMode === 'detail' && selectedBagging && (
                         <BaggingDetailView
                             bagging={selectedBagging}
+                            navigation={navigation}
                             onBack={() => {
                                 setSelectedBagging(null);
                                 setViewMode('list');
@@ -669,6 +685,18 @@ const styles = StyleSheet.create({
         flex: 2,
         textAlign: 'right',
     },
+    traceBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: CoffeeColors.DARK_BROWN,
+        padding: 14,
+        borderRadius: 12,
+        marginTop: 16,
+    },
+    traceBtnText: { color: '#fff', fontWeight: '700', fontFamily: Fonts.semiBold },
+    traceHint: { fontSize: 11, color: '#888', marginTop: 8, textAlign: 'center', fontFamily: Fonts.regular },
     successBanner: {
         flexDirection: 'row',
         alignItems: 'center',

@@ -16,6 +16,7 @@ import CustomAlert from '../../components/CustomAlert';
 import CoffeeColors from '../../theme/colors';
 import Fonts from '../../theme/fonts';
 import ApiService from '../../services/ApiService';
+import { loadPickerMap } from '../../services/configService';
 
 // Helper function to generate sequential block ID (BLK-01, BLK-02, etc.)
 const generateBlockId = async () => {
@@ -95,6 +96,9 @@ const FERTILIZER_OPTIONS = {
   ],
   inorganic: [
     { label: 'NPK', value: 'npk' },
+    { label: 'Other', value: 'other' },
+  ],
+  mixed: [
     { label: 'Other', value: 'other' },
   ],
 };
@@ -255,8 +259,19 @@ const Step1_TreeDetails = ({ formData, updateField }) => {
 };
 
 // === STEP 2: FERTILIZERS & PESTICIDES (Copy from your provided code) ===
-const Step2_FertilizersPesticides = ({ formData, updateField }) => {
+const Step2_FertilizersPesticides = ({ formData, updateField, configOptions = {} }) => {
   const [showOtherFertilizer, setShowOtherFertilizer] = useState(false);
+  const mapProducts = (list) => (list || []).map(v =>
+    typeof v === 'string' ? { label: v, value: v.toLowerCase().replace(/\s+/g, '_') } : v
+  );
+  const fertilizerOptions = {
+    organic: mapProducts(configOptions.fertilizer_organic || FERTILIZER_OPTIONS.organic),
+    inorganic: mapProducts(configOptions.fertilizer_inorganic || FERTILIZER_OPTIONS.inorganic),
+    mixed: mapProducts(configOptions.fertilizer_mixed || FERTILIZER_OPTIONS.mixed || []),
+  };
+  const pesticideOptions = (configOptions.pesticides || PESTICIDE_OPTIONS).map(v => (
+    typeof v === 'string' ? { label: v, value: v.toLowerCase().replace(/\s+/g, '_') } : v
+  ));
 
   useEffect(() => {
     // Sync state with formData.fertilizerList on component mount/update
@@ -304,14 +319,24 @@ const Step2_FertilizersPesticides = ({ formData, updateField }) => {
           ]} />
           <Text style={styles.radioText}>Inorganic</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.radioButton}
+          onPress={() => handleFertilizerTypeChange('mixed')}
+        >
+          <View style={[
+            styles.radioCircle,
+            formData.fertilizerType === 'mixed' && styles.radioCircleSelected
+          ]} />
+          <Text style={styles.radioText}>Mixed</Text>
+        </TouchableOpacity>
       </View>
 
-      {formData.fertilizerType && FERTILIZER_OPTIONS[formData.fertilizerType] && (
+      {formData.fertilizerType && fertilizerOptions[formData.fertilizerType] && (
         <CustomPicker
           label="Select Fertilizer"
           selectedValue={formData.fertilizerList}
           onValueChange={handleFertilizerSelection}
-          items={FERTILIZER_OPTIONS[formData.fertilizerType] || []}
+          items={fertilizerOptions[formData.fertilizerType] || []}
         />
       )}
 
@@ -356,7 +381,7 @@ const Step2_FertilizersPesticides = ({ formData, updateField }) => {
       {formData.usePesticides === 'yes' && (
         <>
           <Text style={styles.label}>Select Pesticides</Text>
-          {PESTICIDE_OPTIONS.map(p => (
+          {pesticideOptions.map(p => (
             <TouchableOpacity
               key={p.value}
               style={styles.checkboxContainer}
@@ -388,10 +413,14 @@ const Step2_FertilizersPesticides = ({ formData, updateField }) => {
 };
 
 // === STEP 3: STANDARD PRACTICES (Copy from your provided code) ===
-const Step3_StandardPractices = ({ formData, updateField }) => (
+const Step3_StandardPractices = ({ formData, updateField, configOptions = {} }) => {
+  const practiceOptions = (configOptions.practices || STANDARD_PRACTICES).map(v => (
+    typeof v === 'string' ? { label: v, value: v.toLowerCase().replace(/\s+/g, '_') } : v
+  ));
+  return (
   <View style={styles.stepContent}>
     <Text style={styles.label}>Standard Practices</Text>
-    {STANDARD_PRACTICES.map(p => (
+    {practiceOptions.map(p => (
       <TouchableOpacity
         key={p.value}
         style={styles.checkboxContainer}
@@ -417,7 +446,8 @@ const Step3_StandardPractices = ({ formData, updateField }) => (
       </>
     )}
   </View>
-);
+  );
+};
 
 // === STEPS ===
 const STEPS = [
@@ -442,6 +472,11 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
     type: 'info',
     buttons: []
   });
+  const [configOptions, setConfigOptions] = useState({});
+
+  useEffect(() => {
+    loadPickerMap().then(setConfigOptions).catch(() => {});
+  }, []);
 
   const showAlert = (title, message, type = 'info', buttons = []) => {
     const defaultButtons = buttons.length > 0 ? buttons : [
@@ -820,7 +855,7 @@ const BlockRegistrationStepper = ({ navigation, route }) => {
         </View>
 
         <View style={styles.stepContainer}>
-          <CurrentStepComponent formData={formData} updateField={updateField} />
+          <CurrentStepComponent formData={formData} updateField={updateField} configOptions={configOptions} />
         </View>
 
         {isLoading && <ActivityIndicator size="large" color={CoffeeColors.MEDIUM_BROWN} />}
