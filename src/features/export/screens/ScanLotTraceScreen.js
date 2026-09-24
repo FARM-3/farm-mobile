@@ -74,7 +74,7 @@ export default function ScanLotTraceScreen({ navigation, route }) {
       <SimpleHeader title="Scan Lot Trace" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.hint}>Scan a bag QR (LOT:…) or enter the code manually.</Text>
+        <Text style={styles.hint}>Scan a lot QR (LOT:…), block QR (BLOCK:…), or enter the code manually.</Text>
 
         {CameraView && (
           <TouchableOpacity style={styles.scanBtn} onPress={async () => {
@@ -97,7 +97,7 @@ export default function ScanLotTraceScreen({ navigation, route }) {
         <View style={styles.manualRow}>
           <TextInput
             style={styles.input}
-            placeholder="LOT:W38 or harvest ID"
+            placeholder="LOT:W38, BLOCK:B01, or harvest ID"
             value={manualCode}
             onChangeText={setManualCode}
             autoCapitalize="characters"
@@ -113,12 +113,44 @@ export default function ScanLotTraceScreen({ navigation, route }) {
         {trace && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>
-              {trace.scanned_lot_id ? `Lot ${trace.scanned_lot_id}` : trace.harvest_id || 'Trace result'}
+              {trace.scan_type === 'block'
+                ? `Block ${trace.block_id}`
+                : trace.scanned_lot_id
+                  ? `Lot ${trace.scanned_lot_id}`
+                  : trace.harvest_id || 'Trace result'}
             </Text>
-            {trace.farmer_name && <Text style={styles.line}>Supplier: {trace.farmer_name}</Text>}
-            {trace.source?.coffee_type && <Text style={styles.line}>Coffee: {trace.source.coffee_type}</Text>}
-            {trace.source?.gps_coordinates && <Text style={styles.line}>GPS: {trace.source.gps_coordinates}</Text>}
-            {trace.current_stage && <Text style={styles.line}>Stage: {trace.current_stage}</Text>}
+
+            {trace.scan_type === 'block' && trace.block && (
+              <>
+                <Text style={styles.line}>Trees: {trace.block.no_of_trees}</Text>
+                <Text style={styles.line}>Coffee: {trace.block.type_of_coffee}</Text>
+                <Text style={styles.line}>Planted: {trace.block.date_planted}</Text>
+                <Text style={styles.line}>Seedling: {trace.block.type_of_seedling}</Text>
+                <Text style={styles.line}>GAP: {trace.block.standard_practices || '—'}</Text>
+                <Text style={styles.line}>Fertilizers: {trace.block.fertilizer_names || trace.block.fertilizers || '—'}</Text>
+                {trace.field_history?.block_activities?.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Recent activities ({trace.activity_count || trace.field_history.block_activities.length})</Text>
+                    {trace.field_history.block_activities.slice(0, 5).map((a, i) => (
+                      <Text key={a.log_id || i} style={styles.line}>{a.activity_date}: {a.title} ({a.log_type})</Text>
+                    ))}
+                  </View>
+                )}
+                {trace.harvests?.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Harvests from block</Text>
+                    {trace.harvests.slice(0, 5).map((h, i) => (
+                      <Text key={h.harvest_id || i} style={styles.line}>{h.harvest_id} — {h.weight_on_delivery} kg</Text>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+
+            {trace.scan_type !== 'block' && trace.farmer_name && <Text style={styles.line}>Supplier: {trace.farmer_name}</Text>}
+            {trace.scan_type !== 'block' && trace.source?.coffee_type && <Text style={styles.line}>Coffee: {trace.source.coffee_type}</Text>}
+            {trace.scan_type !== 'block' && trace.source?.gps_coordinates && <Text style={styles.line}>GPS: {trace.source.gps_coordinates}</Text>}
+            {trace.scan_type !== 'block' && trace.current_stage && <Text style={styles.line}>Stage: {trace.current_stage}</Text>}
 
             {trace.stages?.length > 0 && (
               <View style={styles.section}>
